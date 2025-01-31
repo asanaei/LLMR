@@ -9,16 +9,17 @@ LLMR offers a unified interface for interacting with multiple Large Language Mod
   install.packages("LLMR")
   ```
 
--**GitHub (development version)**:
+- **GitHub (development version)**:
 ```r
 remotes::install_github("YOUR_USERNAME/LLMR")
 ```
 
 
-Example Usage
+## Example Usage
 
 Below is an example demonstrating a comprehensive configuration and API call using OpenAI. In this example, the model name is changed to gpt-4-lite and the response object is named detailed_response.
 
+```r
 library(LLMR)
 
 # Create a configuration with more parameters
@@ -52,5 +53,6 @@ cat("Comprehensive OpenAI Response:", detailed_response, "\n")
 # Access and print the raw JSON response
 raw_json_response <- attr(detailed_response, "raw_json")
 print(raw_json_response)
+```
 
 Contributions: are welcome.
