@@ -11,7 +11,7 @@ LLMR offers a unified interface for interacting with multiple Large Language Mod
 
 - **GitHub (development version)**:
 ```r
-remotes::install_github("YOUR_USERNAME/LLMR")
+remotes::install_github("asanaei/LLMR")
 ```
 
 
