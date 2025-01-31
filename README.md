@@ -7,11 +7,12 @@ LLMR offers a unified interface for interacting with multiple Large Language Mod
 - **CRAN**:  
   ```r
   install.packages("LLMR")
+  ```
 
-	•	GitHub (development version):
-
+-**GitHub (development version)**:
+```r
 remotes::install_github("YOUR_USERNAME/LLMR")
-
+```
 
 
 Example Usage
