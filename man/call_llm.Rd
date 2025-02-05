@@ -49,5 +49,34 @@ Sends a message to the specified LLM API and retrieves the response.
   embedding_response <- call_llm(voyage_config, text_input)
   embeddings <- parse_embeddings(embedding_response)
   embeddings |> cor() |> print()
+
+
+  # Gemini Example
+  gemini_config <- llm_config(
+    provider = "gemini",
+    model = "gemini-pro",          # Or another Gemini model
+    api_key = Sys.getenv("GEMINI_API_KEY"), # Make sure to set your Gemini API key in environment variables
+    temperature = 0.9,               # Controls randomness
+    max_tokens = 800,              # Maximum tokens to generate
+    top_p = 0.9,                     # Nucleus sampling parameter
+    top_k = 10                      # Top K sampling parameter
+  )
+
+  gemini_message <- list(
+    list(role = "user", content = "Explain the theory of relativity to a curious 3-year-old!")
+  )
+
+  gemini_response <- call_llm(
+    config = gemini_config,
+    messages = gemini_message,
+    json = TRUE # Get raw JSON for inspection if needed
+  )
+
+  # Display the generated text response
+  cat("Gemini Response:", gemini_response, "\n")
+
+  # Access and print the raw JSON response
+  raw_json_gemini_response <- attr(gemini_response, "raw_json")
+  print(raw_json_gemini_response)
 }
 }

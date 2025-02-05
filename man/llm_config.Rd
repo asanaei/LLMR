@@ -13,7 +13,8 @@ llm_config(provider, model, api_key, ...)
 "groq" for Groq,
 "together" for Together AI,
 "deepseek" for DeepSeek,
-"voyage" for Voyage AI.}
+"voyage" for Voyage AI.
+"gemini" for Google Gemini.}
 
 \item{model}{The model name to use. This depends on the provider.}
 

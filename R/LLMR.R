@@ -15,6 +15,9 @@ perform_request <- function(req, verbose, json) {
   # Parse the response as JSON
   content <- httr2::resp_body_json(resp)
 
+  ## uncomment for diagnostics
+  # print(content)
+
   if (verbose) {
     cat("Full API Response:\n")
     print(content)
@@ -34,6 +37,8 @@ perform_request <- function(req, verbose, json) {
   return(text)
 }
 
+
+
 #' Extract Text from API Response
 #'
 #' Internal helper function to extract text from the API response content.
@@ -44,10 +49,6 @@ extract_text <- function(content) {
   # If the content contains embedding results, return it as is.
   if (!is.null(content$data) && is.list(content$data)) {
     return(content)
-  }
-
-  if (is.null(content$choices) && is.null(content$content)) {
-    stop("No recognizable content returned from API.")
   }
 
   if (!is.null(content$choices)) {
@@ -66,8 +67,26 @@ extract_text <- function(content) {
     return(content$content[[1]]$text)
   }
 
+  # --- ADD THIS GEMINI SPECIFIC BLOCK ---
+  if (!is.null(content$candidates)) {
+    # For Gemini API
+    if (length(content$candidates) == 0 ||
+        is.null(content$candidates[[1]]$content$parts) || # Check for parts
+        length(content$candidates[[1]]$content$parts) == 0 || # Check if parts is empty
+        is.null(content$candidates[[1]]$content$parts[[1]]$text)) { # Finally check for text
+      stop("No content returned from Gemini API.")
+    }
+    return(content$candidates[[1]]$content$parts[[1]]$text)
+  }
+  # --- END GEMINI BLOCK ---
+
   stop("Unable to extract text from the API response.")
 }
+
+
+
+
+
 
 #' Format Anthropic Messages
 #'
@@ -116,6 +135,7 @@ format_anthropic_messages <- function(messages) {
 #'   "together" for Together AI,
 #'   "deepseek" for DeepSeek,
 #'   "voyage" for Voyage AI.
+#'   "gemini" for Google Gemini.
 #' @param model The model name to use. This depends on the provider.
 #' @param api_key Your API key for the provider.
 #' @param ... Additional model-specific parameters (e.g., `temperature`, `max_tokens`, etc.).
@@ -215,6 +235,35 @@ llm_config <- function(provider, model, api_key, ...) {
 #'   embedding_response <- call_llm(voyage_config, text_input)
 #'   embeddings <- parse_embeddings(embedding_response)
 #'   embeddings |> cor() |> print()
+#'
+#'
+#'   # Gemini Example
+#'   gemini_config <- llm_config(
+#'     provider = "gemini",
+#'     model = "gemini-pro",          # Or another Gemini model
+#'     api_key = Sys.getenv("GEMINI_API_KEY"), # Make sure to set your Gemini API key in environment variables
+#'     temperature = 0.9,               # Controls randomness
+#'     max_tokens = 800,              # Maximum tokens to generate
+#'     top_p = 0.9,                     # Nucleus sampling parameter
+#'     top_k = 10                      # Top K sampling parameter
+#'   )
+#'
+#'   gemini_message <- list(
+#'     list(role = "user", content = "Explain the theory of relativity to a curious 3-year-old!")
+#'   )
+#'
+#'   gemini_response <- call_llm(
+#'     config = gemini_config,
+#'     messages = gemini_message,
+#'     json = TRUE # Get raw JSON for inspection if needed
+#'   )
+#'
+#'   # Display the generated text response
+#'   cat("Gemini Response:", gemini_response, "\n")
+#'
+#'   # Access and print the raw JSON response
+#'   raw_json_gemini_response <- attr(gemini_response, "raw_json")
+#'   print(raw_json_gemini_response)
 #' }
 call_llm <- function(config, messages, verbose = FALSE, json = FALSE) {
   UseMethod("call_llm", config)
@@ -393,6 +442,44 @@ call_llm.voyage <- function(config, messages, verbose = FALSE, json = FALSE) {
 
   perform_request(req, verbose, json)
 }
+
+
+#' @export
+call_llm.gemini <- function(config, messages, verbose = FALSE, json = FALSE) {
+  endpoint <- get_endpoint(config, default_endpoint = paste0("https://generativelanguage.googleapis.com/v1beta/models/", config$model, ":generateContent"))
+
+  # Format messages for Gemini API
+  formatted_messages <- lapply(messages, function(msg) {
+    list(
+      role = msg$role,
+      parts = list(list(text = msg$content)) # Gemini expects content in 'parts' as a list of lists
+    )
+  })
+
+  body <- list(
+    contents = formatted_messages,
+    generationConfig = list(
+      temperature = rlang::`%||%`(config$model_params$temperature, 1),
+      maxOutputTokens = rlang::`%||%`(config$model_params$max_tokens, 1024), # Gemini uses maxOutputTokens
+      topP = rlang::`%||%`(config$model_params$top_p, 1),
+      topK = rlang::`%||%`(config$model_params$top_k, 1) # Added topK as it's common
+      # frequency_penalty and presence_penalty are not standard Gemini parameters.
+    )
+  )
+
+  req <- httr2::request(endpoint) |>
+    httr2::req_headers(
+      "Content-Type" = "application/json",
+      "x-goog-api-key" = config$api_key # Gemini uses x-goog-api-key header
+    ) |>
+    httr2::req_body_json(body)
+
+  perform_request(req, verbose, json)
+}
+
+
+
+
 
 #' Parse Embedding Response into a Numeric Matrix
 #'
