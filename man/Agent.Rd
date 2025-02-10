@@ -7,6 +7,104 @@
 An R6 class representing an agent that interacts with language models.
 Each Agent can maintain its own memory, knowledge, and references to a model config.
 }
+\examples{
+\dontrun{
+# Example: Multi-Agent Conversation on Carbon Footprint
+# ------------------------------------------------------
+# First, set up the LLM configuration
+agentcfg <- llm_config(
+  provider = "groq",
+  model = "llama-3.3-70b-versatile",
+  api_key = Sys.getenv("GROQ_KEY"),
+  temperature = 1,
+  max_tokens = 500
+)
+
+# Create a conversation about reducing carbon footprint
+conv <- LLMConversation$new(topic = "Reducing Carbon Footprint Discussion")
+
+# Create three agents with different perspectives
+liberal_agent <- Agent$new(
+  id = "liberal",
+  model_config = agentcfg,
+  knowledge = list(party = "liberal")
+)
+
+conservative_agent <- Agent$new(
+  id = "conservative",
+  model_config = agentcfg,
+  knowledge = list(party = "conservative")
+)
+
+mediator_agent <- Agent$new(
+  id = "mediator",
+  model_config = agentcfg,
+  knowledge = list(role = "mediator")
+)
+
+# Add all agents to the conversation
+conv$add_agent(liberal_agent)
+conv$add_agent(conservative_agent)
+conv$add_agent(mediator_agent)
+
+# Chain responses using AgentAction
+# Initial liberal perspective
+conv <- conv + AgentAction(
+  liberal_agent,
+  prompt_template = paste(
+    "{{topic}} From your liberal perspective,",
+    "what strategies would you suggest to further reduce the carbon footprint?"
+  )
+)
+
+# Conservative response incorporating conversation history
+conv <- conv + AgentAction(
+  conservative_agent,
+  prompt_template = paste(
+    "{{conversation}} Do you agree with all of this?",
+    "Given your conservative background, give your comments about every item",
+    "proposed so far and then add your own suggestions."
+  )
+)
+
+# Mediator synthesizes perspectives
+conv <- conv + AgentAction(
+  mediator_agent,
+  prompt_template = paste(
+    "Considering these views\n{{conversation}}\n",
+    "identify common ground and propose a unified approach",
+    "to reducing the carbon footprint."
+  )
+)
+
+# Liberal response to mediator's summary
+conv <- conv + AgentAction(
+  liberal_agent,
+  prompt_template = paste(
+    "Reviewing what the moderator summarized: {{last_output}}\n",
+    "I understand there is disagreement, but do you agree with these",
+    "common grounds? If not, what would you change?"
+  )
+)
+
+# Advanced: Using specific conversation snippets
+mediator_snippet <- paste(
+  tail(conv$conversation_history, 2)[[1]]$speaker,
+  tail(conv$conversation_history, 2)[[1]]$text,
+  collapse = ":"
+)
+
+conv <- conv + AgentAction(
+  conservative_agent,
+  prompt_template = "The mediator said:\n{{frozen_text}}\nWhat is your response?",
+  replacements = list(frozen_text = mediator_snippet)
+)
+
+# View the conversation history
+conv$print_history()
+}
+
+}
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
 \describe{
