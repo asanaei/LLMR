@@ -23,6 +23,7 @@ Sends a message to the specified LLM API and retrieves the response.
 }
 \examples{
 \dontrun{
+# Make sure to set your needed API keys in environment variables
   # OpenAI Embedding Example (overwriting api_url):
   openai_embed_config <- llm_config(
     provider = "openai",
@@ -55,7 +56,7 @@ Sends a message to the specified LLM API and retrieves the response.
   gemini_config <- llm_config(
     provider = "gemini",
     model = "gemini-pro",          # Or another Gemini model
-    api_key = Sys.getenv("GEMINI_API_KEY"), # Make sure to set your Gemini API key in environment variables
+    api_key = Sys.getenv("GEMINI_API_KEY"),
     temperature = 0.9,               # Controls randomness
     max_tokens = 800,              # Maximum tokens to generate
     top_p = 0.9,                     # Nucleus sampling parameter

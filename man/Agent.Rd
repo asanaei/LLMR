@@ -11,29 +11,34 @@ Each Agent can maintain its own memory, knowledge, and references to a model con
 \dontrun{
 # Example: Multi-Agent Conversation on Carbon Footprint
 # ------------------------------------------------------
-# First, set up the LLM configuration
+library(LLMR)
+
+# Set up model configuration
 agentcfg <- llm_config(
-  provider = "groq",
-  model = "llama-3.3-70b-versatile",
-  api_key = Sys.getenv("GROQ_KEY"),
-  temperature = 1,
-  max_tokens = 500
+  provider   = "openai",
+  model      = "gpt-4o-mini",
+  api_key    = Sys.getenv("OPENAI_KEY"),
+  temperature = 1.0,
+  max_tokens  = 1000
 )
 
-# Create a conversation about reducing carbon footprint
-conv <- LLMConversation$new(topic = "Reducing Carbon Footprint Discussion")
-
-# Create three agents with different perspectives
+# Create three agents: liberal, conservative, mediator
 liberal_agent <- Agent$new(
   id = "liberal",
   model_config = agentcfg,
-  knowledge = list(party = "liberal")
+  knowledge = list(
+    ideology  = "liberal",
+    verbosity = "brief"
+  )
 )
 
 conservative_agent <- Agent$new(
   id = "conservative",
   model_config = agentcfg,
-  knowledge = list(party = "conservative")
+  knowledge = list(
+    ideology  = "conservative",
+    verbosity = "very terse"
+  )
 )
 
 mediator_agent <- Agent$new(
@@ -42,52 +47,57 @@ mediator_agent <- Agent$new(
   knowledge = list(role = "mediator")
 )
 
-# Add all agents to the conversation
-conv$add_agent(liberal_agent)
-conv$add_agent(conservative_agent)
-conv$add_agent(mediator_agent)
+# We can inject messages to establish context
+# conv$add_message(
+#   "System",
+#   "We are discussing the most effective ways to reduce carbon footprint."
+# )
+# conv$add_message(
+#   "Liberal",
+#   "If corporations are not held accountable, they will continue to pollute.
+#    We need stricter regulations."
+# )
+# conv$add_message(
+#   "Conservative",
+#   "Regulations can stifle economic growth. We should incentivize companies
+#    to reduce emissions voluntarily. Don't kill capitalism!"
+# )
 
-# Chain responses using AgentAction
-# Initial liberal perspective
-conv <- conv + AgentAction(
-  liberal_agent,
-  prompt_template = paste(
-    "{{topic}} From your liberal perspective,",
-    "what strategies would you suggest to further reduce the carbon footprint?"
+# Create a conversation about reducing carbon footprint
+# Chain agent responses:
+conv <- LLMConversation$new(topic = "Reducing Carbon Footprint Discussion") +
+  AgentAction(
+    liberal_agent,
+    prompt_template = "{{topic}}\n From your liberal perspective, what
+    strategies would you suggest to further reduce the carbon footprint?"
   )
-)
 
-# Conservative response incorporating conversation history
+# See how conversation is injected into the prompt:
 conv <- conv + AgentAction(
   conservative_agent,
-  prompt_template = paste(
-    "{{conversation}} Do you agree with all of this?",
-    "Given your conservative background, give your comments about every item",
-    "proposed so far and then add your own suggestions."
-  )
+  prompt_template = "so far we heard\n {{conversation}}\n Do you agree
+  with all of this?  Given your coservative background, give your comments
+  about every item proposed so far and then add your own suggestions."
 )
 
-# Mediator synthesizes perspectives
 conv <- conv + AgentAction(
   mediator_agent,
-  prompt_template = paste(
-    "Considering these views\n{{conversation}}\n",
-    "identify common ground and propose a unified approach",
-    "to reducing the carbon footprint."
-  )
+  prompt_template = "Considering these views\n{{conversation}}\n identify
+  common ground and propose a unified approach to reducing the carbon
+  footprint."
 )
 
-# Liberal response to mediator's summary
+# New step for the liberal agent that now includes just the last line
 conv <- conv + AgentAction(
   liberal_agent,
-  prompt_template = paste(
-    "Reviewing what the moderator summarized: {{last_output}}\n",
-    "I understand there is disagreement, but do you agree with these",
-    "common grounds? If not, what would you change?"
-  )
+  prompt_template = "Reviewing what the moderator summarized: {{last_output}}\n
+  I understand there is disagreement, but do you agree with these common grounds?
+  If not, what would you change?"
 )
 
-# Advanced: Using specific conversation snippets
+conv$print_history()
+
+# Another technique for more direct control of what goes into a prompt
 mediator_snippet <- paste(
   tail(conv$conversation_history, 2)[[1]]$speaker,
   tail(conv$conversation_history, 2)[[1]]$text,
@@ -100,7 +110,7 @@ conv <- conv + AgentAction(
   replacements = list(frozen_text = mediator_snippet)
 )
 
-# View the conversation history
+# Print the final conversation history
 conv$print_history()
 }
 

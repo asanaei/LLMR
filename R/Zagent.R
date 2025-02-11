@@ -1,9 +1,13 @@
+#################
+# Zagent.R
+#################
+
 # -----------------------------------------------------------------------------
 # UTILITY
 # -----------------------------------------------------------------------------
 
 #' @keywords internal
-#' Null-coalescing operator
+# Null-coalescing operator
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
 
@@ -13,18 +17,16 @@
 # Because `+` in R is an S3 generic that dispatches on the class of the FIRST
 # argument, we define `+.LLMConversation` to dispatch on the second argument's class.
 # This solves the "non-numeric argument" issue when doing:
-#     conv + summary_agent(...) + latex_agent(...)
+#     conv + AgentAction(...) + AgentAction(...)
 
 #' @export
 `+.LLMConversation` <- function(e1, e2) {
-  class_e2 <- class(e2)[1]  # e.g. "AgentAction" or "Agent"
-  method <- paste0("+.LLMConversation.", class_e2)
-  if (exists(method, mode = "function")) {
-    # call the specialized method if it exists
-    do.call(method, list(e1, e2))
+  # We only care about AgentAction chaining now
+  if (inherits(e2, "AgentAction")) {
+    return(`+.LLMConversation.AgentAction`(e1, e2))
   } else {
-    # fall back on base plus if no method
-    base::`+`(e1, e2)
+    # Anything else is not supported
+    stop("Unsupported addition: LLMConversation + ", class(e2)[1])
   }
 }
 
@@ -38,53 +40,20 @@
   }
   # Prompt that agent
   e1$converse(
-    agent_id       = agent_id,
-    prompt_template= e2$prompt_template,
-    replacements   = e2$replacements,
-    verbose        = e2$verbose
+    agent_id        = agent_id,
+    prompt_template = e2$prompt_template,
+    replacements    = e2$replacements,
+    verbose         = e2$verbose
   )
   # Return updated conversation
   e1
 }
 
-#' @export
-`+.LLMConversation.Agent` <- function(e1, e2) {
-  # e1 is LLMConversation, e2 is Agent
-  e1$add_agent(e2)
-  e1
-}
-
-
 # -----------------------------------------------------------------------------
-# S3 "PLUS" DISPATCH FOR Agent (only if needed)
+# WE REMOVE Ops.LLMConversation & Ops.Agent
 # -----------------------------------------------------------------------------
-# For Agent + Agent, etc. This is optional; included for completeness.
 
-#' @export
-`+.Agent` <- function(e1, e2) {
-  UseMethod("+.Agent", e2)
-}
-
-#' @export
-`+.Agent.Agent` <- function(e1, e2) {
-  # If user does agent1 + agent2, produce a new conversation containing both.
-  conv <- LLMConversation$new(topic = "Conversation from two Agents")
-  conv$add_agent(e1)
-  conv$add_agent(e2)
-  conv
-}
-
-#' @export
-`+.Agent.LLMConversation` <- function(e1, e2) {
-  e2$add_agent(e1)
-  e2
-}
-
-#' @export
-`+.Agent.default` <- function(e1, e2) {
-  base::`+`(e1, e2)
-}
-
+# No more support for conv + agent or agent + agent.
 
 # -----------------------------------------------------------------------------
 # AGENTACTION S3 CLASS
@@ -133,7 +102,6 @@ AgentAction <- function(agent, prompt_template, replacements = list(), verbose =
   )
 }
 
-
 # -----------------------------------------------------------------------------
 # AGENT R6 CLASS
 # -----------------------------------------------------------------------------
@@ -143,6 +111,112 @@ AgentAction <- function(agent, prompt_template, replacements = list(), verbose =
 #' @description
 #' An R6 class representing an agent that interacts with language models.
 #' Each Agent can maintain its own memory, knowledge, and references to a model config.
+#' @examples
+#' \dontrun{
+#' # Example: Multi-Agent Conversation on Carbon Footprint
+#' # ------------------------------------------------------
+#' library(LLMR)
+#'
+#' # Set up model configuration
+#' agentcfg <- llm_config(
+#'   provider   = "openai",
+#'   model      = "gpt-4o-mini",
+#'   api_key    = Sys.getenv("OPENAI_KEY"),
+#'   temperature = 1.0,
+#'   max_tokens  = 1000
+#' )
+#'
+#' # Create three agents: liberal, conservative, mediator
+#' liberal_agent <- Agent$new(
+#'   id = "liberal",
+#'   model_config = agentcfg,
+#'   knowledge = list(
+#'     ideology  = "liberal",
+#'     verbosity = "brief"
+#'   )
+#' )
+#'
+#' conservative_agent <- Agent$new(
+#'   id = "conservative",
+#'   model_config = agentcfg,
+#'   knowledge = list(
+#'     ideology  = "conservative",
+#'     verbosity = "very terse"
+#'   )
+#' )
+#'
+#' mediator_agent <- Agent$new(
+#'   id = "mediator",
+#'   model_config = agentcfg,
+#'   knowledge = list(role = "mediator")
+#' )
+#'
+#' # We can inject messages to establish context
+#' # conv$add_message(
+#' #   "System",
+#' #   "We are discussing the most effective ways to reduce carbon footprint."
+#' # )
+#' # conv$add_message(
+#' #   "Liberal",
+#' #   "If corporations are not held accountable, they will continue to pollute.
+#' #    We need stricter regulations."
+#' # )
+#' # conv$add_message(
+#' #   "Conservative",
+#' #   "Regulations can stifle economic growth. We should incentivize companies
+#' #    to reduce emissions voluntarily. Don't kill capitalism!"
+#' # )
+#'
+#' # Create a conversation about reducing carbon footprint
+#' # Chain agent responses:
+#' conv <- LLMConversation$new(topic = "Reducing Carbon Footprint Discussion") +
+#'   AgentAction(
+#'     liberal_agent,
+#'     prompt_template = "{{topic}}\n From your liberal perspective, what
+#'     strategies would you suggest to further reduce the carbon footprint?"
+#'   )
+#'
+#' # See how conversation is injected into the prompt:
+#' conv <- conv + AgentAction(
+#'   conservative_agent,
+#'   prompt_template = "so far we heard\n {{conversation}}\n Do you agree
+#'   with all of this?  Given your coservative background, give your comments
+#'   about every item proposed so far and then add your own suggestions."
+#' )
+#'
+#' conv <- conv + AgentAction(
+#'   mediator_agent,
+#'   prompt_template = "Considering these views\n{{conversation}}\n identify
+#'   common ground and propose a unified approach to reducing the carbon
+#'   footprint."
+#' )
+#'
+#' # New step for the liberal agent that now includes just the last line
+#' conv <- conv + AgentAction(
+#'   liberal_agent,
+#'   prompt_template = "Reviewing what the moderator summarized: {{last_output}}\n
+#'   I understand there is disagreement, but do you agree with these common grounds?
+#'   If not, what would you change?"
+#' )
+#'
+#' conv$print_history()
+#'
+#' # Another technique for more direct control of what goes into a prompt
+#' mediator_snippet <- paste(
+#'   tail(conv$conversation_history, 2)[[1]]$speaker,
+#'   tail(conv$conversation_history, 2)[[1]]$text,
+#'   collapse = ":"
+#' )
+#'
+#' conv <- conv + AgentAction(
+#'   conservative_agent,
+#'   prompt_template = "The mediator said:\n{{frozen_text}}\nWhat is your response?",
+#'   replacements = list(frozen_text = mediator_snippet)
+#' )
+#'
+#' # Print the final conversation history
+#' conv$print_history()
+#' }
 #'
 #' @export
 Agent <- R6::R6Class(
@@ -171,11 +245,11 @@ Agent <- R6::R6Class(
       if (!inherits(model_config, "llm_config")) {
         stop("model_config must be an llm_config object.")
       }
-      self$id            <- id
-      self$context_length<- context_length
-      self$knowledge     <- knowledge %||% list()
-      self$model_config  <- model_config
-      self$memory        <- list()
+      self$id             <- id
+      self$context_length <- context_length
+      self$knowledge      <- knowledge %||% list()
+      self$model_config   <- model_config
+      self$memory         <- list()
     },
 
     #' @description
@@ -219,21 +293,18 @@ Agent <- R6::R6Class(
         full_resp  <- attr(response, "full_response")
         text_out   <- ""
         token_info <- list(tokens_sent = 0, tokens_received = 0)
-
         # Extract text
         tryCatch({
           text_out <- private$extract_text_from_response(full_resp)
         }, error = function(e) {
           warning("Error extracting text: ", e$message)
         })
-
         # Extract usage
         tryCatch({
           token_info <- private$extract_token_counts(full_resp, self$model_config$provider)
         }, error = function(e) {
           warning("Error counting tokens: ", e$message)
         })
-
         list(
           text            = if (is.null(text_out)) "" else as.character(text_out),
           tokens_sent     = as.numeric(token_info$tokens_sent),
@@ -268,21 +339,18 @@ Agent <- R6::R6Class(
     think = function(topic, prompt_template, replacements = list(), verbose = FALSE) {
       if (missing(topic)) stop("Topic is required for thinking.")
       if (missing(prompt_template)) stop("Prompt template is required for thinking.")
-
       # Combine all memory into a conversation string
       conversation <- paste(
         sapply(self$memory, function(msg) paste0(msg$speaker, ": ", msg$text)),
         collapse = "\n"
       )
-
-      # Capture the agent's last output (or empty if none)
+      # Capture the agent's last output
       last_output <- if (length(self$memory) > 0) {
         self$memory[[length(self$memory)]]$text
       } else {
         ""
       }
-
-      # Build up the list of placeholders
+      # Build up placeholders
       full_replacements <- c(
         list(
           topic        = topic,
@@ -292,7 +360,6 @@ Agent <- R6::R6Class(
         replacements,
         self$knowledge
       )
-
       self$generate(prompt_template, full_replacements, verbose)
     },
 
@@ -305,20 +372,18 @@ Agent <- R6::R6Class(
     respond = function(topic, prompt_template, replacements = list(), verbose = FALSE) {
       if (missing(topic)) stop("Topic is required for responding.")
       if (missing(prompt_template)) stop("Prompt template is required for responding.")
-
       # Combine all memory into a conversation string
       conversation <- paste(
         sapply(self$memory, function(msg) paste0(msg$speaker, ": ", msg$text)),
         collapse = "\n"
       )
-
-      # The last output from memory (same approach as in think())
+      # The last output from memory
       last_output <- if (length(self$memory) > 0) {
         self$memory[[length(self$memory)]]$text
       } else {
         ""
       }
-
+      # Build up placeholders
       full_replacements <- c(
         list(
           topic        = topic,
@@ -337,7 +402,6 @@ Agent <- R6::R6Class(
       self$memory <- list()
     }
   ),
-
   private = list(
     extract_token_counts = function(response, provider) {
       usage <- response$usage %||% NULL
@@ -365,7 +429,6 @@ Agent <- R6::R6Class(
         tokens_received = as.numeric(tokens_received %||% 0)
       )
     },
-
     extract_text_from_response = function(response) {
       if (is.null(response)) return("")
       # OpenAI style
@@ -404,7 +467,6 @@ Agent <- R6::R6Class(
   )
 )
 
-
 # -----------------------------------------------------------------------------
 # LLMCONVERSATION R6 CLASS
 # -----------------------------------------------------------------------------
@@ -437,7 +499,6 @@ LLMConversation <- R6::R6Class(
     topic = NULL,
     #' @field prompts An optional list of prompt templates (may be ignored).
     prompts = NULL,
-
     #' @description
     #' Create a new conversation.
     #' @param topic Character. The conversation topic.
@@ -449,7 +510,6 @@ LLMConversation <- R6::R6Class(
       self$agents               <- list()
       self$conversation_history <- list()
     },
-
     #' @description
     #' Add an \code{Agent} to this conversation. The agent is stored by its \code{id}.
     #' @param agent The \code{Agent} to add.
@@ -459,7 +519,6 @@ LLMConversation <- R6::R6Class(
       }
       self$agents[[agent$id]] <- agent
     },
-
     #' @description
     #' Add a message to the global conversation log.
     #' @param speaker Character. Who is speaking?
@@ -470,7 +529,6 @@ LLMConversation <- R6::R6Class(
         list(list(speaker = speaker, text = text))
       )
     },
-
     #' @description
     #' Have a specific agent produce a response. The entire global conversation so far
     #' is temporarily loaded into that agent's memory, the agent responds, and then
@@ -485,25 +543,19 @@ LLMConversation <- R6::R6Class(
         stop("Agent ", agent_id, " is not in the conversation.")
       }
       agent <- self$agents[[agent_id]]
-
       # Temporarily feed entire conv history to the agent
       for (msg in self$conversation_history) {
         agent$add_memory(msg$speaker, msg$text)
       }
-
       # Let the agent produce a response
       response <- agent$respond(self$topic, prompt_template, replacements, verbose)
-
       # Store it globally
       self$add_message(agent_id, response$text)
-
       # Trim agent's memory, re-add only the final new line
       agent$reset_memory()
       agent$add_memory(agent_id, response$text)
-
       invisible(response)
     },
-
     #' @description
     #' Run a multi-step conversation among a sequence of agents.
     #' @param agent_sequence Character vector of agent IDs in the order they will speak.
@@ -531,16 +583,14 @@ LLMConversation <- R6::R6Class(
         self$converse(agent_id, current_prompt, current_reps, verbose)
       }
     },
-
     #' @description
     #' Print the conversation so far to the console.
     print_history = function() {
       cat("Conversation History:\n")
       for (msg in self$conversation_history) {
-        cat(sprintf("%s: %s\n", msg$speaker, msg$text))
+        cat(sprintf("\n-------------\n<%s>: %s\n", msg$speaker, msg$text))
       }
     },
-
     #' @description
     #' Clear the global conversation and reset all agent memories.
     reset_conversation = function() {
@@ -549,7 +599,6 @@ LLMConversation <- R6::R6Class(
         agent$reset_memory()
       }
     },
-
     #' @description
     #' A pipe-like operator to chain conversation steps. E.g.,
     #' \code{conv |> "Solver"(prompt_template, replacements)}.
