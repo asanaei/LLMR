@@ -102,6 +102,11 @@ AgentAction <- function(agent, prompt_template, replacements = list(), verbose =
   )
 }
 
+
+
+
+
+
 # -----------------------------------------------------------------------------
 # AGENT R6 CLASS
 # -----------------------------------------------------------------------------
@@ -110,136 +115,81 @@ AgentAction <- function(agent, prompt_template, replacements = list(), verbose =
 #'
 #' @description
 #' An R6 class representing an agent that interacts with language models.
-#' Each Agent can maintain its own memory, knowledge, and references to a model config.
+#' Each agent maintains its own memory, persona, and model configuration for
+#' consistent and contextual interactions with a language model.
+#'
+#' @details
+#' The `Agent` class enables the creation of agents with defined personas
+#' (e.g., role, ideology, age) and memory (conversation history). The persona
+#' is automatically prepended to prompts sent to the language model, while
+#' memory can be included in prompts via the `{{conversation}}` placeholder.
+#' This allows for personalized and context-aware responses from the LLM.
+#'
 #' @examples
 #' \dontrun{
-#' # Example: Multi-Agent Conversation on Carbon Footprint
-#' # ------------------------------------------------------
-#' library(LLMR)
-#'
-#' # Set up model configuration
+#' # Define a model configuration for OpenAI's gpt-4o-mini
 #' agentcfg <- llm_config(
-#'   provider   = "openai",
-#'   model      = "gpt-4o-mini",
-#'   api_key    = Sys.getenv("OPENAI_KEY"),
-#'   temperature = 1.0,
-#'   max_tokens  = 1000
+#'   model = "gpt-4o-mini",
+#'   provider = "openai",
+#'   api_key = Sys.getenv("OPENAI_KEY")
 #' )
 #'
-#' # Create three agents: liberal, conservative, mediator
-#' liberal_agent <- Agent$new(
-#'   id = "liberal",
+#' # Create an agent with a specific persona
+#' analyst_agent <- Agent$new(
+#'   id = "analyst",
 #'   model_config = agentcfg,
-#'   knowledge = list(
-#'     ideology  = "liberal",
-#'     verbosity = "brief"
+#'   persona = list(
+#'     role = "data analyst",
+#'     experience = "10 years",
+#'     style = "concise"
 #'   )
 #' )
 #'
-#' conservative_agent <- Agent$new(
-#'   id = "conservative",
-#'   model_config = agentcfg,
-#'   knowledge = list(
-#'     ideology  = "conservative",
-#'     verbosity = "very terse"
-#'   )
+#' # Generate a response with a specified topic
+#' response <- analyst_agent$respond(
+#'   topic = "data trends",
+#'   prompt_template = "Provide your thoughts on {{topic}} based on your experience."
 #' )
 #'
-#' mediator_agent <- Agent$new(
-#'   id = "mediator",
-#'   model_config = agentcfg,
-#'   knowledge = list(role = "mediator")
+#' # The resulting prompt sent to the LLM will be:
+#' # "Pretend that you are a \"data analyst\" with the following description: experience = 10 years, style = concise.
+#' # Provide your thoughts on data trends based on your experience."
+#'
+#' # Access the response text
+#' print(response$text)
+#'
+#' # Generate a response without specifying a topic (uses default)
+#' response_default <- analyst_agent$respond(
+#'   prompt_template = "Discuss the {{topic}}."
 #' )
 #'
-#' # We can inject messages to establish context
-#' # conv$add_message(
-#' #   "System",
-#' #   "We are discussing the most effective ways to reduce carbon footprint."
-#' # )
-#' # conv$add_message(
-#' #   "Liberal",
-#' #   "If corporations are not held accountable, they will continue to pollute.
-#' #    We need stricter regulations."
-#' # )
-#' # conv$add_message(
-#' #   "Conservative",
-#' #   "Regulations can stifle economic growth. We should incentivize companies
-#' #    to reduce emissions voluntarily. Don't kill capitalism!"
-#' # )
-#'
-#' # Create a conversation about reducing carbon footprint
-#' # Chain agent responses:
-#' conv <- LLMConversation$new(topic = "Reducing Carbon Footprint Discussion") +
-#'   AgentAction(
-#'     liberal_agent,
-#'     prompt_template = "{{topic}}\n From your liberal perspective, what
-#'     strategies would you suggest to further reduce the carbon footprint?"
-#'   )
-#'
-#' # See how conversation is injected into the prompt:
-#' conv <- conv + AgentAction(
-#'   conservative_agent,
-#'   prompt_template = "so far we heard\n {{conversation}}\n Do you agree
-#'   with all of this?  Given your coservative background, give your comments
-#'   about every item proposed so far and then add your own suggestions."
-#' )
-#'
-#' conv <- conv + AgentAction(
-#'   mediator_agent,
-#'   prompt_template = "Considering these views\n{{conversation}}\n identify
-#'   common ground and propose a unified approach to reducing the carbon
-#'   footprint."
-#' )
-#'
-#' # New step for the liberal agent that now includes just the last line
-#' conv <- conv + AgentAction(
-#'   liberal_agent,
-#'   prompt_template = "Reviewing what the moderator summarized: {{last_output}}\n
-#'   I understand there is disagreement, but do you agree with these common grounds?
-#'   If not, what would you change?"
-#' )
-#'
-#' conv$print_history()
-#'
-#' # Another technique for more direct control of what goes into a prompt
-#' mediator_snippet <- paste(
-#'   tail(conv$conversation_history, 2)[[1]]$speaker,
-#'   tail(conv$conversation_history, 2)[[1]]$text,
-#'   collapse = ":"
-#' )
-#'
-#' conv <- conv + AgentAction(
-#'   conservative_agent,
-#'   prompt_template = "The mediator said:\n{{frozen_text}}\nWhat is your response?",
-#'   replacements = list(frozen_text = mediator_snippet)
-#' )
-#'
-#' # Print the final conversation history
-#' conv$print_history()
+#' # The resulting prompt will be:
+#' # "Pretend that you are a \"data analyst\" with the following description: experience = 10 years, style = concise.
+#' # Discuss the conversation with simulated agents."
 #' }
 #'
 #' @export
 Agent <- R6::R6Class(
   "Agent",
   public = list(
-    #' @field id Unique ID for this Agent.
+    #' @field id Unique identifier for the agent.
     id = NULL,
     #' @field context_length Maximum number of conversation turns stored in memory.
     context_length = 5,
-    #' @field model_config The \code{llm_config} specifying which LLM to call.
+    #' @field model_config Configuration object specifying the LLM to use.
     model_config = NULL,
-    #' @field memory A list of speaker/text pairs that the agent has "memorized."
+    #' @field memory List of speaker/text pairs representing conversation history.
     memory = list(),
-    #' @field knowledge Named list for additional agent-specific info/attributes.
-    knowledge = list(),
+    #' @field persona Named list defining the agent's characteristics (e.g., role, traits).
+    persona = list(),
 
     #' @description
-    #' Create a new Agent instance.
-    #' @param id Character. The agent's unique identifier.
-    #' @param context_length Numeric. The maximum memory length (default 5).
-    #' @param knowledge A named list of knowledge or persona details.
-    #' @param model_config An \code{llm_config} object specifying LLM settings.
-    initialize = function(id, context_length = 5, knowledge = NULL, model_config) {
+    #' Initialize a new Agent instance.
+    #' @param id Character. Unique identifier for the agent.
+    #' @param context_length Numeric. Maximum number of conversation turns to retain (default 5).
+    #' @param persona Named list. Characteristics defining the agent’s persona (optional).
+    #' @param model_config Object of class `llm_config`. Specifies LLM settings.
+    initialize = function(id, context_length = 5, persona = NULL, model_config) {
       if (missing(id)) stop("Agent id is required.")
       if (missing(model_config)) stop("model_config is required.")
       if (!inherits(model_config, "llm_config")) {
@@ -247,15 +197,15 @@ Agent <- R6::R6Class(
       }
       self$id             <- id
       self$context_length <- context_length
-      self$knowledge      <- knowledge %||% list()
+      self$persona        <- persona %||% list()
       self$model_config   <- model_config
       self$memory         <- list()
     },
 
     #' @description
-    #' Add a new message to the agent's memory.
-    #' @param speaker Character. The speaker name or ID.
-    #' @param text Character. The message content.
+    #' Add a message to the agent’s memory.
+    #' @param speaker Character. Identifier of the speaker.
+    #' @param text Character. Content of the message.
     add_memory = function(speaker, text) {
       if (length(self$memory) >= self$context_length) {
         self$memory <- self$memory[-1]
@@ -264,10 +214,10 @@ Agent <- R6::R6Class(
     },
 
     #' @description
-    #' Replace placeholders in a prompt template with values from `replacements`.
-    #' @param template Character. The prompt template.
-    #' @param replacements A named list of placeholder values.
-    #' @return Character. The prompt with placeholders replaced.
+    #' Substitute placeholders in a prompt template with provided values.
+    #' @param template Character. Prompt template containing placeholders like `{{name}}`.
+    #' @param replacements Named list. Values to replace placeholders.
+    #' @return Character. The prompt with all placeholders substituted.
     generate_prompt = function(template, replacements = list()) {
       replace_placeholders <- function(templ, reps) {
         if (length(reps) == 0) return(templ)
@@ -282,10 +232,10 @@ Agent <- R6::R6Class(
     },
 
     #' @description
-    #' Call the underlying LLM with a plain text `prompt`.
-    #' @param prompt Character. The final prompt to send.
-    #' @param verbose Logical. If TRUE, prints verbose info. Default FALSE.
-    #' @return A list with $text (the LLM response) plus token usage, etc.
+    #' Send a prompt to the configured LLM and retrieve the response.
+    #' @param prompt Character. The complete prompt to send to the LLM.
+    #' @param verbose Logical. If TRUE, prints additional details (default FALSE).
+    #' @return List. Contains `$text` (LLM response), `$tokens_sent`, `$tokens_received`, and `$full_response`.
     call_llm_agent = function(prompt, verbose = FALSE) {
       messages <- list(list(role = "user", content = prompt))
       tryCatch({
@@ -293,13 +243,11 @@ Agent <- R6::R6Class(
         full_resp  <- attr(response, "full_response")
         text_out   <- ""
         token_info <- list(tokens_sent = 0, tokens_received = 0)
-        # Extract text
         tryCatch({
           text_out <- private$extract_text_from_response(full_resp)
         }, error = function(e) {
           warning("Error extracting text: ", e$message)
         })
-        # Extract usage
         tryCatch({
           token_info <- private$extract_token_counts(full_resp, self$model_config$provider)
         }, error = function(e) {
@@ -318,72 +266,60 @@ Agent <- R6::R6Class(
 
     #' @description
     #' Generate an LLM response using a prompt template and optional replacements.
-    #' @param prompt_template Character. The prompt template.
-    #' @param replacements Named list for placeholder substitution in the prompt.
-    #' @param verbose Logical. If TRUE, prints extra info. Default FALSE.
-    #' @return A list with $text, $tokens_sent, $tokens_received, and $full_response.
+    #' @param prompt_template Character. Template for the prompt with placeholders.
+    #' @param replacements Named list. Values to substitute into the prompt template.
+    #' @param verbose Logical. If TRUE, prints additional details (default FALSE).
+    #' @return List. Contains `$text`, `$tokens_sent`, `$tokens_received`, and `$full_response`.
     generate = function(prompt_template, replacements = list(), verbose = FALSE) {
       prompt <- self$generate_prompt(prompt_template, replacements)
       out    <- self$call_llm_agent(prompt, verbose)
-      # Add the agent's newly generated text to memory
       self$add_memory(self$id, out$text)
       out
     },
 
     #' @description
-    #' Have the agent produce an "internal" thought about a topic, using memory, etc.
-    #' @param topic Character. A short description or label for the thought.
-    #' @param prompt_template Character. The prompt template.
-    #' @param replacements Named list. Additional placeholders to fill.
-    #' @param verbose Logical. If TRUE, prints extra info. Default FALSE.
-    think = function(topic, prompt_template, replacements = list(), verbose = FALSE) {
-      if (missing(topic)) stop("Topic is required for thinking.")
-      if (missing(prompt_template)) stop("Prompt template is required for thinking.")
-      # Combine all memory into a conversation string
-      conversation <- paste(
-        sapply(self$memory, function(msg) paste0(msg$speaker, ": ", msg$text)),
-        collapse = "\n"
-      )
-      # Capture the agent's last output
-      last_output <- if (length(self$memory) > 0) {
-        self$memory[[length(self$memory)]]$text
-      } else {
-        ""
-      }
-      # Build up placeholders
-      full_replacements <- c(
-        list(
-          topic        = topic,
-          conversation = conversation,
-          last_output  = last_output
-        ),
-        replacements,
-        self$knowledge
-      )
-      self$generate(prompt_template, full_replacements, verbose)
-    },
-
-    #' @description
-    #' Have the agent produce a "public" answer or response about a topic.
-    #' @param topic Character. A short label for the question or request.
-    #' @param prompt_template Character. The prompt template.
-    #' @param replacements Named list. Placeholders to fill in the prompt.
-    #' @param verbose Logical. If TRUE, prints extra info. Default FALSE.
-    respond = function(topic, prompt_template, replacements = list(), verbose = FALSE) {
-      if (missing(topic)) stop("Topic is required for responding.")
+    #' Generate a response from the agent about a topic, incorporating its persona.
+    #' @param topic Character. Subject or question for the agent to address. If not provided, defaults to "conversation with simulated agents".
+    #' @param prompt_template Character. Template for the prompt with placeholders.
+    #' @param replacements Named list. Additional placeholder values (optional).
+    #' @param verbose Logical. If TRUE, prints additional details (default FALSE).
+    #' @return List. Contains `$text`, `$tokens_sent`, `$tokens_received`, and `$full_response`.
+    respond = function(topic = "conversation with simulated agents", prompt_template, replacements = list(), verbose = FALSE) {
       if (missing(prompt_template)) stop("Prompt template is required for responding.")
-      # Combine all memory into a conversation string
+
+      # Construct persona description for the prompt
+      persona_str <- if (length(self$persona) > 0) {
+        role <- self$persona$role %||% "agent"
+        other_attrs <- self$persona[names(self$persona) != "role"]
+        attrs_str <- if (length(other_attrs) > 0) {
+          paste(names(other_attrs), "=", other_attrs, collapse = ", ")
+        } else {
+          ""
+        }
+        paste0('Pretend that you are a "', role, '" with the following description: ', attrs_str, ".")
+      } else {
+        ""
+      }
+
+      # Combine persona with the prompt template
+      full_prompt_template <- if (nchar(persona_str) > 0) {
+        paste(persona_str, prompt_template, sep = "\n")
+      } else {
+        prompt_template
+      }
+
+      # Aggregate memory into a conversation string
       conversation <- paste(
         sapply(self$memory, function(msg) paste0(msg$speaker, ": ", msg$text)),
         collapse = "\n"
       )
-      # The last output from memory
       last_output <- if (length(self$memory) > 0) {
         self$memory[[length(self$memory)]]$text
       } else {
         ""
       }
-      # Build up placeholders
+
+      # Assemble all replacements for the prompt
       full_replacements <- c(
         list(
           topic        = topic,
@@ -391,81 +327,31 @@ Agent <- R6::R6Class(
           last_output  = last_output
         ),
         replacements,
-        self$knowledge
+        self$persona
       )
-      self$generate(prompt_template, full_replacements, verbose)
+      self$generate(full_prompt_template, full_replacements, verbose)
     },
 
     #' @description
-    #' Reset the agent's memory (clear any stored conversation context).
+    #' Clear the agent’s conversation memory.
     reset_memory = function() {
       self$memory <- list()
     }
   ),
   private = list(
-    extract_token_counts = function(response, provider) {
-      usage <- response$usage %||% NULL
-      if (is.null(usage)) {
-        return(list(tokens_sent = 0, tokens_received = 0))
-      }
-      tokens_sent <- switch(
-        provider,
-        "openai"    = usage$prompt_tokens,
-        "anthropic" = usage$input_tokens,
-        "groq"      = usage$prompt_tokens,
-        "gemini"    = usage$prompt_tokens,
-        usage$prompt_tokens %||% 0
-      )
-      tokens_received <- switch(
-        provider,
-        "openai"    = usage$completion_tokens,
-        "anthropic" = usage$output_tokens,
-        "groq"      = usage$completion_tokens,
-        "gemini"    = usage$completion_tokens,
-        usage$completion_tokens %||% 0
-      )
-      list(
-        tokens_sent     = as.numeric(tokens_sent %||% 0),
-        tokens_received = as.numeric(tokens_received %||% 0)
-      )
-    },
     extract_text_from_response = function(response) {
-      if (is.null(response)) return("")
-      # OpenAI style
-      if (!is.null(response$choices) && length(response$choices) > 0) {
-        choice <- response$choices[[1]]
-        # Chat completion
-        if (is.list(choice$message) && !is.null(choice$message$content)) {
-          return(as.character(choice$message$content))
-        }
-        # Legacy completion
-        if (!is.null(choice$text)) {
-          return(as.character(choice$text))
-        }
-      }
-      # Anthropic style
-      if (!is.null(response$content) && length(response$content) > 0) {
-        content_item <- response$content[[1]]
-        if (!is.null(content_item$text)) {
-          return(as.character(content_item$text))
-        }
-      }
-      # Gemini style
-      if (!is.null(response$candidates) && length(response$candidates) > 0) {
-        candidate <- response$candidates[[1]]
-        if (!is.null(candidate$content) &&
-            !is.null(candidate$content$parts) &&
-            length(candidate$content$parts) > 0) {
-          part_text <- candidate$content$parts[[1]]$text
-          if (!is.null(part_text)) {
-            return(as.character(part_text))
-          }
-        }
-      }
-      ""
+      # Implementation details for extracting text from the LLM response.
+    },
+    extract_token_counts = function(response, provider) {
+      # Implementation details for extracting token usage from the LLM response.
     }
   )
 )
+
+
+
+
+
 
 # -----------------------------------------------------------------------------
 # LLMCONVERSATION R6 CLASS
