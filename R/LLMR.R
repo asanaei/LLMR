@@ -267,9 +267,9 @@ llm_config <- function(provider, model, api_key, ...) {
 #'   print(raw_json_gemini_response)
 #' }
 call_llm <- function(config, messages, verbose = FALSE, json = FALSE) {
-  print("\n\n Inside call_llm for troubleshooting")
-  print(messages)
-  print("\n\n")
+  # print("\n\n Inside call_llm for troubleshooting")
+  # print(messages)
+  # print("\n\n")
   UseMethod("call_llm", config)
 }
 
