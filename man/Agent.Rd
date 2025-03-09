@@ -10,67 +10,23 @@ consistent and contextual interactions with a language model.
 }
 \details{
 The `Agent` class enables the creation of agents with defined personas
-(e.g., role, ideology, age) and memory (conversation history). The persona
-is automatically prepended to prompts sent to the language model, while
-memory can be included in prompts via the `{{conversation}}` placeholder.
-This allows for personalized and context-aware responses from the LLM.
-}
-\examples{
-\dontrun{
-# Define a model configuration for OpenAI's gpt-4o-mini
-agentcfg <- llm_config(
-  model = "gpt-4o-mini",
-  provider = "openai",
-  api_key = Sys.getenv("OPENAI_KEY")
-)
-
-# Create an agent with a specific persona
-analyst_agent <- Agent$new(
-  id = "analyst",
-  model_config = agentcfg,
-  persona = list(
-    role = "data analyst",
-    experience = "10 years",
-    style = "concise"
-  )
-)
-
-# Generate a response with a specified topic
-response <- analyst_agent$respond(
-  topic = "data trends",
-  prompt_template = "Provide your thoughts on {{topic}} based on your experience."
-)
-
-# The resulting prompt sent to the LLM will be:
-# "Pretend that you are a \"data analyst\" with the following description: experience = 10 years, style = concise.
-# Provide your thoughts on data trends based on your experience."
-
-# Access the response text
-print(response$text)
-
-# Generate a response without specifying a topic (uses default)
-response_default <- analyst_agent$respond(
-  prompt_template = "Discuss the {{topic}}."
-)
-
-# The resulting prompt will be:
-# "Pretend that you are a \"data analyst\" with the following description: experience = 10 years, style = concise.
-# Discuss the conversation with simulated agents."
-}
-
+(e.g., ideology, verbosity, role) and memory (conversation history). In the new version,
+the persona is pushed to the LLM via a system message instead of being concatenated
+into the prompt. All previous functionality (e.g., thinking and responding) is preserved,
+with the old `knowledge` parameter replaced by `persona`.
 }
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
 \describe{
-\item{\code{id}}{Unique identifier for the agent.}
+\item{\code{id}}{Unique ID for this Agent.}
 
 \item{\code{context_length}}{Maximum number of conversation turns stored in memory.}
 
-\item{\code{model_config}}{Configuration object specifying the LLM to use.}
+\item{\code{model_config}}{The \code{llm_config} specifying which LLM to call.}
 
-\item{\code{memory}}{List of speaker/text pairs representing conversation history.}
+\item{\code{memory}}{A list of speaker/text pairs that the agent has "memorized."}
 
-\item{\code{persona}}{Named list defining the agent's characteristics (e.g., role, traits).}
+\item{\code{persona}}{Named list for additional agent-specific persona details.}
 }
 \if{html}{\out{</div>}}
 }
@@ -82,6 +38,7 @@ response_default <- analyst_agent$respond(
 \item \href{#method-Agent-generate_prompt}{\code{Agent$generate_prompt()}}
 \item \href{#method-Agent-call_llm_agent}{\code{Agent$call_llm_agent()}}
 \item \href{#method-Agent-generate}{\code{Agent$generate()}}
+\item \href{#method-Agent-think}{\code{Agent$think()}}
 \item \href{#method-Agent-respond}{\code{Agent$respond()}}
 \item \href{#method-Agent-reset_memory}{\code{Agent$reset_memory()}}
 \item \href{#method-Agent-clone}{\code{Agent$clone()}}
@@ -91,7 +48,7 @@ response_default <- analyst_agent$respond(
 \if{html}{\out{<a id="method-Agent-new"></a>}}
 \if{latex}{\out{\hypertarget{method-Agent-new}{}}}
 \subsection{Method \code{new()}}{
-Initialize a new Agent instance.
+Create a new Agent instance.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Agent$new(id, context_length = 5, persona = NULL, model_config)}\if{html}{\out{</div>}}
 }
@@ -99,13 +56,13 @@ Initialize a new Agent instance.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{id}}{Character. Unique identifier for the agent.}
+\item{\code{id}}{Character. The agent's unique identifier.}
 
-\item{\code{context_length}}{Numeric. Maximum number of conversation turns to retain (default 5).}
+\item{\code{context_length}}{Numeric. The maximum memory length (default 5).}
 
-\item{\code{persona}}{Named list. Characteristics defining the agent’s persona (optional).}
+\item{\code{persona}}{A named list of persona details (replaces old "knowledge").}
 
-\item{\code{model_config}}{Object of class `llm_config`. Specifies LLM settings.}
+\item{\code{model_config}}{An \code{llm_config} object specifying LLM settings.}
 }
 \if{html}{\out{</div>}}
 }
@@ -114,7 +71,7 @@ Initialize a new Agent instance.
 \if{html}{\out{<a id="method-Agent-add_memory"></a>}}
 \if{latex}{\out{\hypertarget{method-Agent-add_memory}{}}}
 \subsection{Method \code{add_memory()}}{
-Add a message to the agent’s memory.
+Add a new message to the agent's memory.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Agent$add_memory(speaker, text)}\if{html}{\out{</div>}}
 }
@@ -122,9 +79,9 @@ Add a message to the agent’s memory.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{speaker}}{Character. Identifier of the speaker.}
+\item{\code{speaker}}{Character. The speaker name or ID.}
 
-\item{\code{text}}{Character. Content of the message.}
+\item{\code{text}}{Character. The message content.}
 }
 \if{html}{\out{</div>}}
 }
@@ -133,7 +90,7 @@ Add a message to the agent’s memory.
 \if{html}{\out{<a id="method-Agent-generate_prompt"></a>}}
 \if{latex}{\out{\hypertarget{method-Agent-generate_prompt}{}}}
 \subsection{Method \code{generate_prompt()}}{
-Substitute placeholders in a prompt template with provided values.
+Replace placeholders in a prompt template with values from `replacements`.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Agent$generate_prompt(template, replacements = list())}\if{html}{\out{</div>}}
 }
@@ -141,21 +98,22 @@ Substitute placeholders in a prompt template with provided values.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{template}}{Character. Prompt template containing placeholders like `{{name}}`.}
+\item{\code{template}}{Character. The prompt template.}
 
-\item{\code{replacements}}{Named list. Values to replace placeholders.}
+\item{\code{replacements}}{A named list of placeholder values.}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-Character. The prompt with all placeholders substituted.
+Character. The prompt with placeholders replaced.
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Agent-call_llm_agent"></a>}}
 \if{latex}{\out{\hypertarget{method-Agent-call_llm_agent}{}}}
 \subsection{Method \code{call_llm_agent()}}{
-Send a prompt to the configured LLM and retrieve the response.
+Call the underlying LLM with a plain text `prompt`.
+If a persona is defined, it is pushed as a system message.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Agent$call_llm_agent(prompt, verbose = FALSE)}\if{html}{\out{</div>}}
 }
@@ -163,14 +121,14 @@ Send a prompt to the configured LLM and retrieve the response.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{prompt}}{Character. The complete prompt to send to the LLM.}
+\item{\code{prompt}}{Character. The final prompt to send.}
 
-\item{\code{verbose}}{Logical. If TRUE, prints additional details (default FALSE).}
+\item{\code{verbose}}{Logical. If TRUE, prints verbose info. Default FALSE.}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-List. Contains `$text` (LLM response), `$tokens_sent`, `$tokens_received`, and `$full_response`.
+A list with $text (the LLM response) plus token usage, etc.
 }
 }
 \if{html}{\out{<hr>}}
@@ -185,54 +143,75 @@ Generate an LLM response using a prompt template and optional replacements.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{prompt_template}}{Character. Template for the prompt with placeholders.}
+\item{\code{prompt_template}}{Character. The prompt template.}
 
-\item{\code{replacements}}{Named list. Values to substitute into the prompt template.}
+\item{\code{replacements}}{A named list for placeholder substitution.}
 
-\item{\code{verbose}}{Logical. If TRUE, prints additional details (default FALSE).}
+\item{\code{verbose}}{Logical. If TRUE, prints extra info. Default FALSE.}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-List. Contains `$text`, `$tokens_sent`, `$tokens_received`, and `$full_response`.
+A list with $text, $tokens_sent, $tokens_received, and $full_response.
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Agent-think"></a>}}
+\if{latex}{\out{\hypertarget{method-Agent-think}{}}}
+\subsection{Method \code{think()}}{
+Have the agent produce an "internal" thought about a topic using its memory.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Agent$think(topic, prompt_template, replacements = list(), verbose = FALSE)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{topic}}{Character. A short description or label for the thought.}
+
+\item{\code{prompt_template}}{Character. The prompt template.}
+
+\item{\code{replacements}}{A named list of additional placeholder values.}
+
+\item{\code{verbose}}{Logical. If TRUE, prints extra info. Default FALSE.}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A list with the LLM's response and related metadata.
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Agent-respond"></a>}}
 \if{latex}{\out{\hypertarget{method-Agent-respond}{}}}
 \subsection{Method \code{respond()}}{
-Generate a response from the agent about a topic, incorporating its persona.
+Have the agent produce a "public" answer or response about a topic.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Agent$respond(
-  topic = "conversation with simulated agents",
-  prompt_template,
-  replacements = list(),
-  verbose = FALSE
-)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Agent$respond(topic, prompt_template, replacements = list(), verbose = FALSE)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{topic}}{Character. Subject or question for the agent to address. If not provided, defaults to "conversation with simulated agents".}
+\item{\code{topic}}{Character. A short label for the question or request.}
 
-\item{\code{prompt_template}}{Character. Template for the prompt with placeholders.}
+\item{\code{prompt_template}}{Character. The prompt template.}
 
-\item{\code{replacements}}{Named list. Additional placeholder values (optional).}
+\item{\code{replacements}}{A named list for placeholder substitution.}
 
-\item{\code{verbose}}{Logical. If TRUE, prints additional details (default FALSE).}
+\item{\code{verbose}}{Logical. If TRUE, prints extra info. Default FALSE.}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-List. Contains `$text`, `$tokens_sent`, `$tokens_received`, and `$full_response`.
+A list with $text, $tokens_sent, $tokens_received, and $full_response.
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Agent-reset_memory"></a>}}
 \if{latex}{\out{\hypertarget{method-Agent-reset_memory}{}}}
 \subsection{Method \code{reset_memory()}}{
-Clear the agent’s conversation memory.
+Reset the agent's memory (clear any stored conversation context).
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Agent$reset_memory()}\if{html}{\out{</div>}}
 }
