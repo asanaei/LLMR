@@ -7,13 +7,16 @@
 An R6 class representing an agent that interacts with language models.
 Each agent maintains its own memory, persona, and model configuration for
 consistent and contextual interactions with a language model.
-}
-\details{
+
 The `Agent` class enables the creation of agents with defined personas
 (e.g., ideology, verbosity, role) and memory (conversation history). In the new version,
 the persona is pushed to the LLM via a system message instead of being concatenated
 into the prompt. All previous functionality (e.g., thinking and responding) is preserved,
 with the old `knowledge` parameter replaced by `persona`.
+
+Additionally, dynamic memory summarization can be enabled to handle longer
+contexts gracefully. If the memory exceeds a threshold, the agent will
+summarize its past memory.
 }
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
@@ -27,6 +30,10 @@ with the old `knowledge` parameter replaced by `persona`.
 \item{\code{memory}}{A list of speaker/text pairs that the agent has "memorized."}
 
 \item{\code{persona}}{Named list for additional agent-specific persona details.}
+
+\item{\code{enable_summarization}}{Toggle whether memory summarization is used when threshold is exceeded.}
+
+\item{\code{summarization_threshold}}{The maximum number of memory items before summarization is triggered.}
 }
 \if{html}{\out{</div>}}
 }
@@ -35,6 +42,7 @@ with the old `knowledge` parameter replaced by `persona`.
 \itemize{
 \item \href{#method-Agent-new}{\code{Agent$new()}}
 \item \href{#method-Agent-add_memory}{\code{Agent$add_memory()}}
+\item \href{#method-Agent-maybe_summarize_memory}{\code{Agent$maybe_summarize_memory()}}
 \item \href{#method-Agent-generate_prompt}{\code{Agent$generate_prompt()}}
 \item \href{#method-Agent-call_llm_agent}{\code{Agent$call_llm_agent()}}
 \item \href{#method-Agent-generate}{\code{Agent$generate()}}
@@ -50,7 +58,13 @@ with the old `knowledge` parameter replaced by `persona`.
 \subsection{Method \code{new()}}{
 Create a new Agent instance.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Agent$new(id, context_length = 5, persona = NULL, model_config)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Agent$new(
+  id,
+  context_length = 5,
+  persona = NULL,
+  model_config,
+  enable_summarization = TRUE
+)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -63,15 +77,22 @@ Create a new Agent instance.
 \item{\code{persona}}{A named list of persona details (replaces old "knowledge").}
 
 \item{\code{model_config}}{An \code{llm_config} object specifying LLM settings.}
+
+\item{\code{enable_summarization}}{Logical, if \code{TRUE}, agent will attempt to summarize
+memory when it exceeds the summarization threshold. Default \code{TRUE}.}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A new \code{Agent} object.
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Agent-add_memory"></a>}}
 \if{latex}{\out{\hypertarget{method-Agent-add_memory}{}}}
 \subsection{Method \code{add_memory()}}{
-Add a new message to the agent's memory.
+Add a new message to the agent's memory. If summarization is enabled and the memory
+size exceeds the threshold, it automatically summarizes the memory.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Agent$add_memory(speaker, text)}\if{html}{\out{</div>}}
 }
@@ -85,6 +106,17 @@ Add a new message to the agent's memory.
 }
 \if{html}{\out{</div>}}
 }
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Agent-maybe_summarize_memory"></a>}}
+\if{latex}{\out{\hypertarget{method-Agent-maybe_summarize_memory}{}}}
+\subsection{Method \code{maybe_summarize_memory()}}{
+Summarize the current memory by calling the LLM, then replace the old memory
+with the single summarized block. This helps keep the agent's memory manageable.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Agent$maybe_summarize_memory()}\if{html}{\out{</div>}}
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Agent-generate_prompt"></a>}}
