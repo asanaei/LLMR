@@ -34,8 +34,7 @@ The prompt template can include reserved placeholders that are automatically sub
   \item \code{\{\{conversation\}\}}: Inserts the current conversation history.
   \item \code{\{\{last_output\}\}}: Inserts the output from the last agent.
   \item \code{\{\{topic\}\}}: Inserts the conversation topic.
-  \item Any key from the agent's \code{knowledge} list (e.g., \code{\{\{party\}\}} or \code{\{\{role\}\}})
-        is also available.
+  \item Any key from the agent's \code{persona} list (e.g., \code{\{\{party\}\}}).
 }
 
 Additional custom placeholders can be provided via the \code{replacements} argument.

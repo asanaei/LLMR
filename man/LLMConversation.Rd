@@ -11,11 +11,14 @@ Holds:
   \item \code{conversation_history}: The full log of messages so far.
   \item \code{topic}: A short label or theme for the conversation.
   \item \code{prompts}: Optional named list of prompt templates.
+  \item \code{shared_memory}: A global shared memory that is also fed into agents.
 }
 
 Agents do \emph{not} automatically share memory. Whenever you call \code{converse()},
-the entire conversation history is \emph{temporarily} loaded into the targeted
-agent, which responds, then is pruned again.
+the entire conversation history and any \code{shared_memory} items are
+\emph{temporarily} loaded into that agent's memory. Then the agent responds, and
+we prune again. This new \code{shared_memory} field allows a global store for items
+that any agent can read.
 }
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
@@ -27,6 +30,8 @@ agent, which responds, then is pruned again.
 \item{\code{topic}}{A short string describing the conversation's theme.}
 
 \item{\code{prompts}}{An optional list of prompt templates (may be ignored).}
+
+\item{\code{shared_memory}}{Global store that is also fed into each agent's memory at conversation time.}
 }
 \if{html}{\out{</div>}}
 }
@@ -84,7 +89,7 @@ Add an \code{Agent} to this conversation. The agent is stored by its \code{id}.
 \if{html}{\out{<a id="method-LLMConversation-add_message"></a>}}
 \if{latex}{\out{\hypertarget{method-LLMConversation-add_message}{}}}
 \subsection{Method \code{add_message()}}{
-Add a message to the global conversation log.
+Add a message to the global conversation log. Also appends to shared memory.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{LLMConversation$add_message(speaker, text)}\if{html}{\out{</div>}}
 }
@@ -104,8 +109,8 @@ Add a message to the global conversation log.
 \if{latex}{\out{\hypertarget{method-LLMConversation-converse}{}}}
 \subsection{Method \code{converse()}}{
 Have a specific agent produce a response. The entire global conversation so far
-is temporarily loaded into that agent's memory, the agent responds, and then
-we store the agent's new message in this conversation.
+plus the shared memory is temporarily loaded into that agent, which responds. Then
+the new message is recorded in the conversation, and the agent's memory is reset.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{LLMConversation$converse(
   agent_id,
@@ -148,7 +153,7 @@ Run a multi-step conversation among a sequence of agents.
 \describe{
 \item{\code{agent_sequence}}{Character vector of agent IDs in the order they will speak.}
 
-\item{\code{prompt_template}}{Either a single string or a named list of templates.}
+\item{\code{prompt_template}}{Either a single string or a named list of templates (keyed by agent ID).}
 
 \item{\code{replacements}}{Either a single list or a list-of-lists with per-agent placeholders.}
 
@@ -171,7 +176,7 @@ Print the conversation so far to the console.
 \if{html}{\out{<a id="method-LLMConversation-reset_conversation"></a>}}
 \if{latex}{\out{\hypertarget{method-LLMConversation-reset_conversation}{}}}
 \subsection{Method \code{reset_conversation()}}{
-Clear the global conversation and reset all agent memories.
+Clear the global conversation and reset all agents' memories. Also clears shared memory.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{LLMConversation$reset_conversation()}\if{html}{\out{</div>}}
 }
@@ -182,7 +187,7 @@ Clear the global conversation and reset all agent memories.
 \if{latex}{\out{\hypertarget{method-LLMConversation-|>}{}}}
 \subsection{Method \code{|>()}}{
 A pipe-like operator to chain conversation steps. E.g.,
-\code{conv |> "Solver"(prompt_template, replacements)}.
+  conv |> "Solver"(prompt_template, replacements)
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{LLMConversation$|>(agent_id)}\if{html}{\out{</div>}}
 }
@@ -193,6 +198,9 @@ A pipe-like operator to chain conversation steps. E.g.,
 \item{\code{agent_id}}{Character. The ID of the agent to call next.}
 }
 \if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A function that expects \code{(prompt_template, replacements, verbose)}.
 }
 }
 \if{html}{\out{<hr>}}
