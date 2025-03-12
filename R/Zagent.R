@@ -36,13 +36,19 @@
   if (is.null(e1$agents[[agent_id]])) {
     e1$add_agent(e2$agent)
   }
-  # Prompt that agent
-  e1$converse(
+  ## Capture the agent's response and store it in "last_response"
+  response <- e1$converse(
     agent_id        = agent_id,
     prompt_template = e2$prompt_template,
     replacements    = e2$replacements,
     verbose         = e2$verbose
   )
+  e1$last_response <- response
+
+  ## update cumulative token counts
+  e1$total_tokens_sent <- (e1$total_tokens_sent %||% 0) + response$tokens_sent
+  e1$total_tokens_received <- (e1$total_tokens_received %||% 0) + response$tokens_received
+
   e1
 }
 
@@ -104,51 +110,64 @@ AgentAction <- function(agent, prompt_template, replacements = list(), verbose =
 #' Each agent maintains its own memory, persona, and model configuration for
 #' consistent and contextual interactions with a language model.
 #'
-#' The `Agent` class enables the creation of agents with defined personas
-#' (e.g., ideology, verbosity, role) and memory (conversation history). In the new version,
-#' the persona is pushed to the LLM via a system message instead of being concatenated
-#' into the prompt. All previous functionality (e.g., thinking and responding) is preserved,
-#' with the old `knowledge` parameter replaced by `persona`.
-#'
-#' Additionally, dynamic memory summarization can be enabled to handle longer
-#' contexts gracefully. If the memory exceeds a threshold, the agent will
-#' summarize its past memory.
+#' In this design, you can enable/disable:
+#' \itemize{
+#'   \item \strong{Dynamic Summarization:} When \code{enable_summarization = TRUE}, the agent automatically
+#'         summarizes its memory once it exceeds \code{summarization_threshold}. This keeps the agent's
+#'         memory concise and avoids large prompt contexts.
+#'   \item \strong{Auto-Injection of Conversation:} When \code{auto_inject_conversation = TRUE}, the agent
+#'         checks if \code{{\{conversation\}}} is in the user-provided prompt. If it's missing, the agent
+#'         automatically prepends a short block containing the entire conversation memory.
+#' }
 #'
 #' @export
 Agent <- R6::R6Class(
   "Agent",
+
   public = list(
+
     #' @field id Unique ID for this Agent.
     id = NULL,
+
     #' @field context_length Maximum number of conversation turns stored in memory.
     context_length = 5,
+
     #' @field model_config The \code{llm_config} specifying which LLM to call.
     model_config = NULL,
-    #' @field memory A list of speaker/text pairs that the agent has "memorized."
+
+    #' @field memory A list of speaker/text pairs that the agent has memorized.
     memory = list(),
-    #' @field persona Named list for additional agent-specific persona details.
+
+    #' @field persona Named list for additional agent-specific details (e.g., role, style).
     persona = list(),
-    #' @field enable_summarization Toggle whether memory summarization is used when threshold is exceeded.
+
+    #' @field enable_summarization If TRUE, agent will summarize memory once it exceeds a threshold.
     enable_summarization = TRUE,
-    #' @field summarization_threshold The maximum number of memory items before summarization is triggered.
+
+    #' @field summarization_threshold The max memory length before summarization. Defaults to \code{context_length}.
     summarization_threshold = 5,
+
+    #' @field auto_inject_conversation If TRUE, automatically prepend conversation if missing in the prompt.
+    auto_inject_conversation = TRUE,
 
     #' @description
     #' Create a new Agent instance.
     #'
     #' @param id Character. The agent's unique identifier.
-    #' @param context_length Numeric. The maximum memory length (default 5).
-    #' @param persona A named list of persona details (replaces old "knowledge").
-    #' @param model_config An \code{llm_config} object specifying LLM settings.
-    #' @param enable_summarization Logical, if \code{TRUE}, agent will attempt to summarize
-    #'   memory when it exceeds the summarization threshold. Default \code{TRUE}.
+    #' @param context_length Numeric. The maximum number of messages stored (default = 5).
+    #' @param persona A named list of persona details (replaces old "knowledge" concept).
+    #' @param model_config An \code{llm_config} object (from LLMR) specifying LLM settings (API, model, etc.).
+    #' @param enable_summarization Logical. If TRUE, memory is auto-summarized when threshold exceeded.
+    #' @param auto_inject_conversation Logical. If TRUE, auto-append conversation memory to prompt
+    #'   if \code{{\{conversation\}}} is missing. Defaults to TRUE.
     #'
     #' @return A new \code{Agent} object.
     initialize = function(id,
                           context_length = 5,
                           persona = NULL,
                           model_config,
-                          enable_summarization = TRUE) {
+                          enable_summarization = TRUE,
+                          auto_inject_conversation = TRUE) {
 
       if (missing(id)) stop("Agent id is required.")
       if (missing(model_config)) stop("model_config is required.")
@@ -156,54 +175,60 @@ Agent <- R6::R6Class(
         stop("model_config must be an llm_config object.")
       }
 
+      # Basic fields
       self$id                    <- id
       self$context_length        <- context_length
       self$persona               <- persona %||% list()
       self$model_config          <- model_config
       self$memory                <- list()
+
+      # Summarization
       self$enable_summarization  <- enable_summarization
-      # By default, set the summarization threshold to match the context length
-      self$summarization_threshold <- context_length
+      self$summarization_threshold <- context_length  # default to context_length
+
+      # Auto-injection of conversation
+      self$auto_inject_conversation <- auto_inject_conversation
     },
 
     #' @description
-    #' Add a new message to the agent's memory. If summarization is enabled and the memory
-    #' size exceeds the threshold, it automatically summarizes the memory.
+    #' Add a new message to the agent's memory. If summarization is enabled and
+    #' the memory size exceeds \code{summarization_threshold}, the agent will summarize
+    #' the entire memory into a single "summary" message.
     #'
     #' @param speaker Character. The speaker name or ID.
     #' @param text Character. The message content.
     add_memory = function(speaker, text) {
       self$memory <- append(self$memory, list(list(speaker = speaker, text = text)))
 
-      # If summarization is enabled and memory is large, summarize it
+      # Check summarization
       if (self$enable_summarization && length(self$memory) > self$summarization_threshold) {
         self$maybe_summarize_memory()
       }
     },
 
     #' @description
-    #' Summarize the current memory by calling the LLM, then replace the old memory
-    #' with the single summarized block. This helps keep the agent's memory manageable.
+    #' Summarize the entire memory via a call to the underlying LLM, replacing
+    #' all past messages with a single "summary" line.
     maybe_summarize_memory = function() {
-      conversation <- paste(
+      conversation_text <- paste(
         sapply(self$memory, function(msg) paste0(msg$speaker, ": ", msg$text)),
         collapse = "\n"
       )
       prompt <- paste(
-        "Summarize the following conversation succinctly, capturing only key points:\n\n",
-        conversation
+        "Summarize the following conversation succinctly, capturing only the key points:\n\n",
+        conversation_text
       )
 
-      # Call LLM to obtain summary
+      # Obtain summary
       summary_result <- self$call_llm_agent(prompt, verbose = FALSE)$text
 
-      # Replace the entire memory with a single summary line
+      # Reset memory, store summary
       self$reset_memory()
       self$add_memory("summary", summary_result)
     },
 
     #' @description
-    #' Replace placeholders in a prompt template with values from `replacements`.
+    #' Internal helper to prepare final prompt by substituting placeholders.
     #'
     #' @param template Character. The prompt template.
     #' @param replacements A named list of placeholder values.
@@ -222,16 +247,22 @@ Agent <- R6::R6Class(
     },
 
     #' @description
-    #' Call the underlying LLM with a plain text `prompt`.
-    #' If a persona is defined, it is pushed as a system message.
+    #' Make a low-level call to the LLM (via \code{call_llm()}) with the final prompt.
+    #' If \code{persona} is set, a system message is prepended to help the LLM assume
+    #' the agent's role/personality.
     #'
-    #' @param prompt Character. The final prompt to send.
-    #' @param verbose Logical. If TRUE, prints verbose info. Default FALSE.
+    #' @param prompt Character. The final prompt text.
+    #' @param verbose Logical. If TRUE, prints debug info. Default FALSE.
     #'
-    #' @return A list with $text (the LLM response) plus token usage, etc.
+    #' @return A list with:
+    #' \itemize{
+    #'   \item{text}{The text output from the LLM.}
+    #'   \item{tokens_sent}{Number of tokens sent (if provider returns usage).}
+    #'   \item{tokens_received}{Number of tokens in the LLM response (if provider returns usage).}
+    #'   \item{full_response}{Raw response from the LLM (list).}
+    #'   }
     call_llm_agent = function(prompt, verbose = FALSE) {
-
-      # If persona is defined, push it as a system message
+      # Persona as system message
       if (length(self$persona) > 0) {
         role <- self$persona$role %||% "agent"
         other_attrs <- self$persona[names(self$persona) != "role"]
@@ -250,58 +281,74 @@ Agent <- R6::R6Class(
         messages <- list(list(role = "user", content = prompt))
       }
 
-      tryCatch({
-        response   <- call_llm(self$model_config, messages, json = TRUE, verbose = verbose)
-        full_resp  <- attr(response, "full_response")
-        text_out   <- ""
-        token_info <- list(tokens_sent = 0, tokens_received = 0)
-
-        # Extract text from the response
-        tryCatch({
-          text_out <- private$extract_text_from_response(full_resp)
-        }, error = function(e) {
-          warning("Error extracting text: ", e$message)
-        })
-
-        # Extract token usage
-        tryCatch({
-          token_info <- private$extract_token_counts(full_resp, self$model_config$provider)
-        }, error = function(e) {
-          warning("Error counting tokens: ", e$message)
-        })
-
-        list(
-          text            = if (is.null(text_out)) "" else as.character(text_out),
-          tokens_sent     = as.numeric(token_info$tokens_sent),
-          tokens_received = as.numeric(token_info$tokens_received),
-          full_response   = full_resp
-        )
+      # Perform the LLM call (from LLMR)
+      response <- tryCatch({
+        call_llm(self$model_config, messages, json = TRUE, verbose = verbose)
       }, error = function(e) {
         stop("LLM API call failed: ", e$message)
       })
+
+      # Extract text / usage
+      full_resp  <- attr(response, "full_response")
+      text_out   <- ""
+      token_info <- list(tokens_sent = 0, tokens_received = 0)
+
+      # 1) Extract text
+      tryCatch({
+        text_out <- private$extract_text_from_response(full_resp)
+      }, error = function(e) {
+        warning("Error extracting text: ", e$message)
+      })
+
+      # 2) Extract token usage
+      tryCatch({
+        token_info <- private$extract_token_counts(full_resp, self$model_config$provider)
+      }, error = function(e) {
+        warning("Error counting tokens: ", e$message)
+      })
+
+      list(
+        text            = if (is.null(text_out)) "" else as.character(text_out),
+        tokens_sent     = as.numeric(token_info$tokens_sent),
+        tokens_received = as.numeric(token_info$tokens_received),
+        full_response   = full_resp
+      )
     },
 
     #' @description
-    #' Generate an LLM response using a prompt template and optional replacements.
+    #' A general method to generate a response from the LLM using a prompt template
+    #' and optional replacements. This method:
+    #' \enumerate{
+    #'   \item Substitutes placeholders in the prompt.
+    #'   \item Calls the LLM.
+    #'   \item Saves the newly generated text to memory.
+    #'   \item Returns the response with usage info.
+    #' }
+    #'
     #' @param prompt_template Character. The prompt template.
-    #' @param replacements A named list for placeholder substitution.
+    #' @param replacements A named list of placeholder values. (e.g. \code{list(topic = "Math problem")})
     #' @param verbose Logical. If TRUE, prints extra info. Default FALSE.
-    #' @return A list with $text, $tokens_sent, $tokens_received, and $full_response.
+    #'
+    #' @return A list with fields \code{text}, \code{tokens_sent}, \code{tokens_received}, \code{full_response}.
     generate = function(prompt_template, replacements = list(), verbose = FALSE) {
       prompt <- self$generate_prompt(prompt_template, replacements)
       out    <- self$call_llm_agent(prompt, verbose)
-      # Add the agent's newly generated text to memory
+      # Append LLM's output to memory
       self$add_memory(self$id, out$text)
       out
     },
 
     #' @description
-    #' Have the agent produce an "internal" thought about a topic using its memory.
-    #' @param topic Character. A short description or label for the thought.
-    #' @param prompt_template Character. The prompt template.
-    #' @param replacements A named list of additional placeholder values.
-    #' @param verbose Logical. If TRUE, prints extra info. Default FALSE.
-    #' @return A list with the LLM's response and related metadata.
+    #' Have the agent produce an "internal" thought about a \code{topic}, using the entire memory.
+    #' By default, if \code{auto_inject_conversation} is TRUE and the template lacks \code{{\{conversation\}}}
+    #' the agent prepends a short block with the conversation.
+    #'
+    #' @param topic Character. A label describing the thought (for logging).
+    #' @param prompt_template Character. The prompt template, which may include placeholders like \code{{\{conversation\}}}.
+    #' @param replacements Named list for additional placeholders.
+    #' @param verbose Logical. If TRUE, prints debug info.
+    #'
+    #' @return A list with the LLM's response text, tokens sent/received, and the full LLM response.
     think = function(topic, prompt_template, replacements = list(), verbose = FALSE) {
       if (missing(topic)) stop("Topic is required for thinking.")
       if (missing(prompt_template)) stop("Prompt template is required for thinking.")
@@ -310,33 +357,40 @@ Agent <- R6::R6Class(
         sapply(self$memory, function(msg) paste0(msg$speaker, ": ", msg$text)),
         collapse = "\n"
       )
-      last_output <- if (length(self$memory) > 0) {
-        self$memory[[length(self$memory)]]$text
-      } else {
-        ""
-      }
+      last_output <- if (length(self$memory) > 0) self$memory[[length(self$memory)]]$text else ""
 
-      # Merge placeholders with persona
+      # Build placeholders
       full_replacements <- c(
-        list(
-          topic        = topic,
-          conversation = conversation,
-          last_output  = last_output
-        ),
+        list(topic = topic,
+             conversation = conversation,
+             last_output = last_output),
         replacements,
         self$persona
       )
+
+      # Auto-inject conversation if user didn't include {{conversation}}
+      if (!grepl("\\{\\{conversation\\}\\}", prompt_template, fixed = TRUE) &&
+          self$auto_inject_conversation) {
+        prompt_template <- paste(
+          "Conversation so far:\n{{conversation}}\n\nNow think:\n",
+          prompt_template
+        )
+      }
 
       self$generate(prompt_template, full_replacements, verbose)
     },
 
     #' @description
-    #' Have the agent produce a "public" answer or response about a topic.
-    #' @param topic Character. A short label for the question or request.
+    #' Have the agent produce a "public" response (or output) about a \code{topic}.
+    #' By default, if \code{auto_inject_conversation} is TRUE and the template lacks \code{{\{conversation\}}},
+    #' the agent automatically prepends the entire memory.
+    #'
+    #' @param topic Character. A short label for the question/issue being responded to.
     #' @param prompt_template Character. The prompt template.
     #' @param replacements A named list for placeholder substitution.
-    #' @param verbose Logical. If TRUE, prints extra info. Default FALSE.
-    #' @return A list with $text, $tokens_sent, $tokens_received, and $full_response.
+    #' @param verbose Logical. If TRUE, prints extra info.
+    #'
+    #' @return A list with \code{text}, \code{tokens_sent}, \code{tokens_received}, \code{full_response}.
     respond = function(topic, prompt_template, replacements = list(), verbose = FALSE) {
       if (missing(topic)) stop("Topic is required for responding.")
       if (missing(prompt_template)) stop("Prompt template is required for responding.")
@@ -345,22 +399,25 @@ Agent <- R6::R6Class(
         sapply(self$memory, function(msg) paste0(msg$speaker, ": ", msg$text)),
         collapse = "\n"
       )
-      last_output <- if (length(self$memory) > 0) {
-        self$memory[[length(self$memory)]]$text
-      } else {
-        ""
-      }
+      last_output <- if (length(self$memory) > 0) self$memory[[length(self$memory)]]$text else ""
 
-      # Merge placeholders with persona
+      # Build placeholders
       full_replacements <- c(
-        list(
-          topic        = topic,
-          conversation = conversation,
-          last_output  = last_output
-        ),
+        list(topic = topic,
+             conversation = conversation,
+             last_output = last_output),
         replacements,
         self$persona
       )
+
+      # Auto-inject conversation if missing
+      if (!grepl("\\{\\{conversation\\}\\}", prompt_template, fixed = TRUE) &&
+          self$auto_inject_conversation) {
+        prompt_template <- paste(
+          "Conversation so far:\n{{conversation}}\n\nNow respond:\n",
+          prompt_template
+        )
+      }
 
       self$generate(prompt_template, full_replacements, verbose)
     },
@@ -373,55 +430,85 @@ Agent <- R6::R6Class(
   ),
 
   private = list(
-    # Extract token counts from the API response based on provider.
+
+    # Internal helper to extract token counts from the provider response.
     extract_token_counts = function(response, provider) {
+      # Check if usage exists; if not, try usageMetadata for providers like Gemini.
       usage <- response$usage %||% NULL
       if (is.null(usage)) {
+        if (!is.null(response$usageMetadata)) {
+          ## OXYGEN COMMENT: For Gemini, tokens are provided in usageMetadata.
+          return(list(
+            tokens_sent = as.numeric(response$usageMetadata$promptTokenCount %||% 0),
+            tokens_received = as.numeric(response$usageMetadata$candidatesTokenCount %||% 0)
+          ))
+        }
         return(list(tokens_sent = 0, tokens_received = 0))
       }
+
+      # Determine tokens_sent based on provider.
       tokens_sent <- switch(
         provider,
         "openai"    = usage$prompt_tokens,
         "anthropic" = usage$input_tokens,
         "groq"      = usage$prompt_tokens,
-        "gemini"    = usage$prompt_tokens,
+        "together"  = usage$prompt_tokens,
+        "deepseek"  = usage$prompt_tokens,
+        "gemini"    = if (!is.null(response$usageMetadata)) {
+          response$usageMetadata$promptTokenCount
+        } else {
+          usage$prompt_tokens
+        },
         usage$prompt_tokens %||% 0
       )
+
+      # Determine tokens_received based on provider.
       tokens_received <- switch(
         provider,
         "openai"    = usage$completion_tokens,
         "anthropic" = usage$output_tokens,
         "groq"      = usage$completion_tokens,
-        "gemini"    = usage$completion_tokens,
+        "together"  = usage$completion_tokens,
+        "deepseek"  = usage$completion_tokens,
+        "gemini"    = if (!is.null(response$usageMetadata)) {
+          response$usageMetadata$candidatesTokenCount
+        } else {
+          usage$completion_tokens
+        },
         usage$completion_tokens %||% 0
       )
+
+      ## OXYGEN COMMENT: Return token counts as numeric values.
       list(
         tokens_sent     = as.numeric(tokens_sent %||% 0),
         tokens_received = as.numeric(tokens_received %||% 0)
       )
-    },
+    } ,
 
-    # Extract text from the API response in a provider-specific manner.
+    # Internal helper to extract text from a provider response, handling
+    # different providers (OpenAI, Anthropic, Gemini, etc.).
     extract_text_from_response = function(response) {
       if (is.null(response)) return("")
-      # OpenAI style
+      # OpenAI-style
       if (!is.null(response$choices) && length(response$choices) > 0) {
         choice <- response$choices[[1]]
+        # Chat completion
         if (is.list(choice$message) && !is.null(choice$message$content)) {
           return(as.character(choice$message$content))
         }
+        # Legacy completion
         if (!is.null(choice$text)) {
           return(as.character(choice$text))
         }
       }
-      # Anthropic style
+      # Anthropic-style
       if (!is.null(response$content) && length(response$content) > 0) {
         content_item <- response$content[[1]]
         if (!is.null(content_item$text)) {
           return(as.character(content_item$text))
         }
       }
-      # Gemini style
+      # Gemini-style
       if (!is.null(response$candidates) && length(response$candidates) > 0) {
         candidate <- response$candidates[[1]]
         if (!is.null(candidate$content) &&
@@ -433,10 +520,17 @@ Agent <- R6::R6Class(
           }
         }
       }
-      ""
     }
   )
 )
+
+
+
+
+
+
+
+
 
 # -----------------------------------------------------------------------------
 # LLMCONVERSATION R6 CLASS
@@ -475,6 +569,12 @@ LLMConversation <- R6::R6Class(
     prompts = NULL,
     #' @field shared_memory Global store that is also fed into each agent's memory at conversation time.
     shared_memory = list(),
+    #' @field last_response last response received
+    last_response = NULL,
+    #' @field total_tokens_sent total tokens sent in the conversation
+    total_tokens_sent = 0,
+    #' @field total_tokens_received total tokens received in the conversation
+    total_tokens_received = 0,
 
     #' @description
     #' Create a new conversation.
@@ -487,6 +587,9 @@ LLMConversation <- R6::R6Class(
       self$agents               <- list()
       self$conversation_history <- list()
       self$shared_memory        <- list()
+      self$last_response <- NULL
+      self$total_tokens_sent <- 0
+      self$total_tokens_received <- 0
     },
 
     #' @description
