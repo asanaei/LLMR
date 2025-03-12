@@ -267,9 +267,10 @@ llm_config <- function(provider, model, api_key, ...) {
 #'   print(raw_json_gemini_response)
 #' }
 call_llm <- function(config, messages, verbose = FALSE, json = FALSE) {
- # print("\n\n Inside call_llm for troubleshooting")
-#  print(messages)
-#  print("\n\n")
+  # print("\n\n Inside call_llm for troubleshooting")
+  # print(messages)
+  # print(config)
+  # print("\n\n")
   UseMethod("call_llm", config)
 }
 
@@ -450,36 +451,85 @@ call_llm.voyage <- function(config, messages, verbose = FALSE, json = FALSE) {
 
 #' @export
 call_llm.gemini <- function(config, messages, verbose = FALSE, json = FALSE) {
+  # Define the API endpoint using the model from config
   endpoint <- get_endpoint(config, default_endpoint = paste0("https://generativelanguage.googleapis.com/v1beta/models/", config$model, ":generateContent"))
 
-  # Format messages for Gemini API
-  formatted_messages <- lapply(messages, function(msg) {
+  # Extract system messages and combine their content
+  system_messages <- purrr::keep(messages, ~ .x$role == "system")
+  other_messages <- purrr::keep(messages, ~ .x$role != "system")
+  if (length(system_messages) > 0) {
+    system_text <- paste(sapply(system_messages, function(x) x$content), collapse = " ")
+    system_instruction <- list(parts = list(list(text = system_text)))
+  } else {
+    system_instruction <- NULL
+  }
+
+  # Format non-system messages, mapping "assistant" to "model" for Gemini
+  formatted_messages <- lapply(other_messages, function(msg) {
+    role <- if (msg$role == "assistant") "model" else "user"
     list(
-      role = msg$role,
-      parts = list(list(text = msg$content)) # Gemini expects content in 'parts' as a list of lists
+      role = role,
+      parts = list(list(text = msg$content))
     )
   })
 
+  # Construct the request body with contents and optional systemInstruction
   body <- list(
     contents = formatted_messages,
     generationConfig = list(
       temperature = rlang::`%||%`(config$model_params$temperature, 1),
-      maxOutputTokens = rlang::`%||%`(config$model_params$max_tokens, 1024), # Gemini uses maxOutputTokens
+      maxOutputTokens = rlang::`%||%`(config$model_params$max_tokens, 1024),
       topP = rlang::`%||%`(config$model_params$top_p, 1),
-      topK = rlang::`%||%`(config$model_params$top_k, 1) # Added topK as it's common
-      # frequency_penalty and presence_penalty are not standard Gemini parameters.
+      topK = rlang::`%||%`(config$model_params$top_k, 1)
     )
   )
+  if (!is.null(system_instruction)) {
+    body$systemInstruction <- system_instruction
+  }
 
+  # Build and send the HTTP request
   req <- httr2::request(endpoint) |>
     httr2::req_headers(
       "Content-Type" = "application/json",
-      "x-goog-api-key" = config$api_key # Gemini uses x-goog-api-key header
+      "x-goog-api-key" = config$api_key
     ) |>
     httr2::req_body_json(body)
 
+  # Perform the request and return the response
   perform_request(req, verbose, json)
 }
+
+# call_llm.gemini <- function(config, messages, verbose = FALSE, json = FALSE) {
+#   endpoint <- get_endpoint(config, default_endpoint = paste0("https://generativelanguage.googleapis.com/v1beta/models/", config$model, ":generateContent"))
+#
+#   # Format messages for Gemini API
+#   formatted_messages <- lapply(messages, function(msg) {
+#     list(
+#       role = msg$role,
+#       parts = list(list(text = msg$content)) # Gemini expects content in 'parts' as a list of lists
+#     )
+#   })
+#
+#   body <- list(
+#     contents = formatted_messages,
+#     generationConfig = list(
+#       temperature = rlang::`%||%`(config$model_params$temperature, 1),
+#       maxOutputTokens = rlang::`%||%`(config$model_params$max_tokens, 1024), # Gemini uses maxOutputTokens
+#       topP = rlang::`%||%`(config$model_params$top_p, 1),
+#       topK = rlang::`%||%`(config$model_params$top_k, 1) # Added topK as it's common
+#       # frequency_penalty and presence_penalty are not standard Gemini parameters.
+#     )
+#   )
+#
+#   req <- httr2::request(endpoint) |>
+#     httr2::req_headers(
+#       "Content-Type" = "application/json",
+#       "x-goog-api-key" = config$api_key # Gemini uses x-goog-api-key header
+#     ) |>
+#     httr2::req_body_json(body)
+#
+#   perform_request(req, verbose, json)
+# }
 
 
 

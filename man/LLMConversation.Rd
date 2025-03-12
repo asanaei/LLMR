@@ -32,6 +32,12 @@ that any agent can read.
 \item{\code{prompts}}{An optional list of prompt templates (may be ignored).}
 
 \item{\code{shared_memory}}{Global store that is also fed into each agent's memory at conversation time.}
+
+\item{\code{last_response}}{last response received}
+
+\item{\code{total_tokens_sent}}{total tokens sent in the conversation}
+
+\item{\code{total_tokens_received}}{total tokens received in the conversation}
 }
 \if{html}{\out{</div>}}
 }
