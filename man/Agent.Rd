@@ -5,18 +5,9 @@
 \title{Agent Class for LLM Interactions}
 \description{
 An R6 class representing an agent that interacts with language models.
-Each agent maintains its own memory, persona, and model configuration for
-consistent and contextual interactions with a language model.
 
-In this design, you can enable/disable:
-\itemize{
-  \item \strong{Dynamic Summarization:} When \code{enable_summarization = TRUE}, the agent automatically
-        summarizes its memory once it exceeds \code{summarization_threshold}. This keeps the agent's
-        memory concise and avoids large prompt contexts.
-  \item \strong{Auto-Injection of Conversation:} When \code{auto_inject_conversation = TRUE}, the agent
-        checks if \code{{\{conversation\}}} is in the user-provided prompt. If it's missing, the agent
-        automatically prepends a short block containing the entire conversation memory.
-}
+*At agent-level we do not automate summarization.* The `maybe_summarize_memory()`
+ function can be called manually if the user wishes to compress the agent's memory.
 }
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
@@ -31,11 +22,19 @@ In this design, you can enable/disable:
 
 \item{\code{persona}}{Named list for additional agent-specific details (e.g., role, style).}
 
-\item{\code{enable_summarization}}{If TRUE, agent will summarize memory once it exceeds a threshold.}
+\item{\code{enable_summarization}}{Logical. If TRUE, user *may* call `maybe_summarize_memory()`.}
 
-\item{\code{summarization_threshold}}{The max memory length before summarization. Defaults to \code{context_length}.}
+\item{\code{token_threshold}}{Numeric. If manually triggered, we can compare total_tokens.}
 
-\item{\code{auto_inject_conversation}}{If TRUE, automatically prepend conversation if missing in the prompt.}
+\item{\code{total_tokens}}{Numeric. Estimated total tokens in memory.}
+
+\item{\code{summarization_density}}{Character. "low", "medium", or "high".}
+
+\item{\code{summarization_prompt}}{Character. Optional custom prompt for summarization.}
+
+\item{\code{summarizer_config}}{Optional \code{llm_config} for summarizing the agent's memory.}
+
+\item{\code{auto_inject_conversation}}{Logical. If TRUE, automatically prepend conversation memory if missing.}
 }
 \if{html}{\out{</div>}}
 }
@@ -66,6 +65,10 @@ Create a new Agent instance.
   persona = NULL,
   model_config,
   enable_summarization = TRUE,
+  token_threshold = 1000,
+  summarization_density = "medium",
+  summarization_prompt = NULL,
+  summarizer_config = NULL,
   auto_inject_conversation = TRUE
 )}\if{html}{\out{</div>}}
 }
@@ -77,14 +80,21 @@ Create a new Agent instance.
 
 \item{\code{context_length}}{Numeric. The maximum number of messages stored (default = 5).}
 
-\item{\code{persona}}{A named list of persona details (replaces old "knowledge" concept).}
+\item{\code{persona}}{A named list of persona details.}
 
-\item{\code{model_config}}{An \code{llm_config} object (from LLMR) specifying LLM settings (API, model, etc.).}
+\item{\code{model_config}}{An \code{llm_config} object specifying LLM settings.}
 
-\item{\code{enable_summarization}}{Logical. If TRUE, memory is auto-summarized when threshold exceeded.}
+\item{\code{enable_summarization}}{Logical. If TRUE, you can manually call summarization.}
 
-\item{\code{auto_inject_conversation}}{Logical. If TRUE, auto-append conversation memory to prompt
-if \code{{\{conversation\}}} is missing. Defaults to TRUE.}
+\item{\code{token_threshold}}{Numeric. If you're calling summarization, use this threshold if desired.}
+
+\item{\code{summarization_density}}{Character. "low", "medium", "high" for summary detail.}
+
+\item{\code{summarization_prompt}}{Character. Optional custom prompt for summarization.}
+
+\item{\code{summarizer_config}}{Optional \code{llm_config} for summarization calls.}
+
+\item{\code{auto_inject_conversation}}{Logical. If TRUE, auto-append conversation memory to prompt if missing.}
 }
 \if{html}{\out{</div>}}
 }
@@ -96,9 +106,8 @@ A new \code{Agent} object.
 \if{html}{\out{<a id="method-Agent-add_memory"></a>}}
 \if{latex}{\out{\hypertarget{method-Agent-add_memory}{}}}
 \subsection{Method \code{add_memory()}}{
-Add a new message to the agent's memory. If summarization is enabled and
-the memory size exceeds \code{summarization_threshold}, the agent will summarize
-the entire memory into a single "summary" message.
+Add a new message to the agent's memory.
+We do NOT automatically call summarization here.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Agent$add_memory(speaker, text)}\if{html}{\out{</div>}}
 }
@@ -117,8 +126,8 @@ the entire memory into a single "summary" message.
 \if{html}{\out{<a id="method-Agent-maybe_summarize_memory"></a>}}
 \if{latex}{\out{\hypertarget{method-Agent-maybe_summarize_memory}{}}}
 \subsection{Method \code{maybe_summarize_memory()}}{
-Summarize the entire memory via a call to the underlying LLM, replacing
-all past messages with a single "summary" line.
+Manually compress the agent's memory if desired.
+Summarizes all memory into a single "summary" message.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Agent$maybe_summarize_memory()}\if{html}{\out{</div>}}
 }
@@ -150,9 +159,8 @@ Character. The prompt with placeholders replaced.
 \if{html}{\out{<a id="method-Agent-call_llm_agent"></a>}}
 \if{latex}{\out{\hypertarget{method-Agent-call_llm_agent}{}}}
 \subsection{Method \code{call_llm_agent()}}{
-Make a low-level call to the LLM (via \code{call_llm()}) with the final prompt.
-If \code{persona} is set, a system message is prepended to help the LLM assume
-the agent's role/personality.
+Low-level call to the LLM (via \code{call_llm()}) with a final prompt.
+If persona is defined, a system message is prepended to help set the role.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Agent$call_llm_agent(prompt, verbose = FALSE)}\if{html}{\out{</div>}}
 }
@@ -168,26 +176,18 @@ the agent's role/personality.
 }
 \subsection{Returns}{
 A list with:
-\itemize{
-  \item{text}{The text output from the LLM.}
-  \item{tokens_sent}{Number of tokens sent (if provider returns usage).}
-  \item{tokens_received}{Number of tokens in the LLM response (if provider returns usage).}
-  \item{full_response}{Raw response from the LLM (list).}
-  }
+  * text
+  * tokens_sent
+  * tokens_received
+  * full_response (raw list)
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Agent-generate"></a>}}
 \if{latex}{\out{\hypertarget{method-Agent-generate}{}}}
 \subsection{Method \code{generate()}}{
-A general method to generate a response from the LLM using a prompt template
-and optional replacements. This method:
-\enumerate{
-  \item Substitutes placeholders in the prompt.
-  \item Calls the LLM.
-  \item Saves the newly generated text to memory.
-  \item Returns the response with usage info.
-}
+Generate a response from the LLM using a prompt template and optional replacements.
+Substitutes placeholders, calls the LLM, saves output to memory, returns the response.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Agent$generate(prompt_template, replacements = list(), verbose = FALSE)}\if{html}{\out{</div>}}
 }
@@ -197,7 +197,7 @@ and optional replacements. This method:
 \describe{
 \item{\code{prompt_template}}{Character. The prompt template.}
 
-\item{\code{replacements}}{A named list of placeholder values. (e.g. \code{list(topic = "Math problem")})}
+\item{\code{replacements}}{A named list of placeholder values.}
 
 \item{\code{verbose}}{Logical. If TRUE, prints extra info. Default FALSE.}
 }
@@ -211,9 +211,8 @@ A list with fields \code{text}, \code{tokens_sent}, \code{tokens_received}, \cod
 \if{html}{\out{<a id="method-Agent-think"></a>}}
 \if{latex}{\out{\hypertarget{method-Agent-think}{}}}
 \subsection{Method \code{think()}}{
-Have the agent produce an "internal" thought about a \code{topic}, using the entire memory.
-By default, if \code{auto_inject_conversation} is TRUE and the template lacks \code{{\{conversation\}}}
-the agent prepends a short block with the conversation.
+The agent "thinks" about a topic, possibly using the entire memory in the prompt.
+If auto_inject_conversation is TRUE and the template lacks {{conversation}}, we prepend the memory.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Agent$think(topic, prompt_template, replacements = list(), verbose = FALSE)}\if{html}{\out{</div>}}
 }
@@ -221,27 +220,23 @@ the agent prepends a short block with the conversation.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{topic}}{Character. A label describing the thought (for logging).}
+\item{\code{topic}}{Character. Label for the thought.}
 
-\item{\code{prompt_template}}{Character. The prompt template, which may include placeholders like \code{{\{conversation\}}}.}
+\item{\code{prompt_template}}{Character. The prompt template.}
 
 \item{\code{replacements}}{Named list for additional placeholders.}
 
-\item{\code{verbose}}{Logical. If TRUE, prints debug info.}
+\item{\code{verbose}}{Logical. If TRUE, prints info.}
 }
 \if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A list with the LLM's response text, tokens sent/received, and the full LLM response.
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Agent-respond"></a>}}
 \if{latex}{\out{\hypertarget{method-Agent-respond}{}}}
 \subsection{Method \code{respond()}}{
-Have the agent produce a "public" response (or output) about a \code{topic}.
-By default, if \code{auto_inject_conversation} is TRUE and the template lacks \code{{\{conversation\}}},
-the agent automatically prepends the entire memory.
+The agent produces a public "response" about a topic.
+If auto_inject_conversation is TRUE and the template lacks {{conversation}}, we prepend memory.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Agent$respond(topic, prompt_template, replacements = list(), verbose = FALSE)}\if{html}{\out{</div>}}
 }
@@ -249,11 +244,11 @@ the agent automatically prepends the entire memory.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{topic}}{Character. A short label for the question/issue being responded to.}
+\item{\code{topic}}{Character. A short label for the question/issue.}
 
 \item{\code{prompt_template}}{Character. The prompt template.}
 
-\item{\code{replacements}}{A named list for placeholder substitution.}
+\item{\code{replacements}}{Named list of placeholder substitutions.}
 
 \item{\code{verbose}}{Logical. If TRUE, prints extra info.}
 }
@@ -267,7 +262,7 @@ A list with \code{text}, \code{tokens_sent}, \code{tokens_received}, \code{full_
 \if{html}{\out{<a id="method-Agent-reset_memory"></a>}}
 \if{latex}{\out{\hypertarget{method-Agent-reset_memory}{}}}
 \subsection{Method \code{reset_memory()}}{
-Reset the agent's memory (clear any stored conversation context).
+Reset the agent's memory.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Agent$reset_memory()}\if{html}{\out{</div>}}
 }

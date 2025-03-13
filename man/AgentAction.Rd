@@ -28,14 +28,4 @@ When `conversation + AgentAction` is called:
   \item The agent is prompted with the provided prompt template (and replacements).
   \item The conversation is updated with the agent's response.
 }
-
-The prompt template can include reserved placeholders that are automatically substituted:
-\itemize{
-  \item \code{\{\{conversation\}\}}: Inserts the current conversation history.
-  \item \code{\{\{last_output\}\}}: Inserts the output from the last agent.
-  \item \code{\{\{topic\}\}}: Inserts the conversation topic.
-  \item Any key from the agent's \code{persona} list (e.g., \code{\{\{party\}\}}).
-}
-
-Additional custom placeholders can be provided via the \code{replacements} argument.
 }
