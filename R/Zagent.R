@@ -902,7 +902,7 @@ Agent <- R6::R6Class(
 
     #' @description
     #' The agent "thinks" about a topic, possibly using the entire memory in the prompt.
-    #' If auto_inject_conversation is TRUE and the template lacks {{conversation}}, we prepend the memory.
+    #' If auto_inject_conversation is TRUE and the template lacks \{\{conversation\}\}, we prepend the memory.
     #'
     #' @param topic Character. Label for the thought.
     #' @param prompt_template Character. The prompt template.
@@ -939,7 +939,7 @@ Agent <- R6::R6Class(
 
     #' @description
     #' The agent produces a public "response" about a topic.
-    #' If auto_inject_conversation is TRUE and the template lacks {{conversation}}, we prepend memory.
+    #' If auto_inject_conversation is TRUE and the template lacks \{\{conversation\}\}, we prepend the memory.
     #'
     #' @param topic Character. A short label for the question/issue.
     #' @param prompt_template Character. The prompt template.

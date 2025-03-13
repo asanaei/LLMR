@@ -4,7 +4,7 @@ Version: 0.2.3
 Depends: R (>= 4.1.0)
 Authors@R: 
     person("Ali", "Sanaei", , "sanaei@uchicago.edu", role = c("aut", "cre"))
-Description: A unified interface to interact with various Large Language Model (LLM) APIs such as 'OpenAI' (see <https://platform.openai.com/docs/quickstart> for details), 'Anthropic' (see <https://docs.anthropic.com/en/api/getting-started> for details), 'Groq' (see <https://console.groq.com/docs/api-reference> for details), 'Together AI' (see <https://docs.together.ai/docs/quickstart> for details), 'DeepSeek' (see <https://api-docs.deepseek.com> for details), 'Gemini' (see <https://aistudio.google.com> for details), and 'Voyage AI' (see <https://docs.voyageai.com/docs/introduction> for details). Allows users to configure API parameters, send messages, and retrieve responses seamlessly within R.
+Description: A unified interface to interact with various Large Language Model (LLM) APIs such as 'OpenAI' (see <https://platform.openai.com/docs/overview> for details), 'Anthropic' (see <https://docs.anthropic.com/en/api/getting-started> for details), 'Groq' (see <https://console.groq.com/docs/api-reference> for details), 'Together AI' (see <https://docs.together.ai/docs/quickstart> for details), 'DeepSeek' (see <https://api-docs.deepseek.com> for details), 'Gemini' (see <https://aistudio.google.com> for details), and 'Voyage AI' (see <https://docs.voyageai.com/docs/introduction> for details). Allows users to configure API parameters, send messages, and retrieve responses seamlessly within R.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
