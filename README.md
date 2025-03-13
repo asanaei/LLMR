@@ -18,7 +18,7 @@ remotes::install_github("asanaei/LLMR")
 ## Example Usage
 
 
-### Typical Generative Call
+### Typical Low-Level Generative Call
 Below is an example demonstrating a comprehensive configuration and API call using OpenAI.
 
 ```r
@@ -80,6 +80,97 @@ library(LLMR)
   # Additional processing:
   embeddings |> cor() |> print()
   
+```
+
+
+### Example of a High-Level Call
+```r
+# simulate a conversation about high tax on ultra processed food
+
+library(LLMR)
+
+# Create a cheaper config
+cheap_config <- llm_config(
+  provider = "openai", #"groq",
+  model = "gpt-4o", #"llama-3.3-70b-versatile",
+  api_key = Sys.getenv("OPENAI_KEY"), #Sys.getenv("GROQ_KEY"),
+  temperature = 1,
+#  trouble_shooting = TRUE,
+  max_tokens = 1000
+)
+
+# Create an OpenAI configuration for summarization (using GPT-4o)
+openai_config <- llm_config(
+  provider = "openai",
+  model = "gpt-4o",
+  api_key = Sys.getenv("OPENAI_KEY"),
+  temperature = 1,
+#  trouble_shooting = TRUE,
+  max_tokens = 2000
+)
+
+# Create Agents with the GROQ configuration
+agent_econ <- Agent$new(
+  id = "Econ",
+  model_config = cheap_config,
+  persona = list(role = "Economist", perspective = "Market-oriented", expertise = "Economic analysis"),
+)
+
+agent_health <- Agent$new(
+  id = "Health",
+  model_config = cheap_config,
+  persona = list(role = "Public Health Expert", perspective = "Health-first", expertise = "Epidemiology"),
+)
+
+agent_policy <- Agent$new(
+  id = "Policy",
+  model_config = cheap_config,
+  persona = list(role = "Policy Maker", perspective = "Regulatory", expertise = "Public Policy"),
+)
+
+agent_industry <- Agent$new(
+  id = "Industry",
+  model_config = cheap_config,
+  persona = list(role = "Industry Representative", perspective = "Business-focused", expertise = "Food Industry"),
+)
+
+# Initialize the Conversation with summarizer_config using the OpenAI summarizer configuration
+conversation <- LLMConversation$new(
+  topic = "High Tax on Ultra Processed Food",
+  summarizer_config = list(
+    llm_config = openai_config,
+    ## we can override the default summarization prompt
+    #prompt = "Summarize the following conversation into fewer than 500 words, preserving speaker details and main points:",
+    threshold = 2000,       # Lower threshold to force summary quickly for demonstration
+    summary_length = 500
+  )
+)
+
+# Add agents to the conversation
+conversation$add_agent(agent_econ)
+conversation$add_agent(agent_health)
+conversation$add_agent(agent_policy)
+conversation$add_agent(agent_industry)
+
+# Define the discussion prompt template
+prompt_template <- "Discuss the potential impacts of a high tax on ultra processed food from your perspective."
+
+# Run several rounds to accumulate memory & trigger summarization
+for(i in 1:5) {
+  cat("Round:", i, "\n")
+  agent_id <- sample(c("Econ", "Health", "Policy", "Industry"), 1)
+  conversation$converse(agent_id, prompt_template, verbose = TRUE)
+  #Sys.sleep(10)
+}
+
+# Print the full conversation history to observe responses and the triggered summarization
+conversation$print_history()
+
+
+#### compare with full history
+conversation$conversation_history_full
+
+
 ```
 
 Contributions: are welcome.

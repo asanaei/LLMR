@@ -26,6 +26,8 @@ Includes optional conversation-level summarization if `summarizer_config` is pro
 
 \item{\code{conversation_history}}{A list of speaker/text pairs for the entire conversation.}
 
+\item{\code{conversation_history_full}}{A list of speaker/text pairs for the entire conversation that is never modified and never used directly.}
+
 \item{\code{topic}}{A short string describing the conversation's theme.}
 
 \item{\code{prompts}}{An optional list of prompt templates (may be ignored).}

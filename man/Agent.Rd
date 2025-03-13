@@ -212,7 +212,7 @@ A list with fields \code{text}, \code{tokens_sent}, \code{tokens_received}, \cod
 \if{latex}{\out{\hypertarget{method-Agent-think}{}}}
 \subsection{Method \code{think()}}{
 The agent "thinks" about a topic, possibly using the entire memory in the prompt.
-If auto_inject_conversation is TRUE and the template lacks {{conversation}}, we prepend the memory.
+If auto_inject_conversation is TRUE and the template lacks \{\{conversation\}\}, we prepend the memory.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Agent$think(topic, prompt_template, replacements = list(), verbose = FALSE)}\if{html}{\out{</div>}}
 }
@@ -236,7 +236,7 @@ If auto_inject_conversation is TRUE and the template lacks {{conversation}}, we 
 \if{latex}{\out{\hypertarget{method-Agent-respond}{}}}
 \subsection{Method \code{respond()}}{
 The agent produces a public "response" about a topic.
-If auto_inject_conversation is TRUE and the template lacks {{conversation}}, we prepend memory.
+If auto_inject_conversation is TRUE and the template lacks \{\{conversation\}\}, we prepend the memory.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Agent$respond(topic, prompt_template, replacements = list(), verbose = FALSE)}\if{html}{\out{</div>}}
 }
