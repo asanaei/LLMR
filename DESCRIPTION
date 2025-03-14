@@ -1,6 +1,6 @@
 Package: LLMR
 Title: Interface for Large Language Model APIs in R
-Version: 0.2.3
+Version: 0.2.4
 Depends: R (>= 4.1.0)
 Authors@R: 
     person("Ali", "Sanaei", , "sanaei@uchicago.edu", role = c("aut", "cre"))
@@ -11,7 +11,8 @@ LazyData: true
 Imports:
     httr2,
     purrr,
-    rlang
+    rlang,
+    memoise
 Suggests:
     testthat (>= 3.0.0),
     roxygen2 (>= 7.1.2),
