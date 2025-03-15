@@ -4,7 +4,7 @@
 \alias{llm_config}
 \title{Create LLM Configuration}
 \usage{
-llm_config(provider, model, api_key, trouble_shooting = FALSE, ...)
+llm_config(provider, model, api_key, troubleshooting = FALSE, ...)
 }
 \arguments{
 \item{provider}{A string specifying the API provider. Supported providers include:
@@ -20,7 +20,7 @@ llm_config(provider, model, api_key, trouble_shooting = FALSE, ...)
 
 \item{api_key}{Your API key for the provider.}
 
-\item{trouble_shooting}{Prints out all api calls. USE WITH EXTREME CAUTION as it prints your API key.}
+\item{troubleshooting}{Prints out all api calls. USE WITH EXTREME CAUTION as it prints your API key.}
 
 \item{...}{Additional model-specific parameters (e.g., `temperature`, `max_tokens`, etc.).}
 }
