@@ -138,7 +138,7 @@ format_anthropic_messages <- function(messages) {
 #'   "gemini" for Google Gemini.
 #' @param model The model name to use. This depends on the provider.
 #' @param api_key Your API key for the provider.
-#' @param trouble_shooting Prints out all api calls. USE WITH EXTREME CAUTION as it prints your API key.
+#' @param troubleshooting Prints out all api calls. USE WITH EXTREME CAUTION as it prints your API key.
 #' @param ... Additional model-specific parameters (e.g., `temperature`, `max_tokens`, etc.).
 #'
 #' @return An object of class `llm_config` containing API and model parameters.
@@ -184,12 +184,13 @@ format_anthropic_messages <- function(messages) {
 #'   # Additional processing:
 #'   embeddings |> cor() |> print()
 #' }
-llm_config <- function(provider, model, api_key, trouble_shooting = FALSE, ...) {
+llm_config <- function(provider, model, api_key, troubleshooting = FALSE, ...) {
   model_params <- list(...)
   config <- list(
     provider = provider,
     model = model,
     api_key = api_key,
+    troubleshooting = troubleshooting,
     model_params = model_params
   )
   class(config) <- c("llm_config", provider)
@@ -268,7 +269,7 @@ llm_config <- function(provider, model, api_key, trouble_shooting = FALSE, ...) 
 #'   print(raw_json_gemini_response)
 #' }
 call_llm <- function(config, messages, verbose = FALSE, json = FALSE) {
-  if (config$trouble_shooting == TRUE){
+  if (config$troubleshooting == TRUE){
    print("\n\n Inside call_llm for troubleshooting\n")
    print("\nBE CAREFUL THIS BIT CONTAINS YOUR API KEY! DO NOT REPORT IT AS IS!")
    print(messages)
