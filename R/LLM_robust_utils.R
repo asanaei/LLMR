@@ -34,14 +34,10 @@ retry_with_backoff <- function(func,
       func(...),
       error = function(e) {
         message(sprintf("Error on attempt %d: %s", attempt, conditionMessage(e)))
-        if (attempt < tries) {
-          message(sprintf("Waiting %d seconds before retry...", wait_time))
-          Sys.sleep(wait_time)
-          wait_time <- wait_time * backoff_factor
-          return(NULL)
-        } else {
-          stop(e)
-        }
+        message(sprintf("Waiting %d seconds before retry...", wait_time))
+        Sys.sleep(wait_time)
+        wait_time <- wait_time * backoff_factor
+        return(NULL)
       }
     )
     if (!is.null(result)) {
@@ -108,6 +104,9 @@ call_llm_robust <- function(config, messages,
         }
       },
       error = function(e) {
+        # Use our logging function here
+        log_llm_error(e)
+
         err_msg <- conditionMessage(e)
         # Simple detection of rate-limit-like errors
         is_rate_error <- grepl("429|rate limit|too many requests|exceeded",
@@ -206,3 +205,12 @@ log_llm_error <- function(err) {
   message(sprintf("[%s] LLMR Error: %s", stamp, msg))
   invisible(NULL)
 }
+
+
+
+
+
+
+
+
+
