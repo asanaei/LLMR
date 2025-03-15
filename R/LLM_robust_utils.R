@@ -4,7 +4,7 @@
 # fault tolerance of calls made through the LLMR package:
 #
 #   1. retry_with_backoff() - A generic utility that retries any function
-#      with exponential backoff.
+#      with exponential backoff (INTERNAL, not exported).
 #
 #   2. call_llm_robust() - A specialized wrapper around call_llm() with
 #      simple retry logic for rate-limit errors (HTTP 429), now
@@ -17,32 +17,12 @@
 #      with timestamps.
 #
 # -------------------------------------------------------------------
-# 1. Exponential Backoff (Generic Function)
+# 1. Exponential Backoff (Internal)
 # -------------------------------------------------------------------
 
-#' Retry with Exponential Backoff
-#'
-#' A generic utility that calls a function repeatedly with exponential
-#' increases in the wait time after each failure.
-#'
-#' @param func A function to be invoked.
-#' @param tries Integer. Number of attempts before giving up. Default 3.
-#' @param initial_wait Numeric. Initial wait time (seconds). Default 10.
-#' @param backoff_factor Numeric. Multiplier for wait time after each failure. Default 10.
-#' @param ... Arguments passed on to \code{func}.
-#'
-#' @return The result of \code{func(...)} if successful, or an error after all attempts fail.
-#'
-#' @examples
-#' \dontrun{
-#'   # Illustrative usage:
-#'   safe_func <- function(x) {
-#'     if (runif(1) < 0.7) stop("Simulated failure.")
-#'     paste("Success with x =", x)
-#'   }
-#'   result <- retry_with_backoff(safe_func, tries = 3, initial_wait = 5, backoff_factor = 2, x = 10)
-#'   cat("Result:", result, "\n")
-#' }
+# A generic utility that calls a function repeatedly with exponentially
+# increasing wait time after each failure. Not exported, no roxygen docs.
+
 retry_with_backoff <- function(func,
                                tries = 3,
                                initial_wait = 10,
@@ -72,7 +52,7 @@ retry_with_backoff <- function(func,
 }
 
 # -------------------------------------------------------------------
-# 2. Rate-Limit-Aware LLM API Call (Now Uses Exponential Backoff and optional memoize)
+# 2. Rate-Limit-Aware LLM API Call
 # -------------------------------------------------------------------
 
 #' Robustly Call LLM API (Simple Retry)
@@ -141,7 +121,7 @@ call_llm_robust <- function(config, messages,
     )
   }
 
-  # Use the generic exponential backoff for repeated attempts
+  # Use the internal retry function with exponential backoff
   retry_with_backoff(
     func = call_func,
     tries = tries,
@@ -197,7 +177,6 @@ cache_llm_call <- memoise::memoise(function(config, messages, verbose = FALSE, j
 #'
 #' Logs an error with a timestamp for troubleshooting.
 #'
-#' @name log_llm_error
 #' @param err An error object.
 #'
 #' @return Invisibly returns \code{NULL}.
@@ -205,9 +184,20 @@ cache_llm_call <- memoise::memoise(function(config, messages, verbose = FALSE, j
 #'
 #' @examples
 #' \dontrun{
+#'   # Example of logging an error by catching a failure:
+#'   # Use a deliberately fake API key to force an error
+#'   config_test <- llm_config(
+#'     provider = "openai",
+#'     model = "gpt-3.5-turbo",
+#'     api_key = "FAKE_KEY",
+#'     temperature = 0.5,
+#'     top_p = 1,
+#'     max_tokens = 30
+#'   )
+#'
 #'   tryCatch(
-#'     stop("Example error"),
-#'     error = function(e) { log_llm_error(e) }
+#'     call_llm(config_test, list(list(role = "user", content = "Hello world!"))),
+#'     error = function(e) log_llm_error(e)
 #'   )
 #' }
 log_llm_error <- function(err) {
