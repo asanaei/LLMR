@@ -159,7 +159,7 @@ Character. The prompt with placeholders replaced.
 \if{html}{\out{<a id="method-Agent-call_llm_agent"></a>}}
 \if{latex}{\out{\hypertarget{method-Agent-call_llm_agent}{}}}
 \subsection{Method \code{call_llm_agent()}}{
-Low-level call to the LLM (via \code{call_llm()}) with a final prompt.
+Low-level call to the LLM (via robust call_llm_robust) with a final prompt.
 If persona is defined, a system message is prepended to help set the role.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Agent$call_llm_agent(prompt, verbose = FALSE)}\if{html}{\out{</div>}}
