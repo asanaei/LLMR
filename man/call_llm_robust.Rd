@@ -9,8 +9,10 @@ call_llm_robust(
   messages,
   tries = 3,
   wait_seconds = 10,
+  backoff_factor = 2,
   verbose = FALSE,
-  json = FALSE
+  json = FALSE,
+  memoize = FALSE
 )
 }
 \arguments{
@@ -20,11 +22,15 @@ call_llm_robust(
 
 \item{tries}{Integer. Number of retries before giving up. Default is 3.}
 
-\item{wait_seconds}{Numeric. How many seconds to wait before each retry. Default is 10.}
+\item{wait_seconds}{Numeric. Initial wait time (seconds) before the first retry. Default is 10.}
+
+\item{backoff_factor}{Numeric. Multiplier for wait time after each failure. Default is 2.}
 
 \item{verbose}{Logical. If TRUE, prints the full API response.}
 
 \item{json}{Logical. If TRUE, returns the raw JSON as an attribute.}
+
+\item{memoize}{Logical. If TRUE, calls are cached to avoid repeated identical requests. Default is FALSE.}
 }
 \value{
 The successful result from \code{\link{call_llm}}, or an error if all retries fail.
@@ -32,7 +38,8 @@ The successful result from \code{\link{call_llm}}, or an error if all retries fa
 \description{
 Wraps \code{\link{call_llm}} to handle rate-limit errors (HTTP 429 or related
 "Too Many Requests" messages). It retries the call a specified number of times,
-waiting a fixed interval before each retry.
+now using exponential backoff. You can also choose to cache responses if you do
+not need fresh results each time.
 }
 \examples{
 \dontrun{
@@ -41,7 +48,8 @@ waiting a fixed interval before each retry.
     config = my_llm_config,
     messages = list(list(role = "user", content = "Hello, LLM!")),
     tries = 3,
-    wait_seconds = 10
+    wait_seconds = 10,
+    memoize = FALSE
   )
   cat("Response:", robust_resp, "\n")
 }
