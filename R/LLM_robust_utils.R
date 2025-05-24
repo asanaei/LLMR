@@ -24,7 +24,7 @@
 # increasing wait time after each failure. Not exported, no roxygen docs.
 
 retry_with_backoff <- function(func,
-                               tries = 3,
+                               tries = 5,
                                initial_wait = 10,
                                backoff_factor = 10,
                                ...) {
@@ -60,7 +60,7 @@ retry_with_backoff <- function(func,
 #'
 #' @param config An \code{llm_config} object from \code{\link{llm_config}}.
 #' @param messages A list of message objects (or character vector for embeddings).
-#' @param tries Integer. Number of retries before giving up. Default is 3.
+#' @param tries Integer. Number of retries before giving up. Default is 5.
 #' @param wait_seconds Numeric. Initial wait time (seconds) before the first retry. Default is 10.
 #' @param backoff_factor Numeric. Multiplier for wait time after each failure. Default is 2.
 #' @param verbose Logical. If TRUE, prints the full API response.
