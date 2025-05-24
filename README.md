@@ -57,7 +57,7 @@ raw_json_response <- attr(detailed_response, "raw_json")
 print(raw_json_response)
 ```
 
-### Typical Word Embedding Call
+### Word Embedding Call with Voyage
 ```r
 
 library(LLMR)
@@ -80,6 +80,31 @@ library(LLMR)
   # Additional processing:
   embeddings |> cor() |> print()
   
+```
+
+### Word Embedding Call with Gemini
+```r
+library(LLMR)
+
+# Configure Gemini embeddings
+config <- llm_config(
+  provider = "gemini",
+  model = "text-embedding-004", 
+  api_key = Sys.getenv("GEMINI_KEY")
+)
+
+# Generate embeddings
+texts <- c("This is text 1", 
+           "This is text 2",
+           "Bears ate all the ants!")
+response <- call_llm(config, texts)
+embeddings <- parse_embeddings(response)
+
+# similarity 
+print (cor(embeddings) )
+
+# hierarchical clustering of the sentences
+hclust(dist(embeddings |> t())) |> plot()
 ```
 
 
