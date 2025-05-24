@@ -20,7 +20,7 @@ call_llm_robust(
 
 \item{messages}{A list of message objects (or character vector for embeddings).}
 
-\item{tries}{Integer. Number of retries before giving up. Default is 3.}
+\item{tries}{Integer. Number of retries before giving up. Default is 5.}
 
 \item{wait_seconds}{Numeric. Initial wait time (seconds) before the first retry. Default is 10.}
 

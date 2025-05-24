@@ -456,6 +456,10 @@ call_llm.voyage <- function(config, messages, verbose = FALSE, json = FALSE) {
 
 #' @export
 call_llm.gemini <- function(config, messages, verbose = FALSE, json = FALSE) {
+  # Auto-detect embedding models and route to embedding handler
+    if (grepl("embedding", config$model, ignore.case = TRUE)) {
+      return(call_llm.gemini_embedding(config, messages, verbose, json))
+    }
   # Define the API endpoint using the model from config
   endpoint <- get_endpoint(config, default_endpoint = paste0("https://generativelanguage.googleapis.com/v1beta/models/", config$model, ":generateContent"))
 
@@ -535,6 +539,63 @@ call_llm.gemini <- function(config, messages, verbose = FALSE, json = FALSE) {
 #
 #   perform_request(req, verbose, json)
 # }
+
+#' Call LLM API for Gemini Embedding Models
+#'
+#' This function handles embedding requests specifically for Gemini embedding models.
+#' It processes text inputs and returns embedding vectors using Google's Generative Language API.
+#'
+#' @param config A configuration object created by llm_config() with provider="gemini"
+#' @param messages Character vector of texts to embed, or list of message objects
+#' @param verbose Logical indicating whether to print request details (default: FALSE)
+#' @param json Logical indicating whether to return raw JSON response (default: FALSE)
+#' @return List containing embedding data in standard LLMR format
+#' @export
+#' @keywords internal
+call_llm.gemini_embedding <- function(config, messages, verbose = FALSE, json = FALSE) {
+  endpoint <- paste0("https://generativelanguage.googleapis.com/v1beta/models/", config$model, ":embedContent")
+
+  # Handle both character vectors and message lists
+  texts <- if (is.character(messages)) {
+    messages
+  } else {
+    sapply(messages, function(msg) if (is.list(msg)) msg$content else as.character(msg))
+  }
+
+  results <- list()
+
+  for (i in seq_along(texts)) {
+    body <- list(
+      content = list(
+        parts = list(list(text = texts[i]))
+      )
+    )
+
+    req <- httr2::request(endpoint) |>
+      httr2::req_url_query(key = config$api_key) |>
+      httr2::req_headers("Content-Type" = "application/json") |>
+      httr2::req_body_json(body)
+
+    if (verbose) {
+      cat("Making embedding request to:", endpoint, "\n")
+      cat("Text length:", nchar(texts[i]), "characters\n")
+    }
+
+    resp <- httr2::req_perform(req)
+
+    if (json) {
+      results[[i]] <- httr2::resp_body_json(resp)
+    } else {
+      result <- httr2::resp_body_json(resp)
+      results[[i]] <- list(embedding = result$embedding$values)
+    }
+  }
+
+  return(list(data = results))
+}
+
+
+
 
 
 
