@@ -126,57 +126,41 @@ format_anthropic_messages <- function(messages) {
 
 #' Create LLM Configuration
 #'
-#' Creates a configuration object for interacting with a specified LLM API provider.
-#'
-#' @param provider A string specifying the API provider. Supported providers include:
-#'   "openai" for OpenAI,
-#'   "anthropic" for Anthropic,
-#'   "groq" for Groq,
-#'   "together" for Together AI,
-#'   "deepseek" for DeepSeek,
-#'   "voyage" for Voyage AI.
-#'   "gemini" for Google Gemini.
-#' @param model The model name to use. This depends on the provider.
-#' @param api_key Your API key for the provider.
+#' @param provider Provider name (openai, anthropic, groq, together, voyage, gemini, deepseek)
+#' @param model Model name to use
+#' @param api_key API key for authentication
 #' @param troubleshooting Prints out all api calls. USE WITH EXTREME CAUTION as it prints your API key.
-#' @param ... Additional model-specific parameters (e.g., `temperature`, `max_tokens`, etc.).
-#'
-#' @return An object of class `llm_config` containing API and model parameters.
-#' @export
-#'
+#' @param base_url Optional base URL override
+#' @param embedding Logical indicating embedding mode: NULL (default, used for backward compatibility, uses prior defaults), TRUE (force embeddings), FALSE (force generative)
+#' @param ... Additional provider-specific parameters#'
+#' #' @return Configuration object for use with call_llm()
 #' @examples
 #' \dontrun{
-#'   # OpenAI Example (chat)
+#' ### Generative example
 #'   openai_config <- llm_config(
 #'     provider = "openai",
-#'     model = "gpt-4o-mini",
+#'     model = "gpt-4.1-mini",
 #'     api_key = Sys.getenv("OPENAI_KEY"),
 #'     temperature = 0.7,
-#'     max_tokens = 500
-#'   )
+#'     max_tokens = 500)
 #'
-#'   # OpenAI Embedding Example (overwriting api_url):
-#'   openai_embed_config <- llm_config(
-#'     provider = "openai",
-#'     model = "text-embedding-3-small",
-#'     api_key = Sys.getenv("OPENAI_KEY"),
-#'     temperature = 0.3,
-#'     api_url = "https://api.openai.com/v1/embeddings"
-#'   )
+#' the_message <- list(
+#' list(role = "system", content = "You are an expert data scientist."),
+#' list(role = "user", content = "When will you ever use the OLS?")
 #'
-#'   text_input <- c("Political science is a useful subject",
-#'                   "We love sociology",
-#'                   "German elections are different",
-#'                   "A student was always curious.")
+#' Call the LLM api
+#' response <- call_llm(
+#' config = comprehensive_openai_config,
+#' messages = the_message)
+#' cat("Response:", response, "\n")
 #'
-#'   embed_response <- call_llm(openai_embed_config, text_input)
-#'   # parse_embeddings() can then be used to convert the embedding results.
-#'
+#' ### Embedding example
 #'   # Voyage AI Example:
 #'   voyage_config <- llm_config(
 #'     provider = "voyage",
 #'     model = "voyage-large-2",
-#'     api_key = Sys.getenv("VOYAGE_API_KEY")
+#'     api_key = Sys.getenv("VOYAGE_API_KEY"),
+#'     embedding = TRUE
 #'   )
 #'
 #'   embedding_response <- call_llm(voyage_config, text_input)
@@ -184,13 +168,14 @@ format_anthropic_messages <- function(messages) {
 #'   # Additional processing:
 #'   embeddings |> cor() |> print()
 #' }
-llm_config <- function(provider, model, api_key, troubleshooting = FALSE, ...) {
+llm_config <- function(provider, model, api_key, troubleshooting = FALSE, base_url = NULL, embedding = NULL, ...) {
   model_params <- list(...)
   config <- list(
     provider = provider,
     model = model,
     api_key = api_key,
     troubleshooting = troubleshooting,
+    embedding <- embedding,
     model_params = model_params
   )
   class(config) <- c("llm_config", provider)
@@ -211,27 +196,11 @@ llm_config <- function(provider, model, api_key, troubleshooting = FALSE, ...) {
 #'
 #' @examples
 #' \dontrun{
-#' # Make sure to set your needed API keys in environment variables
-#'   # OpenAI Embedding Example (overwriting api_url):
-#'   openai_embed_config <- llm_config(
-#'     provider = "openai",
-#'     model = "text-embedding-3-small",
-#'     api_key = Sys.getenv("OPENAI_KEY"),
-#'     temperature = 0.3,
-#'     api_url = "https://api.openai.com/v1/embeddings"
-#'   )
-#'
-#'   text_input <- c("Political science is a useful subject",
-#'                   "We love sociology",
-#'                   "German elections are different",
-#'                   "A student was always curious.")
-#'
-#'   embed_response <- call_llm(openai_embed_config, text_input)
-#'
-#'   # Voyage AI Example:
+#'   # Voyage AI embedding Example:
 #'   voyage_config <- llm_config(
 #'     provider = "voyage",
 #'     model = "voyage-large-2",
+#'     embedding = TRUE,
 #'     api_key = Sys.getenv("VOYAGE_API_KEY")
 #'   )
 #'
@@ -315,7 +284,29 @@ call_llm.default <- function(config, messages, verbose = FALSE, json = FALSE) {
 
 #' @export
 call_llm.openai <- function(config, messages, verbose = FALSE, json = FALSE) {
-  # Use overwrite if provided, otherwise default to chat completions endpoint.
+    # Check explicit embedding request
+    if (isTRUE(config$embedding)) {
+      return(call_llm.openai_embedding(config, messages, verbose, json))
+    }
+
+    # Check explicit non-embedding request (force chat mode)
+    if (isFALSE(config$embedding)) {
+      # Skip any auto-detection, go straight to chat completion
+      endpoint <- get_endpoint(config, default_endpoint = "https://api.openai.com/v1/chat/completions")
+      # ... existing chat logic continues ...
+    }
+
+    # If embedding is NULL, use existing OpenAI logic (backward compatibility)
+    if (is.null(config$embedding)) {
+      # Existing logic: check if api_url/endpoint suggests embeddings
+      endpoint <- get_endpoint(config, default_endpoint = "https://api.openai.com/v1/chat/completions")
+      if (grepl("embeddings", endpoint, ignore.case = TRUE)) {
+        return(call_llm.openai_embedding(config, messages, verbose, json))
+      }
+      # Continue with existing chat logic...
+    }
+  # Use overwrite if provided, otherwise default to openai chat completions endpoint.
+  # this can be used to call other providers which are openai-compatible
   endpoint <- get_endpoint(config, default_endpoint = "https://api.openai.com/v1/chat/completions")
   body <- list(
     model = config$model,
@@ -338,7 +329,38 @@ call_llm.openai <- function(config, messages, verbose = FALSE, json = FALSE) {
 }
 
 #' @export
+#' @keywords internal
+call_llm.openai_embedding <- function(config, messages, verbose = FALSE, json = FALSE) {
+  endpoint <- get_endpoint(config, default_endpoint = "https://api.openai.com/v1/embeddings")
+
+  texts <- if (is.character(messages)) {
+    messages
+  } else {
+    sapply(messages, function(msg) if (is.list(msg)) msg$content else as.character(msg))
+  }
+
+  body <- list(
+    model = config$model,
+    input = texts
+  )
+
+  req <- httr2::request(endpoint) |>
+    httr2::req_headers(
+      "Content-Type" = "application/json",
+      "Authorization" = paste("Bearer", config$api_key)
+    ) |>
+    httr2::req_body_json(body)
+
+  perform_request(req, verbose, json)
+}
+
+
+
+#' @export
 call_llm.anthropic <- function(config, messages, verbose = FALSE, json = FALSE) {
+  if (isTRUE(config$embedding)) {
+    stop("Embedding models are not currently built for Anthropic!")
+  }
   endpoint <- get_endpoint(config, default_endpoint = "https://api.anthropic.com/v1/messages")
   formatted <- format_anthropic_messages(messages)
 
@@ -369,6 +391,10 @@ call_llm.anthropic <- function(config, messages, verbose = FALSE, json = FALSE) 
 
 #' @export
 call_llm.groq <- function(config, messages, verbose = FALSE, json = FALSE) {
+  # Check if this is an embedding request
+  if (isTRUE(config$embedding)) {
+    stop("Embedding models are not currently supported for Groq!")
+  }
   endpoint <- get_endpoint(config, default_endpoint = "https://api.groq.com/openai/v1/chat/completions")
   body <- list(
     model = config$model,
@@ -389,6 +415,19 @@ call_llm.groq <- function(config, messages, verbose = FALSE, json = FALSE) {
 
 #' @export
 call_llm.together <- function(config, messages, verbose = FALSE, json = FALSE) {
+    # Check explicit embedding request
+    if (isTRUE(config$embedding)) {
+      return(call_llm.together_embedding(config, messages, verbose, json))
+    }
+
+    # Check explicit non-embedding request (force chat mode)
+    # if (isFALSE(config$embedding)) {
+    #   # Skip any auto-detection, go straight to chat completion
+    # }
+    # # If embedding is NULL, use existing Together AI logic (backward compatibility)
+    # if (is.null(config$embedding)) {
+    # }
+
   endpoint <- get_endpoint(config, default_endpoint = "https://api.together.xyz/v1/chat/completions")
   body <- list(
     model = config$model,
@@ -412,8 +451,70 @@ call_llm.together <- function(config, messages, verbose = FALSE, json = FALSE) {
   perform_request(req, verbose, json)
 }
 
+#' Call LLM API for Together AI Embedding Models
+#'
+#' This function handles embedding requests specifically for Together AI embedding models.
+#' It processes text inputs and returns embedding vectors using Together AI's embeddings API.
+#'
+#' @param config A configuration object created by llm_config() with provider="together"
+#' @param messages Character vector of texts to embed, or list of message objects
+#' @param verbose Logical indicating whether to print request details (default: FALSE)
+#' @param json Logical indicating whether to return raw JSON response (default: FALSE)
+#' @return List containing embedding data in standard LLMR format
+#' @export
+#' @keywords internal
+call_llm.together_embedding <- function(config, messages, verbose = FALSE, json = FALSE) {
+  endpoint <- get_endpoint(config, default_endpoint = "https://api.together.xyz/v1/embeddings")
+
+  # Handle both character vectors and message lists
+  texts <- if (is.character(messages)) {
+    messages
+  } else {
+    sapply(messages, function(msg) if (is.list(msg)) msg$content else as.character(msg))
+  }
+
+  body <- list(
+    model = config$model,
+    input = texts
+  )
+
+  req <- httr2::request(endpoint) |>
+    httr2::req_headers(
+      "Content-Type" = "application/json",
+      "Authorization" = paste("Bearer", config$api_key)
+    ) |>
+    httr2::req_body_json(body)
+
+  if (verbose) {
+    cat("Making embedding request to:", endpoint, "\n")
+    cat("Model:", config$model, "\n")
+    cat("Number of texts:", length(texts), "\n")
+  }
+
+  response <- perform_request(req, verbose, json)
+
+  if (json) {
+    return(response)
+  }
+
+  # Transform Together AI response to LLMR standard format
+  embeddings_data <- lapply(response$data, function(item) {
+    list(embedding = item$embedding)
+  })
+
+  return(list(data = embeddings_data))
+}
+
+
+
+
+
+
 #' @export
 call_llm.deepseek <- function(config, messages, verbose = FALSE, json = FALSE) {
+  if (isTRUE(config$embedding)) {
+    stop("Embedding models are not currently supported for DeepSeek!")
+  }
   endpoint <- get_endpoint(config, default_endpoint = "https://api.deepseek.com/chat/completions")
   body <- list(
     model = rlang::`%||%`(config$model, "deepseek-chat"),
@@ -435,8 +536,33 @@ call_llm.deepseek <- function(config, messages, verbose = FALSE, json = FALSE) {
   perform_request(req, verbose, json)
 }
 
+
 #' @export
 call_llm.voyage <- function(config, messages, verbose = FALSE, json = FALSE) {
+  # Check explicit embedding request
+  if (isTRUE(config$embedding)) {
+    return(call_llm.voyage_embedding(config, messages, verbose, json))
+  }
+
+  # Check explicit non-embedding request
+  if (isFALSE(config$embedding)) {
+    stop("Only embedding models are set up for Voyage")
+  }
+
+  # If embedding is NULL, use existing Voyage behavior (backward compatibility)
+  if (is.null(config$embedding)) {
+    # Existing behavior: Voyage is embeddings-only, so default to embeddings
+    return(call_llm.voyage_embedding(config, messages, verbose, json))
+  }
+
+  # Fallback: default to embeddings (Voyage's specialty)
+  return(call_llm.voyage_embedding(config, messages, verbose, json))
+}
+
+#' @export
+#' @keywords internal
+call_llm.voyage_embedding <- function(config, messages, verbose = FALSE, json = FALSE) {
+  # Move existing voyage logic here
   endpoint <- get_endpoint(config, default_endpoint = "https://api.voyageai.com/v1/embeddings")
   body <- list(
     input = messages,
@@ -454,8 +580,14 @@ call_llm.voyage <- function(config, messages, verbose = FALSE, json = FALSE) {
 }
 
 
+
 #' @export
 call_llm.gemini <- function(config, messages, verbose = FALSE, json = FALSE) {
+    # Check explicit embedding request
+    if (isTRUE(config$embedding)) {
+      return(call_llm.gemini_embedding(config, messages, verbose, json))
+    }
+
   # Auto-detect embedding models and route to embedding handler
     if (grepl("embedding", config$model, ignore.case = TRUE)) {
       return(call_llm.gemini_embedding(config, messages, verbose, json))

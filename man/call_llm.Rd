@@ -23,27 +23,11 @@ Sends a message to the specified LLM API and retrieves the response.
 }
 \examples{
 \dontrun{
-# Make sure to set your needed API keys in environment variables
-  # OpenAI Embedding Example (overwriting api_url):
-  openai_embed_config <- llm_config(
-    provider = "openai",
-    model = "text-embedding-3-small",
-    api_key = Sys.getenv("OPENAI_KEY"),
-    temperature = 0.3,
-    api_url = "https://api.openai.com/v1/embeddings"
-  )
-
-  text_input <- c("Political science is a useful subject",
-                  "We love sociology",
-                  "German elections are different",
-                  "A student was always curious.")
-
-  embed_response <- call_llm(openai_embed_config, text_input)
-
-  # Voyage AI Example:
+  # Voyage AI embedding Example:
   voyage_config <- llm_config(
     provider = "voyage",
     model = "voyage-large-2",
+    embedding = TRUE,
     api_key = Sys.getenv("VOYAGE_API_KEY")
   )
 

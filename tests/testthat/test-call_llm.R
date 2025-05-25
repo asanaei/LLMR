@@ -8,10 +8,11 @@ test_that("call_llm works with OpenAI API", {
     provider = "openai",
     model = "gpt-4o-mini",
     # if OPENAI_KEY exists, make it the api_key, otherwise use "fake_api
-    api_key = Sys.getenv("OPENAI_KEY", unset = "default_fake_key"),
+    api_key = Sys.getenv("OPENAI_API_KEY", unset = "default_fake_key"),
     temperature = 1,
     max_tokens = 1024,
     top_p = 1,
+#   troubleshooting = FALSE,
     frequency_penalty = 0,
     presence_penalty = 0
   )
