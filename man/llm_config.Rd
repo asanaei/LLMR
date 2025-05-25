@@ -4,65 +4,62 @@
 \alias{llm_config}
 \title{Create LLM Configuration}
 \usage{
-llm_config(provider, model, api_key, troubleshooting = FALSE, ...)
+llm_config(
+  provider,
+  model,
+  api_key,
+  troubleshooting = FALSE,
+  base_url = NULL,
+  embedding = NULL,
+  ...
+)
 }
 \arguments{
-\item{provider}{A string specifying the API provider. Supported providers include:
-"openai" for OpenAI,
-"anthropic" for Anthropic,
-"groq" for Groq,
-"together" for Together AI,
-"deepseek" for DeepSeek,
-"voyage" for Voyage AI.
-"gemini" for Google Gemini.}
+\item{provider}{Provider name (openai, anthropic, groq, together, voyage, gemini, deepseek)}
 
-\item{model}{The model name to use. This depends on the provider.}
+\item{model}{Model name to use}
 
-\item{api_key}{Your API key for the provider.}
+\item{api_key}{API key for authentication}
 
 \item{troubleshooting}{Prints out all api calls. USE WITH EXTREME CAUTION as it prints your API key.}
 
-\item{...}{Additional model-specific parameters (e.g., `temperature`, `max_tokens`, etc.).}
-}
-\value{
-An object of class `llm_config` containing API and model parameters.
+\item{base_url}{Optional base URL override}
+
+\item{embedding}{Logical indicating embedding mode: NULL (default, used for backward compatibility, uses prior defaults), TRUE (force embeddings), FALSE (force generative)}
+
+\item{...}{Additional provider-specific parameters#'
+#' @return Configuration object for use with call_llm()}
 }
 \description{
-Creates a configuration object for interacting with a specified LLM API provider.
+Create LLM Configuration
 }
 \examples{
 \dontrun{
-  # OpenAI Example (chat)
+### Generative example
   openai_config <- llm_config(
     provider = "openai",
-    model = "gpt-4o-mini",
+    model = "gpt-4.1-mini",
     api_key = Sys.getenv("OPENAI_KEY"),
     temperature = 0.7,
-    max_tokens = 500
-  )
+    max_tokens = 500)
 
-  # OpenAI Embedding Example (overwriting api_url):
-  openai_embed_config <- llm_config(
-    provider = "openai",
-    model = "text-embedding-3-small",
-    api_key = Sys.getenv("OPENAI_KEY"),
-    temperature = 0.3,
-    api_url = "https://api.openai.com/v1/embeddings"
-  )
+the_message <- list(
+list(role = "system", content = "You are an expert data scientist."),
+list(role = "user", content = "When will you ever use the OLS?")
 
-  text_input <- c("Political science is a useful subject",
-                  "We love sociology",
-                  "German elections are different",
-                  "A student was always curious.")
+Call the LLM api
+response <- call_llm(
+config = comprehensive_openai_config,
+messages = the_message)
+cat("Response:", response, "\n")
 
-  embed_response <- call_llm(openai_embed_config, text_input)
-  # parse_embeddings() can then be used to convert the embedding results.
-
+### Embedding example
   # Voyage AI Example:
   voyage_config <- llm_config(
     provider = "voyage",
     model = "voyage-large-2",
-    api_key = Sys.getenv("VOYAGE_API_KEY")
+    api_key = Sys.getenv("VOYAGE_API_KEY"),
+    embedding = TRUE
   )
 
   embedding_response <- call_llm(voyage_config, text_input)
