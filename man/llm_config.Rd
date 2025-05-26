@@ -47,9 +47,9 @@ Create LLM Configuration
 
 the_message <- list(
 list(role = "system", content = "You are an expert data scientist."),
-list(role = "user", content = "When will you ever use the OLS?")
+list(role = "user", content = "When will you ever use the OLS?") )
 
-Call the LLM api
+#Call the LLM api
 response <- call_llm(
 config = comprehensive_openai_config,
 messages = the_message)

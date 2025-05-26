@@ -148,9 +148,9 @@ format_anthropic_messages <- function(messages) {
 #'
 #' the_message <- list(
 #' list(role = "system", content = "You are an expert data scientist."),
-#' list(role = "user", content = "When will you ever use the OLS?")
+#' list(role = "user", content = "When will you ever use the OLS?") )
 #'
-#' Call the LLM api
+#' #Call the LLM api
 #' response <- call_llm(
 #' config = comprehensive_openai_config,
 #' messages = the_message)
@@ -775,7 +775,7 @@ parse_embeddings <- function(embedding_response) {
 #' Generate Embeddings in Batches
 #'
 #' A wrapper function that processes a list of texts in batches to generate embeddings,
-#' avoiding rate limits. This function calls \code{\link{call_llm_robust}} for each 
+#' avoiding rate limits. This function calls \code{\link{call_llm_robust}} for each
 #' batch and stitches the results together.
 #'
 #' @param texts Character vector of texts to embed.
@@ -794,60 +794,60 @@ parse_embeddings <- function(embedding_response) {
 #' \dontrun{
 #'   # Basic usage
 #'   texts <- c("Hello world", "How are you?", "Machine learning is great")
-#'   
+#'
 #'   embed_cfg <- llm_config(
 #'     provider = "voyage",
 #'     model = "voyage-3-large",
 #'     api_key = Sys.getenv("VOYAGE_KEY")
 #'   )
-#'   
+#'
 #'   embeddings <- get_batched_embeddings(
 #'     texts = texts,
 #'     embed_config = embed_cfg,
 #'     batch_size = 2
 #'   )
 #' }
-get_batched_embeddings <- function(texts, 
-                                   embed_config, 
+get_batched_embeddings <- function(texts,
+                                   embed_config,
                                    batch_size = 5,
                                    verbose = TRUE) {
-  
+
   # Input validation
   if (length(texts) == 0) {
     if (verbose) message("No texts provided. Returning NULL.")
     return(NULL)
   }
-  
+
   # Setup
   n_docs <- length(texts)
   batches <- split(seq_len(n_docs), ceiling(seq_len(n_docs) / batch_size))
   emb_list <- vector("list", n_docs)
-  
+
   if (verbose) {
     message("Processing ", n_docs, " texts in ", length(batches), " batches of up to ", batch_size, " texts each")
   }
-  
+
   # Process batches
   for (b in seq_along(batches)) {
     idx <- batches[[b]]
     batch_texts <- texts[idx]
-    
+
     if (verbose) {
       message("Processing batch ", b, "/", length(batches), " (texts ", min(idx), "-", max(idx), ")")
     }
-    
+
     tryCatch({
       # Call LLM for this batch
       resp <- call_llm_robust(embed_config, batch_texts, verbose = FALSE)
-      
+
       # Parse embeddings and transpose to get one row per text
       emb_chunk <- parse_embeddings(resp) |> t()
-      
+
       # Store per-document embeddings
       for (i in seq_along(idx)) {
         emb_list[[idx[i]]] <- emb_chunk[i, ]
       }
-      
+
     }, error = function(e) {
       if (verbose) {
         message("Error in batch ", b, ": ", conditionMessage(e))
@@ -859,21 +859,21 @@ get_batched_embeddings <- function(texts,
       }
     })
   }
-  
+
   # Check if we have any successful embeddings
   if (all(vapply(emb_list, function(x) length(x) == 1 && is.na(x), TRUE))) {
     if (verbose) message("No embeddings were successfully generated.")
     return(NULL)
   }
-  
+
   # Combine all embeddings into final matrix
   final_embeddings <- do.call(rbind, emb_list)
-  
+
   if (verbose) {
     n_successful <- sum(!is.na(final_embeddings[, 1]))
-    message("Successfully generated embeddings for ", n_successful, 
+    message("Successfully generated embeddings for ", n_successful,
             "/", n_docs, " texts (", ncol(final_embeddings), " dimensions)")
   }
-  
+
   return(final_embeddings)
 }
