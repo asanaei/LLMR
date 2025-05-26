@@ -133,7 +133,9 @@ format_anthropic_messages <- function(messages) {
 #' @param base_url Optional base URL override
 #' @param embedding Logical indicating embedding mode: NULL (default, used for backward compatibility, uses prior defaults), TRUE (force embeddings), FALSE (force generative)
 #' @param ... Additional provider-specific parameters#'
-#' #' @return Configuration object for use with call_llm()
+#' @return Configuration object for use with call_llm()
+#' @export
+#'
 #' @examples
 #' \dontrun{
 #' ### Generative example

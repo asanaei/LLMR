@@ -27,8 +27,10 @@ llm_config(
 
 \item{embedding}{Logical indicating embedding mode: NULL (default, used for backward compatibility, uses prior defaults), TRUE (force embeddings), FALSE (force generative)}
 
-\item{...}{Additional provider-specific parameters#'
-#' @return Configuration object for use with call_llm()}
+\item{...}{Additional provider-specific parameters#'}
+}
+\value{
+Configuration object for use with call_llm()
 }
 \description{
 Create LLM Configuration
