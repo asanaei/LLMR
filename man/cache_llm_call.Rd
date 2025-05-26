@@ -3,6 +3,9 @@
 \name{cache_llm_call}
 \alias{cache_llm_call}
 \title{Cache LLM API Calls}
+\usage{
+cache_llm_call(config, messages, verbose = FALSE, json = FALSE)
+}
 \arguments{
 \item{config}{An \code{llm_config} object from \code{\link{llm_config}}.}
 

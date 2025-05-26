@@ -26,13 +26,17 @@
 retry_with_backoff <- function(func,
                                tries = 5,
                                initial_wait = 10,
-                               backoff_factor = 10,
+                               backoff_factor = 5,
+                               error_filter_func = NULL,
                                ...) {
   wait_time <- initial_wait
   for (attempt in seq_len(tries)) {
     result <- tryCatch(
       func(...),
       error = function(e) {
+        if (!is.null(error_filter_func) && !error_filter_func(e)) {
+          stop(e)
+        }
         message(sprintf("Error on attempt %d: %s", attempt, conditionMessage(e)))
         message(sprintf("Waiting %d seconds before retry...", wait_time))
         Sys.sleep(wait_time)
@@ -55,14 +59,14 @@ retry_with_backoff <- function(func,
 #'
 #' Wraps \code{\link{call_llm}} to handle rate-limit errors (HTTP 429 or related
 #' "Too Many Requests" messages). It retries the call a specified number of times,
-#' now using exponential backoff. You can also choose to cache responses if you do
+#' using exponential backoff. You can also choose to cache responses if you do
 #' not need fresh results each time.
 #'
 #' @param config An \code{llm_config} object from \code{\link{llm_config}}.
 #' @param messages A list of message objects (or character vector for embeddings).
 #' @param tries Integer. Number of retries before giving up. Default is 5.
 #' @param wait_seconds Numeric. Initial wait time (seconds) before the first retry. Default is 10.
-#' @param backoff_factor Numeric. Multiplier for wait time after each failure. Default is 2.
+#' @param backoff_factor Numeric. Multiplier for wait time after each failure. Default is 5.
 #' @param verbose Logical. If TRUE, prints the full API response.
 #' @param json Logical. If TRUE, returns the raw JSON as an attribute.
 #' @param memoize Logical. If TRUE, calls are cached to avoid repeated identical requests. Default is FALSE.
@@ -76,56 +80,60 @@ retry_with_backoff <- function(func,
 #'   robust_resp <- call_llm_robust(
 #'     config = my_llm_config,
 #'     messages = list(list(role = "user", content = "Hello, LLM!")),
-#'     tries = 3,
+#'     tries = 5,
 #'     wait_seconds = 10,
 #'     memoize = FALSE
 #'   )
 #'   cat("Response:", robust_resp, "\n")
 #' }
 call_llm_robust <- function(config, messages,
-                            tries = 3,
+                            tries = 5,
                             wait_seconds = 10,
-                            backoff_factor = 2,
+                            backoff_factor = 5,
                             verbose = FALSE,
                             json = FALSE,
                             memoize = FALSE) {
 
   # Internal helper that calls either the direct function or the cached variant
   call_func <- function() {
-    tryCatch(
-      {
-        if (memoize) {
-          if (!requireNamespace("memoise", quietly = TRUE)) {
-            stop("memoize=TRUE requires the 'memoise' package. Please install it.")
-          }
-          cache_llm_call(config, messages, verbose = verbose, json = json)
-        } else {
-          call_llm(config, messages, verbose = verbose, json = json)
-        }
-      },
-      error = function(e) {
-        # Use our logging function here
-        log_llm_error(e)
-
-        err_msg <- conditionMessage(e)
-        # Simple detection of rate-limit-like errors
-        is_rate_error <- grepl("429|rate limit|too many requests|exceeded",
-                               err_msg, ignore.case = TRUE)
-        if (is_rate_error) {
-          stop("Rate-limit error. Triggering backoff retry.")
-        } else {
-          stop(e)
-        }
+    if (memoize) {
+      if (!requireNamespace("memoise", quietly = TRUE)) {
+        stop("memoize=TRUE requires the 'memoise' package. Please install it (install.packages('memoise')).")
       }
-    )
+      return(cache_llm_call(config, messages, verbose = verbose, json = json))
+    } else {
+      return(call_llm(config, messages, verbose = verbose, json = json))
+    }
   }
 
-  # Use the internal retry function with exponential backoff
-  retry_with_backoff(
-    func = call_func,
-    tries = tries,
-    initial_wait = wait_seconds,
-    backoff_factor = backoff_factor
+  # Error filter for retry_with_backoff: only retry for specific conditions
+  is_retryable_error <- function(e) {
+    err_msg <- conditionMessage(e)
+    # Simple detection of rate-limit-like errors
+    is_rate_error <- grepl("429|rate limit|too many requests|exceeded",
+                           err_msg, ignore.case = TRUE)
+    if (is_rate_error) {
+      log_llm_error(e) # Log the rate error specifically if we are about to retry it
+      return(TRUE) # Retry this error
+    }
+    return(FALSE) # Do not retry other errors
+  }
+  
+  # Original error handling logic for non-retryable errors or after all retries fail
+  tryCatch(
+    retry_with_backoff(
+      func = call_func,
+      tries = tries,
+      initial_wait = wait_seconds,
+      backoff_factor = backoff_factor,
+      error_filter_func = is_retryable_error
+    ),
+    error = function(e) {
+      if (!is_retryable_error(e)) {
+         log_llm_error(e)
+      }
+      stop(e)
+    }
   )
 }
 
@@ -161,10 +169,10 @@ call_llm_robust <- function(config, messages,
 #'   # Subsequent identical calls won't hit the API unless we clear the cache.
 #'   response2 <- cache_llm_call(my_config, list(list(role="user", content="Hello!")))
 #' }
-if (!requireNamespace("memoise", quietly = TRUE)) {
-  stop("Caching requires the 'memoise' package. Please install it (install.packages('memoise')).")
-}
 cache_llm_call <- memoise::memoise(function(config, messages, verbose = FALSE, json = FALSE) {
+  if (!requireNamespace("memoise", quietly = TRUE)) {
+    stop("Caching with cache_llm_call requires the 'memoise' package. Please install it (install.packages('memoise')).")
+  }
   call_llm(config, messages, verbose = verbose, json = json)
 })
 
