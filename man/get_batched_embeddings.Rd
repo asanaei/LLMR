@@ -23,20 +23,20 @@ A numeric matrix where each row is an embedding vector for the corresponding tex
 }
 \description{
 A wrapper function that processes a list of texts in batches to generate embeddings,
-avoiding rate limits. This function calls \code{\link{call_llm_robust}} for each 
+avoiding rate limits. This function calls \code{\link{call_llm_robust}} for each
 batch and stitches the results together.
 }
 \examples{
 \dontrun{
   # Basic usage
   texts <- c("Hello world", "How are you?", "Machine learning is great")
-  
+
   embed_cfg <- llm_config(
     provider = "voyage",
     model = "voyage-3-large",
     api_key = Sys.getenv("VOYAGE_KEY")
   )
-  
+
   embeddings <- get_batched_embeddings(
     texts = texts,
     embed_config = embed_cfg,
