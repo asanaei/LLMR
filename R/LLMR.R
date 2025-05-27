@@ -152,7 +152,7 @@ format_anthropic_messages <- function(messages) {
 #'
 #' #Call the LLM api
 #' response <- call_llm(
-#' config = comprehensive_openai_config,
+#' config = openai_config,
 #' messages = the_message)
 #' cat("Response:", response, "\n")
 #'
