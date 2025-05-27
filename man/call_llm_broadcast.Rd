@@ -44,6 +44,7 @@ A tibble with columns: message_index, provider, model, response_text, success, e
 \description{
 Broadcasts different messages using the same configuration in parallel.
 Perfect for batch processing different prompts with consistent settings.
+This function requires setting up the parallel environment using `setup_llm_parallel`.
 }
 \examples{
 \dontrun{
@@ -57,6 +58,12 @@ Perfect for batch processing different prompts with consistent settings.
     list(list(role = "user", content = "What is 10/2?"))
   )
 
+  # setup paralle Environment
+  setup_llm_parallel(workers = 4, verbose = TRUE)
+
   results <- call_llm_broadcast(config, messages_list)
+
+  # Reset to sequential
+  reset_llm_parallel(verbose = TRUE)
 }
 }

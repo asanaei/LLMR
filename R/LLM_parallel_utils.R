@@ -21,6 +21,7 @@
 #'
 #' Sweeps through different values of a single parameter while keeping the message constant.
 #' Perfect for hyperparameter tuning, temperature experiments, etc.
+#' This function requires setting up the parallel environment using `setup_llm_parallel`.
 #'
 #' @param base_config Base llm_config object to modify.
 #' @param param_name Character. Name of the parameter to vary (e.g., "temperature", "max_tokens").
@@ -47,7 +48,13 @@
 #'   messages <- list(list(role = "user", content = "What is 15 * 23?"))
 #'   temperatures <- c(0, 0.3, 0.7, 1.0, 1.5)
 #'
+#'   # set up the parallel enviornment
+#'   setup_llm_parallel(workers = 4, verbose = TRUE)
+#'
 #'   results <- call_llm_sweep(config, "temperature", temperatures, messages)
+#'
+#'   # Reset to sequential
+#'   reset_llm_parallel(verbose = TRUE)
 #' }
 call_llm_sweep <- function(base_config,
                            param_name,
@@ -236,6 +243,7 @@ call_llm_sweep <- function(base_config,
 #'
 #' Broadcasts different messages using the same configuration in parallel.
 #' Perfect for batch processing different prompts with consistent settings.
+#' This function requires setting up the parallel environment using `setup_llm_parallel`.
 #'
 #' @param config Single llm_config object to use for all calls.
 #' @param messages_list A list of message lists, each for one API call.
@@ -263,7 +271,13 @@ call_llm_sweep <- function(base_config,
 #'     list(list(role = "user", content = "What is 10/2?"))
 #'   )
 #'
+#'   # setup paralle Environment
+#'   setup_llm_parallel(workers = 4, verbose = TRUE)
+#'
 #'   results <- call_llm_broadcast(config, messages_list)
+#'
+#'   # Reset to sequential
+#'   reset_llm_parallel(verbose = TRUE)
 #' }
 call_llm_broadcast <- function(config,
                                messages_list,
@@ -414,6 +428,7 @@ call_llm_broadcast <- function(config,
 #'
 #' Compares different configurations (models, providers, settings) using the same message.
 #' Perfect for benchmarking across different models or providers.
+#' This function requires setting up the parallel environment using `setup_llm_parallel`.
 #'
 #' @param configs_list A list of llm_config objects to compare.
 #' @param messages List of message objects (same for all configs).
@@ -440,7 +455,13 @@ call_llm_broadcast <- function(config,
 #'   configs_list <- list(config1, config2)
 #'   messages <- list(list(role = "user", content = "Explain quantum computing"))
 #'
+#'   # setup paralle Environment
+#'   setup_llm_parallel(workers = 4, verbose = TRUE)
+#'
 #'   results <- call_llm_compare(configs_list, messages)
+#'
+#'   # Reset to sequential
+#'   reset_llm_parallel(verbose = TRUE)
 #' }
 call_llm_compare <- function(configs_list,
                              messages,
@@ -591,6 +612,7 @@ call_llm_compare <- function(configs_list,
 #'
 #' Processes a list where each element contains both a config and message pair.
 #' Maximum flexibility for complex workflows with different configs and messages.
+#' This function requires setting up the parallel environment using `setup_llm_parallel`.
 #'
 #' @param config_message_pairs A list where each element is a list with 'config' and 'messages' elements.
 #' @param tries Integer. Number of retries for each call. Default is 10.
@@ -618,7 +640,13 @@ call_llm_compare <- function(configs_list,
 #'     list(config = config2, messages = list(list(role = "user", content = "Explain ML")))
 #'   )
 #'
+#'   # setup paralle Environment
+#'   setup_llm_parallel(workers = 4, verbose = TRUE)
+#'
 #'   results <- call_llm_par(pairs)
+#'
+#'   # Reset to sequential
+#'   reset_llm_parallel(verbose = TRUE)
 #' }
 call_llm_par <- function(config_message_pairs,
                          tries = 10,
