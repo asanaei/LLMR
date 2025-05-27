@@ -23,7 +23,8 @@ Suggests:
     httptest2,
     progressr,
     knitr,
-    rmarkdown
+    rmarkdown,
+    ggplot2
 RoxygenNote: 7.3.2
 Config/testthat/edition: 3
 URL: https://github.com/asanaei/LLMR

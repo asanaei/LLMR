@@ -869,6 +869,10 @@ get_batched_embeddings <- function(texts,
   # Combine all embeddings into final matrix
   final_embeddings <- do.call(rbind, emb_list)
 
+  if(!is.null(names(texts))){
+    row.names(final_embeddings) = names(texts)
+  }
+
   if (verbose) {
     n_successful <- sum(!is.na(final_embeddings[, 1]))
     message("Successfully generated embeddings for ", n_successful,
