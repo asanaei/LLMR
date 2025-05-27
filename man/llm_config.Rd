@@ -51,7 +51,7 @@ list(role = "user", content = "When will you ever use the OLS?") )
 
 #Call the LLM api
 response <- call_llm(
-config = comprehensive_openai_config,
+config = openai_config,
 messages = the_message)
 cat("Response:", response, "\n")
 
