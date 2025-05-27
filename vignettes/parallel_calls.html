@@ -2185,11 +2185,11 @@ vertical-align: -.125em;
 
 <div class="quarto-title-meta">
 
-    
-  
-    
+
+
+
   </div>
-  
+
 
 
 </header>
@@ -2238,7 +2238,7 @@ explanations and how to override the soft limit that triggered this warning</cod
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">provider =</span> <span class="st">&quot;openai&quot;</span>,</span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">model =</span> <span class="st">&quot;gpt-4.1-nano&quot;</span>,</span>
 <span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">api_key =</span> <span class="fu">Sys.getenv</span>(<span class="st">&quot;OPENAI_API_KEY&quot;</span>),</span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">max_tokens =</span> <span class="dv">10</span>  <span class="co"># Very few tokens as requested</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">max_tokens =</span> <span class="dv">10</span>  <span class="co"># Very few tokens are requested</span></span>
 <span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
@@ -2306,13 +2306,13 @@ explanations and how to override the soft limit that triggered this warning</cod
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 6 × 9
   param_name  param_value provider model     response_text success error_message
-  &lt;chr&gt;       &lt;chr&gt;       &lt;chr&gt;    &lt;chr&gt;     &lt;chr&gt;         &lt;lgl&gt;   &lt;chr&gt;        
-1 temperature 0           openai   gpt-4.1-… Jared         TRUE    &lt;NA&gt;         
-2 temperature 0           openai   gpt-4.1-… Jared         TRUE    &lt;NA&gt;         
-3 temperature 0           openai   gpt-4.1-… Jared         TRUE    &lt;NA&gt;         
-4 temperature 0           openai   gpt-4.1-… Jared         TRUE    &lt;NA&gt;         
-5 temperature 0           openai   gpt-4.1-… Jared         TRUE    &lt;NA&gt;         
-6 temperature 0           openai   gpt-4.1-… Jared         TRUE    &lt;NA&gt;         
+  &lt;chr&gt;       &lt;chr&gt;       &lt;chr&gt;    &lt;chr&gt;     &lt;chr&gt;         &lt;lgl&gt;   &lt;chr&gt;
+1 temperature 0           openai   gpt-4.1-… Jared         TRUE    &lt;NA&gt;
+2 temperature 0           openai   gpt-4.1-… Jared         TRUE    &lt;NA&gt;
+3 temperature 0           openai   gpt-4.1-… Jared         TRUE    &lt;NA&gt;
+4 temperature 0           openai   gpt-4.1-… Jared         TRUE    &lt;NA&gt;
+5 temperature 0           openai   gpt-4.1-… Jared         TRUE    &lt;NA&gt;
+6 temperature 0           openai   gpt-4.1-… Jared         TRUE    &lt;NA&gt;
 # ℹ 2 more variables: max_tokens &lt;dbl&gt;, temperature &lt;dbl&gt;</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># remove anything other than a-z, A-Z from response_text</span></span>
@@ -2346,7 +2346,7 @@ explanations and how to override the soft limit that triggered this warning</cod
     anchorJS.add('.anchored');
     const isCodeAnnotation = (el) => {
       for (const clz of el.classList) {
-        if (clz.startsWith('code-annotation-')) {                     
+        if (clz.startsWith('code-annotation-')) {
           return true;
         }
       }
@@ -2366,11 +2366,11 @@ explanations and how to override the soft limit that triggered this warning</cod
         button.setAttribute("data-bs-toggle", "tooltip");
         button.setAttribute("data-bs-placement", "left");
         button.setAttribute("data-bs-title", "Copied!");
-        tooltip = new bootstrap.Tooltip(button, 
-          { trigger: "manual", 
+        tooltip = new bootstrap.Tooltip(button,
+          { trigger: "manual",
             customClass: "code-copy-button-tooltip",
             offset: [0, -8]});
-        tooltip.show();    
+        tooltip.show();
       }
       setTimeout(function() {
         if (tooltip) {
@@ -2446,7 +2446,7 @@ explanations and how to override the soft limit that triggered this warning</cod
       if (onUntriggerFn) {
         config.onUntrigger = onUntriggerFn;
       }
-      window.tippy(el, config); 
+      window.tippy(el, config);
     }
     const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
     for (var i=0; i<noterefs.length; i++) {
@@ -2521,7 +2521,7 @@ explanations and how to override the soft limit that triggered this warning</cod
       tippyHover(xref, undefined, function(instance) {
         instance.disable();
         let url = xref.getAttribute('href');
-        let hash = undefined; 
+        let hash = undefined;
         if (url.startsWith('#')) {
           hash = url;
         } else {
@@ -2549,7 +2549,7 @@ explanations and how to override the soft limit that triggered this warning</cod
               if (note !== null) {
                 const html = processXRef(id, note);
                 instance.setContent(html);
-              } 
+              }
             }).finally(() => {
               instance.enable();
               instance.show();
@@ -2573,7 +2573,7 @@ explanations and how to override the soft limit that triggered this warning</cod
               }
               const html = processXRef(null, note);
               instance.setContent(html);
-            } 
+            }
           }).finally(() => {
             instance.enable();
             instance.show();
@@ -2613,7 +2613,7 @@ explanations and how to override the soft limit that triggered this warning</cod
               height = bottom - top;
             }
             if (top !== null && height !== null && parent !== null) {
-              // cook up a div (if necessary) and position it 
+              // cook up a div (if necessary) and position it
               let div = window.document.getElementById("code-annotation-line-highlight");
               if (div === null) {
                 div = window.document.createElement("div");

@@ -6,11 +6,13 @@ vignette: >
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
   %\DontRun
-
 ---
 
-Let us see if there is first name bias in a sepcific model. For this example we 
-use the `gpt-4.1-nano` model which is fast and relatively cheap.
+A few years ago, it was found that some automated resume processors had positive 
+bias toward the name 'Jared.' In this example we want to call a large language 
+model multiple times with various temperatures and see the results.
+
+**Note: This vignette requires a valid OpenAI API key and will not run during package installation.**
 
 ```{r}
 library(LLMR) 
@@ -31,7 +33,7 @@ config <- llm_config(
   provider = "openai",
   model = "gpt-4.1-nano",
   api_key = Sys.getenv("OPENAI_API_KEY"),
-  max_tokens = 10  # Very few tokens as requested
+  max_tokens = 10  # Very few tokens are requested
 )
 ```
 
