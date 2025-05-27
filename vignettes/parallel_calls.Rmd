@@ -5,6 +5,7 @@ vignette: >
   %\VignetteIndexEntry{parallel_calls}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
+  %\DontRun
 ---
 
 Let us see if there is first name bias in a sepcific model. For this example we 
@@ -85,7 +86,7 @@ cat("Sweep completed in:", round(as.numeric(end_time - start_time), 2), "seconds
 Let us clean the output and visualize this:
 ```{r fig.width= 8}
 
-results$response_text_clean |> head()
+results |> head()
   
 # remove anything other than a-z, A-Z from response_text
 # do not remove accented letter
