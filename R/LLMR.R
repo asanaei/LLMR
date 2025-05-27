@@ -177,7 +177,7 @@ llm_config <- function(provider, model, api_key, troubleshooting = FALSE, base_u
     model = model,
     api_key = api_key,
     troubleshooting = troubleshooting,
-    embedding <- embedding,
+    embedding = embedding,
     model_params = model_params
   )
   class(config) <- c("llm_config", provider)
