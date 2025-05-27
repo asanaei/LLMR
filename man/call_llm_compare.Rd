@@ -44,6 +44,7 @@ A tibble with columns: config_index, provider, model, response_text, success, er
 \description{
 Compares different configurations (models, providers, settings) using the same message.
 Perfect for benchmarking across different models or providers.
+This function requires setting up the parallel environment using `setup_llm_parallel`.
 }
 \examples{
 \dontrun{
@@ -56,6 +57,12 @@ Perfect for benchmarking across different models or providers.
   configs_list <- list(config1, config2)
   messages <- list(list(role = "user", content = "Explain quantum computing"))
 
+  # setup paralle Environment
+  setup_llm_parallel(workers = 4, verbose = TRUE)
+
   results <- call_llm_compare(configs_list, messages)
+
+  # Reset to sequential
+  reset_llm_parallel(verbose = TRUE)
 }
 }

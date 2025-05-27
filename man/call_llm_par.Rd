@@ -41,6 +41,7 @@ A tibble with columns: pair_index, provider, model, response_text, success, erro
 \description{
 Processes a list where each element contains both a config and message pair.
 Maximum flexibility for complex workflows with different configs and messages.
+This function requires setting up the parallel environment using `setup_llm_parallel`.
 }
 \examples{
 \dontrun{
@@ -55,6 +56,12 @@ Maximum flexibility for complex workflows with different configs and messages.
     list(config = config2, messages = list(list(role = "user", content = "Explain ML")))
   )
 
+  # setup paralle Environment
+  setup_llm_parallel(workers = 4, verbose = TRUE)
+
   results <- call_llm_par(pairs)
+
+  # Reset to sequential
+  reset_llm_parallel(verbose = TRUE)
 }
 }

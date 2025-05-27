@@ -50,6 +50,7 @@ A tibble with columns: param_name, param_value, provider, model, response_text, 
 \description{
 Sweeps through different values of a single parameter while keeping the message constant.
 Perfect for hyperparameter tuning, temperature experiments, etc.
+This function requires setting up the parallel environment using `setup_llm_parallel`.
 }
 \examples{
 \dontrun{
@@ -60,6 +61,12 @@ Perfect for hyperparameter tuning, temperature experiments, etc.
   messages <- list(list(role = "user", content = "What is 15 * 23?"))
   temperatures <- c(0, 0.3, 0.7, 1.0, 1.5)
 
+  # set up the parallel enviornment
+  setup_llm_parallel(workers = 4, verbose = TRUE)
+
   results <- call_llm_sweep(config, "temperature", temperatures, messages)
+
+  # Reset to sequential
+  reset_llm_parallel(verbose = TRUE)
 }
 }
