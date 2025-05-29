@@ -18,15 +18,15 @@
 #   10. Memory-efficient batch processing (relative to sequential calls for large jobs)
 #
 # Function Categories:
-#   • Basic Parallel Modes: call_llm_sweep(), call_llm_broadcast(), call_llm_compare()
-#   • Advanced Modes: call_llm_par(), call_llm_experiments()
-#   • Design Helpers: build_factorial_experiments()
-#   • Environment: setup_llm_parallel(), reset_llm_parallel()
+#   - Basic Parallel Modes: call_llm_sweep(), call_llm_broadcast(), call_llm_compare()
+#   - Advanced Modes: call_llm_par(), call_llm_experiments()
+#   - Design Helpers: build_factorial_experiments()
+#   - Environment: setup_llm_parallel(), reset_llm_parallel()
 #
 # Recommended Usage:
-#   • Simple experiments: Use call_llm_sweep(), call_llm_broadcast(), or call_llm_compare()
-#   • Complex experiments with metadata: Use call_llm_experiments() or build_factorial_experiments()
-#   • Maximum flexibility: Use call_llm_par() for custom workflows
+#   - Simple experiments: Use call_llm_sweep(), call_llm_broadcast(), or call_llm_compare()
+#   - Complex experiments with metadata: Use call_llm_experiments() or build_factorial_experiments()
+#   - Maximum flexibility: Use call_llm_par() for custom workflows
 #
 # Dependencies: future, future.apply, tibble, dplyr, progressr (optional)
 # -------------------------------------------------------------------
