@@ -994,7 +994,7 @@ call_llm_experiments <- function(experiments,
 #'
 #' @examples
 #' \dontrun{
-#'   # Factorial design: 3 configs × 2 message conditions × 10 reps = 60 experiments
+#'   # Factorial design: 3 configs x 2 message conditions x 10 reps = 60 experiments
 #'   configs <- list(gpt4_config, claude_config, llama_config)
 #'   messages_list <- list(control_messages, treatment_messages)
 #'
@@ -1053,7 +1053,7 @@ build_factorial_experiments <- function(configs,
     }
   }
 
-  message(sprintf("Built %d experiments: %d configs × %d message sets × %d repetitions",
+  message(sprintf("Built %d experiments: %d configs x %d message sets x %d repetitions",
                   length(experiments), length(configs), length(messages_list), repetitions))
 
   return(experiments)

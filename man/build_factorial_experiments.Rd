@@ -33,7 +33,7 @@ all combinations of configs, messages, and repetitions with automatic metadata.
 }
 \examples{
 \dontrun{
-  # Factorial design: 3 configs × 2 message conditions × 10 reps = 60 experiments
+  # Factorial design: 3 configs x 2 message conditions x 10 reps = 60 experiments
   configs <- list(gpt4_config, claude_config, llama_config)
   messages_list <- list(control_messages, treatment_messages)
 
