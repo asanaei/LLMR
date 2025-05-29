@@ -10,13 +10,26 @@
 #   2. call_llm_broadcast() - Message broadcast mode: fixed config, multiple messages
 #   3. call_llm_compare() - Model comparison mode: multiple configs, fixed message
 #   4. call_llm_par() - Full flexibility mode: list of config-message pairs
-#   5. Automatic load balancing and error handling
-#   6. Progress tracking and detailed logging
-#   7. Memory-efficient batch processing (relative to sequential calls for large jobs)
+#   5. call_llm_experiments() - Enhanced mode with automatic metadata tracking
+#   6. build_factorial_experiments() - Helper for factorial experimental designs
+#   7. setup_llm_parallel() / reset_llm_parallel() - Environment management
+#   8. Automatic load balancing and error handling
+#   9. Progress tracking and detailed logging
+#   10. Memory-efficient batch processing (relative to sequential calls for large jobs)
 #
-# Dependencies: future, future.apply, tibble, progressr (optional)
+# Function Categories:
+#   • Basic Parallel Modes: call_llm_sweep(), call_llm_broadcast(), call_llm_compare()
+#   • Advanced Modes: call_llm_par(), call_llm_experiments()
+#   • Design Helpers: build_factorial_experiments()
+#   • Environment: setup_llm_parallel(), reset_llm_parallel()
+#
+# Recommended Usage:
+#   • Simple experiments: Use call_llm_sweep(), call_llm_broadcast(), or call_llm_compare()
+#   • Complex experiments with metadata: Use call_llm_experiments() or build_factorial_experiments()
+#   • Maximum flexibility: Use call_llm_par() for custom workflows
+#
+# Dependencies: future, future.apply, tibble, dplyr, progressr (optional)
 # -------------------------------------------------------------------
-
 #' Mode 1: Parameter Sweep - Vary One Parameter, Fixed Message
 #'
 #' Sweeps through different values of a single parameter while keeping the message constant.
@@ -804,6 +817,249 @@ call_llm_par <- function(config_message_pairs,
 
   return(result_df)
 }
+
+
+#' Call LLM API with Experimental Metadata
+#'
+#' An enhanced version of call_llm_par() that allows attaching metadata to each experiment.
+#' This eliminates the need to manually track experiment indices and join metadata afterward.
+#'
+#' @param experiments A list where each element represents one experiment. Each element
+#'   must contain 'config' and 'messages', and can contain additional named elements
+#'   that will be included as metadata columns in the results.
+#' @param tries Integer. Number of retries for each call. Default is 10.
+#' @param wait_seconds Numeric. Initial wait time (seconds) before retry. Default is 2.
+#' @param backoff_factor Numeric. Multiplier for wait time after each failure. Default is 2.
+#' @param verbose Logical. If TRUE, prints progress and debug information.
+#' @param json Logical. If TRUE, returns raw JSON responses.
+#' @param memoize Logical. If TRUE, enables caching for identical requests.
+#' @param max_workers Integer. Maximum number of parallel workers. If NULL, auto-detects.
+#' @param progress Logical. If TRUE, shows progress bar.
+#'
+#' @return A tibble with API results plus any metadata columns from the experiments.
+#'   The 'pair_index' column shows the position in the input list for debugging.
+#'
+#' @details
+#' This function accepts experiments in two formats:
+#'
+#' \strong{Simple format} (backward compatible with call_llm_par):
+#' \preformatted{
+#' list(config = my_config, messages = my_messages)
+#' }
+#'
+#' \strong{Enhanced format with metadata:}
+#' \preformatted{
+#' list(config = my_config, messages = my_messages,
+#'      condition = "treatment", repetition = 1, model_type = "large")
+#' }
+#'
+#' Any named elements beyond 'config' and 'messages' are treated as metadata
+#' and included as columns in the results tibble. This eliminates the need to
+#' manually track indices and join metadata afterward.
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#'   # Enhanced usage with metadata
+#'   experiments <- list(
+#'     list(config = config1, messages = messages_control,
+#'          condition = "control", repetition = 1, model_size = "small"),
+#'     list(config = config1, messages = messages_treatment,
+#'          condition = "treatment", repetition = 1, model_size = "small"),
+#'     list(config = config2, messages = messages_control,
+#'          condition = "control", repetition = 1, model_size = "large")
+#'   )
+#'
+#'   setup_llm_parallel(workers = 4)
+#'   results <- call_llm_experiments(experiments, progress = TRUE)
+#'   reset_llm_parallel()
+#'
+#'   # Results include metadata columns automatically - no manual joining needed
+#'   print(results)
+#'
+#'   # Direct analysis with metadata
+#'   results %>% group_by(condition, model_size) %>%
+#'     summarise(mean_rating = mean(as.numeric(response_text), na.rm = TRUE))
+#' }
+call_llm_experiments <- function(experiments,
+                                 tries = 10,
+                                 wait_seconds = 2,
+                                 backoff_factor = 2,
+                                 verbose = FALSE,
+                                 json = FALSE,
+                                 memoize = FALSE,
+                                 max_workers = NULL,
+                                 progress = FALSE) {
+
+  if (length(experiments) == 0) {
+    warning("No experiments provided. Returning empty tibble.")
+    return(tibble::tibble(
+      pair_index = integer(0),
+      provider = character(0),
+      model = character(0),
+      response_text = character(0),
+      success = logical(0),
+      error_message = character(0)
+    ))
+  }
+
+  # Validate input and extract config-message pairs and metadata
+  config_message_pairs <- vector("list", length(experiments))
+  metadata_list <- vector("list", length(experiments))
+
+  for (i in seq_along(experiments)) {
+    exp <- experiments[[i]]
+
+    # Validate required elements
+    if (!is.list(exp) || !("config" %in% names(exp)) || !("messages" %in% names(exp))) {
+      stop(sprintf("Element %d of experiments must be a list with 'config' and 'messages' named elements.", i))
+    }
+    if (!inherits(exp$config, "llm_config")) {
+      stop(sprintf("Element %d 'config' is not an llm_config object.", i))
+    }
+
+    # Extract config and messages for API call
+    config_message_pairs[[i]] <- list(config = exp$config, messages = exp$messages)
+
+    # Extract any additional elements as metadata (preserve original order)
+    other_elements <- exp[!names(exp) %in% c("config", "messages")]
+    metadata_list[[i]] <- c(list(experiment_index = i), other_elements)
+  }
+
+  if (verbose) {
+    n_with_metadata <- sum(lengths(metadata_list) > 1)  # More than just experiment_index
+    message(sprintf("Processing %d experiments (%d with metadata)", length(experiments), n_with_metadata))
+  }
+
+  # Call the existing parallel function
+  api_results <- call_llm_par(
+    config_message_pairs = config_message_pairs,
+    tries = tries,
+    wait_seconds = wait_seconds,
+    backoff_factor = backoff_factor,
+    verbose = verbose,
+    json = json,
+    memoize = memoize,
+    max_workers = max_workers,
+    progress = progress
+  )
+
+  # Merge with metadata if any exists beyond just the index
+  has_metadata <- length(metadata_list) > 0 && any(lengths(metadata_list) > 1)
+
+  if (has_metadata) {
+    if (!requireNamespace("dplyr", quietly = TRUE)) {
+      stop("The 'dplyr' package is required. Please install it with: install.packages('dplyr')")
+    }
+
+    # Convert metadata list to dataframe
+    metadata_df <- dplyr::bind_rows(metadata_list)
+
+    # Join with API results
+    results <- dplyr::left_join(api_results, metadata_df, by = c("pair_index" = "experiment_index"))
+
+    # Reorder columns: metadata first, then API columns, keeping pair_index for debugging
+    metadata_cols <- setdiff(names(metadata_df), "experiment_index")
+    api_cols <- setdiff(names(api_results), "pair_index")
+    results <- results[, c("pair_index", metadata_cols, api_cols)]
+
+  } else {
+    results <- api_results
+  }
+
+  if (verbose) {
+    successful_calls <- sum(results$success, na.rm = TRUE)
+    message(sprintf("Experiment processing completed: %d/%d experiments successful", successful_calls, nrow(results)))
+  }
+
+  return(results)
+}
+
+
+#' Build Factorial Experiment Design
+#'
+#' Creates a list of experiments for factorial designs where you want to test
+#' all combinations of configs, messages, and repetitions with automatic metadata.
+#'
+#' @param configs List of llm_config objects to test
+#' @param messages_list List of message lists to test (each element is a message list for one condition)
+#' @param repetitions Integer. Number of repetitions per combination. Default is 1.
+#' @param config_labels Character vector of labels for configs. If NULL, uses config info.
+#' @param message_labels Character vector of labels for message sets. If NULL, uses indices.
+#'
+#' @return A list of experiments suitable for call_llm_experiments(), with metadata
+#'   columns for config_label, message_label, and repetition automatically attached.
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#'   # Factorial design: 3 configs × 2 message conditions × 10 reps = 60 experiments
+#'   configs <- list(gpt4_config, claude_config, llama_config)
+#'   messages_list <- list(control_messages, treatment_messages)
+#'
+#'   experiments <- build_factorial_experiments(
+#'     configs = configs,
+#'     messages_list = messages_list,
+#'     repetitions = 10,
+#'     config_labels = c("gpt4", "claude", "llama"),
+#'     message_labels = c("control", "treatment")
+#'   )
+#'
+#'   # Metadata automatically included: config_label, message_label, repetition
+#'   results <- call_llm_experiments(experiments, progress = TRUE)
+#' }
+build_factorial_experiments <- function(configs,
+                                        messages_list,
+                                        repetitions = 1,
+                                        config_labels = NULL,
+                                        message_labels = NULL) {
+
+  # Validate inputs
+  if (length(configs) == 0 || length(messages_list) == 0) {
+    stop("Both configs and messages_list must have at least one element")
+  }
+
+  # Create config labels if not provided
+  if (is.null(config_labels)) {
+    config_labels <- sapply(configs, function(cfg) {
+      paste(cfg$provider, cfg$model, sep = "_")
+    })
+  } else if (length(config_labels) != length(configs)) {
+    stop("config_labels must have the same length as configs")
+  }
+
+  # Create message labels if not provided
+  if (is.null(message_labels)) {
+    message_labels <- paste0("messages_", seq_along(messages_list))
+  } else if (length(message_labels) != length(messages_list)) {
+    stop("message_labels must have the same length as messages_list")
+  }
+
+  # Build all combinations
+  experiments <- list()
+
+  for (i in seq_along(configs)) {
+    for (j in seq_along(messages_list)) {
+      for (rep in seq_len(repetitions)) {
+        experiments <- append(experiments, list(list(
+          config = configs[[i]],
+          messages = messages_list[[j]],
+          config_label = config_labels[i],
+          message_label = message_labels[j],
+          repetition = rep
+        )))
+      }
+    }
+  }
+
+  message(sprintf("Built %d experiments: %d configs × %d message sets × %d repetitions",
+                  length(experiments), length(configs), length(messages_list), repetitions))
+
+  return(experiments)
+}
+
+
 
 #' Setup Parallel Environment for LLM Processing
 #'

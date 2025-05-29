@@ -1,16 +1,26 @@
 ---
-title: "Parallel Calls"
+title: "Doing Research with Parallel LLM API Calls"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{parallel_calls}
+  %\VignetteIndexEntry{Doing Research with Parallel LLM API Calls}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
   %\DontRun
 ---
 
-A few years ago, it was found that some automated resume processors had positive 
-bias toward the name 'Jared.' In this example we want to call a large language 
-model multiple times with various temperatures and see the results.
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+When doing research on large language models, we often need to compare a number 
+of models; maybe with different arguments, maybe with different prompts, etc. 
+In this example we want to call an LLM multiple times with various temperatures
+and see the results. We suggest different first names and ask the model to pick one.
 
 **Note: This vignette requires a valid OpenAI API key and will not run during package installation.**
 

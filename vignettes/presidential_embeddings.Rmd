@@ -8,6 +8,15 @@ vignette: >
   %\DontRun
 ---
 
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
 This vignette demonstrates how to use LLMR for embedding analysis of presidential inaugural speeches.
 **Note: This vignette requires a valid Gemini API key and will not run during package installation, and you may need to change the model name.**
 
@@ -37,7 +46,7 @@ text_input <- c(
 ```{r config}
 embed_cfg <- llm_config(
   provider = "gemini",
-  model = "text-embedding-004",
+  model = "embedding-001", #"text-embedding-004",
   api_key = Sys.getenv("GEMINI_KEY"),
   embedding = TRUE
 )
