@@ -4,42 +4,18 @@
 \alias{call_llm_broadcast}
 \title{Mode 2: Message Broadcast - Fixed Config, Multiple Messages}
 \usage{
-call_llm_broadcast(
-  config,
-  messages_list,
-  tries = 10,
-  wait_seconds = 2,
-  backoff_factor = 2,
-  verbose = FALSE,
-  json = FALSE,
-  memoize = FALSE,
-  max_workers = NULL,
-  progress = FALSE
-)
+call_llm_broadcast(config, messages_list, ...)
 }
 \arguments{
 \item{config}{Single llm_config object to use for all calls.}
 
 \item{messages_list}{A list of message lists, each for one API call.}
 
-\item{tries}{Integer. Number of retries for each call. Default is 10.}
-
-\item{wait_seconds}{Numeric. Initial wait time (seconds) before retry. Default is 2.}
-
-\item{backoff_factor}{Numeric. Multiplier for wait time after each failure. Default is 2.}
-
-\item{verbose}{Logical. If TRUE, prints progress and debug information.}
-
-\item{json}{Logical. If TRUE, requests raw JSON responses from the API.}
-
-\item{memoize}{Logical. If TRUE, enables caching for identical requests.}
-
-\item{max_workers}{Integer. Maximum number of parallel workers. If NULL, auto-detects.}
-
-\item{progress}{Logical. If TRUE, shows progress bar.}
+\item{...}{Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).}
 }
 \value{
-A tibble with columns: message_index, provider, model, response_text, success, error_message, plus all model parameters as additional columns.
+A tibble with columns: message_index (metadata), provider, model,
+  all model parameters, response_text, raw_response_json, success, error_message.
 }
 \description{
 Broadcasts different messages using the same configuration in parallel.
@@ -58,12 +34,8 @@ This function requires setting up the parallel environment using `setup_llm_para
     list(list(role = "user", content = "What is 10/2?"))
   )
 
-  # setup paralle Environment
   setup_llm_parallel(workers = 4, verbose = TRUE)
-
   results <- call_llm_broadcast(config, messages_list)
-
-  # Reset to sequential
   reset_llm_parallel(verbose = TRUE)
 }
 }

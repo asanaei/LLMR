@@ -1,35 +1,85 @@
 # LLM_parallel_utils.R
 # -------------------------------------------------------------------
 # This file provides parallelized services for dispatching multiple LLM API calls
-# concurrently. It leverages the 'future' package for OS-agnostic parallelization
-# and uses call_llm_robust() as the default calling mechanism with configurable
-# retry and delay settings.
+# concurrently using tibble-based experiment designs. It leverages the 'future'
+# package for OS-agnostic parallelization and uses call_llm_robust() as the default
+# calling mechanism with configurable retry and delay settings.
 #
 # Key Features:
 #   1. call_llm_sweep() - Parameter sweep mode: vary one parameter, fixed message
 #   2. call_llm_broadcast() - Message broadcast mode: fixed config, multiple messages
 #   3. call_llm_compare() - Model comparison mode: multiple configs, fixed message
-#   4. call_llm_par() - Full flexibility mode: list of config-message pairs
-#   5. call_llm_experiments() - Enhanced mode with automatic metadata tracking
-#   6. build_factorial_experiments() - Helper for factorial experimental designs
-#   7. setup_llm_parallel() / reset_llm_parallel() - Environment management
-#   8. Automatic load balancing and error handling
-#   9. Progress tracking and detailed logging
-#   10. Memory-efficient batch processing (relative to sequential calls for large jobs)
+#   4. call_llm_par() - General mode: tibble with config and message columns
+#   5. build_factorial_experiments() - Helper for factorial experimental designs
+#   6. setup_llm_parallel() / reset_llm_parallel() - Environment management
+#   7. Automatic load balancing and error handling
+#   8. Progress tracking and detailed logging
+#   9. Native metadata support through tibble columns
+#  10. Automatic capture of raw JSON API responses
 #
-# Function Categories:
-#   - Basic Parallel Modes: call_llm_sweep(), call_llm_broadcast(), call_llm_compare()
-#   - Advanced Modes: call_llm_par(), call_llm_experiments()
-#   - Design Helpers: build_factorial_experiments()
-#   - Environment: setup_llm_parallel(), reset_llm_parallel()
+# Design Philosophy:
+#   All experiment functions use tibbles with list-columns for configs and messages.
+#   call_llm_par() is the core parallel engine. Wrapper functions (_sweep, _broadcast,
+#   _compare) prepare inputs for call_llm_par() and then use a helper to
+#   format the output, including unnesting config parameters.
+#   This enables natural use of dplyr verbs for building complex experimental designs.
+#   Metadata columns are preserved automatically.
 #
-# Recommended Usage:
-#   - Simple experiments: Use call_llm_sweep(), call_llm_broadcast(), or call_llm_compare()
-#   - Complex experiments with metadata: Use call_llm_experiments() or build_factorial_experiments()
-#   - Maximum flexibility: Use call_llm_par() for custom workflows
-#
-# Dependencies: future, future.apply, tibble, dplyr, progressr (optional)
+# Dependencies: future, future.apply, tibble, dplyr, progressr (optional), tidyr (for build_factorial_experiments)
 # -------------------------------------------------------------------
+
+# Internal helper to unnest config details into columns
+.unnest_config_to_cols <- function(results_df, config_col = "config") {
+  if (!config_col %in% names(results_df) || !is.list(results_df[[config_col]])) {
+    warning(paste0("Config column '", config_col, "' not found or not a list-column. Cannot unnest parameters."))
+    return(results_df)
+  }
+
+  # Extract provider and model
+  results_df$provider <- sapply(results_df[[config_col]], function(cfg) cfg$provider %||% NA_character_)
+  results_df$model    <- sapply(results_df[[config_col]], function(cfg) cfg$model %||% NA_character_)
+
+  # Extract all model parameters
+  all_model_param_names <- unique(unlist(lapply(results_df[[config_col]], function(cfg) names(cfg$model_params))))
+
+  if (length(all_model_param_names) > 0) {
+    param_cols_list <- lapply(all_model_param_names, function(p_name) {
+      sapply(results_df[[config_col]], function(cfg) {
+        val <- cfg$model_params[[p_name]]
+        if (is.null(val)) NA else val
+      })
+    })
+    names(param_cols_list) <- all_model_param_names
+    params_df <- tibble::as_tibble(param_cols_list)
+    results_df <- dplyr::bind_cols(results_df, params_df)
+  }
+
+  # Identify metadata columns (everything except standard columns)
+  meta_cols <- setdiff(names(results_df), c("provider", "model", all_model_param_names,
+                                            config_col, "response_text", "raw_response_json",
+                                            "success", "error_message"))
+
+  # Separate standard config columns from other parameters
+  standard_config_cols <- c("provider", "model")
+  ordered_param_cols <- all_model_param_names[!all_model_param_names %in% standard_config_cols]
+
+  # Define column order: metadata, config info, parameters, results
+  final_cols_order <- c(
+    meta_cols,
+    standard_config_cols,
+    ordered_param_cols,
+    "response_text", "raw_response_json", "success", "error_message"
+  )
+
+  # Only include columns that exist
+  final_cols_order_existing <- final_cols_order[final_cols_order %in% names(results_df)]
+  remaining_cols <- setdiff(names(results_df), final_cols_order_existing)
+
+  results_df <- results_df[, c(final_cols_order_existing, remaining_cols)]
+
+  return(results_df)
+}
+
 #' Mode 1: Parameter Sweep - Vary One Parameter, Fixed Message
 #'
 #' Sweeps through different values of a single parameter while keeping the message constant.
@@ -40,16 +90,10 @@
 #' @param param_name Character. Name of the parameter to vary (e.g., "temperature", "max_tokens").
 #' @param param_values Vector. Values to test for the parameter.
 #' @param messages List of message objects (same for all calls).
-#' @param tries Integer. Number of retries for each call. Default is 10.
-#' @param wait_seconds Numeric. Initial wait time (seconds) before retry. Default is 2.
-#' @param backoff_factor Numeric. Multiplier for wait time after each failure. Default is 2.
-#' @param verbose Logical. If TRUE, prints progress and debug information.
-#' @param json Logical. If TRUE, requests raw JSON responses from the API (note: final tibble's `response_text` will be extracted text).
-#' @param memoize Logical. If TRUE, enables caching for identical requests via `call_llm_robust`.
-#' @param max_workers Integer. Maximum number of parallel workers. If NULL, auto-detects.
-#' @param progress Logical. If TRUE, shows progress bar.
+#' @param ... Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).
 #'
-#' @return A tibble with columns: param_name, param_value, provider, model, response_text, success, error_message, plus all model parameters as additional columns.
+#' @return A tibble with columns: swept_param_name, the varied parameter column, provider, model,
+#'   all other model parameters, response_text, raw_response_json, success, error_message.
 #' @export
 #'
 #' @examples
@@ -61,195 +105,82 @@
 #'   messages <- list(list(role = "user", content = "What is 15 * 23?"))
 #'   temperatures <- c(0, 0.3, 0.7, 1.0, 1.5)
 #'
-#'   # set up the parallel enviornment
 #'   setup_llm_parallel(workers = 4, verbose = TRUE)
-#'
 #'   results <- call_llm_sweep(config, "temperature", temperatures, messages)
-#'
-#'   # Reset to sequential
 #'   reset_llm_parallel(verbose = TRUE)
 #' }
 call_llm_sweep <- function(base_config,
                            param_name,
                            param_values,
                            messages,
-                           tries = 10,
-                           wait_seconds = 2,
-                           backoff_factor = 2,
-                           verbose = FALSE,
-                           json = FALSE,
-                           memoize = FALSE,
-                           max_workers = NULL,
-                           progress = FALSE) {
+                           ...) {
 
-  # Input validation
-  if (!requireNamespace("future", quietly = TRUE)) {
-    stop("The 'future' package is required for parallel processing. Please install it with: install.packages('future')")
-  }
-
-  if (!requireNamespace("future.apply", quietly = TRUE)) {
-    stop("The 'future.apply' package is required for parallel processing. Please install it with: install.packages('future.apply')")
-  }
-
-  if (progress && !requireNamespace("progressr", quietly = TRUE)) {
-    warning("The 'progressr' package is not available. Progress tracking will be disabled.")
-    progress <- FALSE
+  if (!requireNamespace("tibble", quietly = TRUE)) {
+    stop("The 'tibble' package is required. Please install it with: install.packages('tibble')")
   }
 
   if (length(param_values) == 0) {
     warning("No parameter values provided. Returning empty tibble.")
     return(tibble::tibble(
-      param_name = character(0),
-      param_value = character(0),
+      swept_param_name = character(0),
       provider = character(0),
       model = character(0),
       response_text = character(0),
+      raw_response_json = character(0),
       success = logical(0),
       error_message = character(0)
     ))
   }
 
-  # Auto-detect workers if not specified
-  if (is.null(max_workers)) {
-    if (requireNamespace("future", quietly = TRUE)) {
-      max_workers <- min(future::availableCores() - 1, length(param_values))
-      max_workers <- max(1, max_workers) # Ensure at least 1 worker
-    } else {
-      max_workers <- 1 # Fallback if future is not available (though checked above)
-    }
-  }
+  # Build experiments tibble
+  experiments <- tibble::tibble(
+    .param_name_sweep = param_name,
+    .param_value_sweep = param_values,
+    config = lapply(param_values, function(val) {
+      modified_config <- base_config
+      if (is.null(modified_config$model_params)) modified_config$model_params <- list()
+      modified_config$model_params[[param_name]] <- val
+      modified_config
+    }),
+    messages = rep(list(messages), length(param_values))
+  )
 
-  # Set up workers
-  current_plan <- future::plan()
-  if (verbose) {
-    message(sprintf("Setting up parallel execution with %d workers using plan: %s", max_workers, class(current_plan)[1]))
-  }
-  on.exit(future::plan(current_plan), add = TRUE) # Restore previous plan on exit
-  if (!inherits(current_plan, "FutureStrategy") || inherits(current_plan, "sequential")) { # Only change plan if not already parallel or if sequential
-    future::plan(future::multisession, workers = max_workers)
-  }
+  # Run parallel processing
+  results_raw <- call_llm_par(experiments, ...)
 
+  ## Unnest config and remove config column
+  #results_final <- .unnest_config_to_cols(results_raw, config_col = "config")
+  results_final$config <- NULL
 
-  if (verbose) {
-    message(sprintf("Parameter sweep: %s with %d values", param_name, length(param_values)))
-  }
+  # Create the parameter column with actual name
+  results_final[[param_name]] <- results_final$.param_value_sweep
+  results_final$swept_param_name <- results_final$.param_name_sweep
 
-  # Define the worker function
-  sweep_worker <- function(i_val) { # Renamed i to i_val to avoid conflict if i is used in parent env
-    # Note: base_config, param_name, param_values, messages, tries, wait_seconds,
-    # backoff_factor, verbose (for worker message), json, memoize are accessed
-    # from the calling environment of this worker function (lexical scoping).
-    # future.apply handles making these available.
+  # Remove temporary columns
+  results_final$.param_name_sweep <- NULL
+  results_final$.param_value_sweep <- NULL
 
-    current_param_value <- param_values[i_val]
+  # Identify column groups
+  meta_cols <- setdiff(names(results_final), c("swept_param_name", param_name, "provider", "model",
+                                               "response_text", "raw_response_json", "success", "error_message"))
 
-    # Create modified config for this specific call
-    modified_config <- base_config
-    # R's list copy-on-write semantics apply. $model_params is a list.
-    # This modification is local to this worker's copy of modified_config.
-    if (is.null(modified_config$model_params)) modified_config$model_params <- list()
-    modified_config$model_params[[param_name]] <- current_param_value
+  all_model_param_names_unnested <- setdiff(
+    names(results_final)[!names(results_final) %in% c(meta_cols, "swept_param_name", param_name,
+                                                      "provider", "model", "response_text",
+                                                      "raw_response_json", "success", "error_message")],
+    param_name
+  )
 
-    if (verbose) { # This verbose is the main function's verbose, controls messages from master process
-      # If you want worker-specific verbosity, pass it explicitly or manage differently
-      # message(sprintf("Worker processing %s = %s (%d/%d)", param_name, current_param_value, i_val, length(param_values)))
-      # The above message might be too noisy if many workers. Progressr handles overall progress.
-    }
+  # Final column ordering
+  final_order <- c("swept_param_name", param_name, meta_cols, "provider", "model",
+                   all_model_param_names_unnested,
+                   "response_text", "raw_response_json", "success", "error_message")
+  final_order_existing <- final_order[final_order %in% names(results_final)]
+  remaining_cols <- setdiff(names(results_final), final_order_existing)
 
-    tryCatch({
-      result_content <- call_llm_robust(
-        config = modified_config,
-        messages = messages,
-        tries = tries,
-        wait_seconds = wait_seconds,
-        backoff_factor = backoff_factor,
-        verbose = FALSE,  # Individual call verbosity off in parallel, master verbose controls overview
-        json = json,
-        memoize = memoize
-      )
+  results_final <- results_final[, c(final_order_existing, remaining_cols)]
 
-      list(
-        param_name = param_name,
-        param_value = current_param_value,
-        config_info = list(provider = modified_config$provider, model = modified_config$model),
-        config_params = modified_config$model_params,
-        response = result_content, # This is character, possibly with attributes if json=TRUE
-        success = TRUE,
-        error = NA_character_
-      )
-    }, error = function(e) {
-      # warning(sprintf("Call with %s = %s failed: %s", param_name, current_param_value, conditionMessage(e)))
-      # Warnings from many workers can be overwhelming. Error is captured in output.
-      list(
-        param_name = param_name,
-        param_value = current_param_value,
-        config_info = list(provider = modified_config$provider, model = modified_config$model),
-        config_params = modified_config$model_params,
-        response = NA_character_,
-        success = FALSE,
-        error = conditionMessage(e)
-      )
-    })
-  }
-
-  # Execute in parallel
-  if (progress) {
-    progressr::with_progress({
-      p <- progressr::progressor(steps = length(param_values))
-      results <- future.apply::future_lapply(seq_along(param_values), function(k) {
-        res <- sweep_worker(k)
-        p()
-        res
-      }, future.seed = TRUE, future.packages = "LLMR", future.globals = TRUE) # Explicitly state package, keep future.globals=TRUE from original
-    })
-  } else {
-    results <- future.apply::future_lapply(seq_along(param_values), function(k) {
-      sweep_worker(k)
-    }, future.seed = TRUE, future.packages = "LLMR", future.globals = TRUE)
-  }
-
-  # Convert results to tibble
-  if (!requireNamespace("tibble", quietly = TRUE)) {
-    stop("The 'tibble' package is required. Please install it with: install.packages('tibble')")
-  }
-
-  all_model_param_names <- unique(unlist(lapply(results, function(r) names(r$config_params))))
-
-  result_df_list <- lapply(results, function(res) {
-    core_data <- tibble::tibble(
-      param_name = res$param_name,
-      param_value = as.character(res$param_value), # Ensure character for heterogeneous values
-      provider = res$config_info$provider,
-      model = res$config_info$model,
-      response_text = if (res$success) as.character(res$response) else NA_character_, # as.character strips attributes
-      success = res$success,
-      error_message = if (!res$success) res$error else NA_character_
-    )
-
-    # Add model parameters
-    params_data <- stats::setNames(as.list(rep(NA, length(all_model_param_names))), all_model_param_names)
-    if (length(res$config_params) > 0) {
-      for(p_name in names(res$config_params)) {
-        if(p_name %in% all_model_param_names) {
-          params_data[[p_name]] <- res$config_params[[p_name]]
-        }
-      }
-    }
-    # Ensure all parameter columns are present, even if all NA for this row
-    # Convert NULL to NA for tibble compatibility
-    params_data <- lapply(params_data, function(x) if(is.null(x)) NA else x)
-
-    dplyr::bind_cols(core_data, tibble::as_tibble(params_data))
-  })
-
-  result_df <- dplyr::bind_rows(result_df_list)
-
-  if (verbose) {
-    successful_calls <- sum(result_df$success, na.rm = TRUE)
-    message(sprintf("Parameter sweep completed: %d/%d calls successful", successful_calls, nrow(result_df)))
-  }
-
-  return(result_df)
+  return(results_final)
 }
 
 #' Mode 2: Message Broadcast - Fixed Config, Multiple Messages
@@ -260,16 +191,10 @@ call_llm_sweep <- function(base_config,
 #'
 #' @param config Single llm_config object to use for all calls.
 #' @param messages_list A list of message lists, each for one API call.
-#' @param tries Integer. Number of retries for each call. Default is 10.
-#' @param wait_seconds Numeric. Initial wait time (seconds) before retry. Default is 2.
-#' @param backoff_factor Numeric. Multiplier for wait time after each failure. Default is 2.
-#' @param verbose Logical. If TRUE, prints progress and debug information.
-#' @param json Logical. If TRUE, requests raw JSON responses from the API.
-#' @param memoize Logical. If TRUE, enables caching for identical requests.
-#' @param max_workers Integer. Maximum number of parallel workers. If NULL, auto-detects.
-#' @param progress Logical. If TRUE, shows progress bar.
+#' @param ... Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).
 #'
-#' @return A tibble with columns: message_index, provider, model, response_text, success, error_message, plus all model parameters as additional columns.
+#' @return A tibble with columns: message_index (metadata), provider, model,
+#'   all model parameters, response_text, raw_response_json, success, error_message.
 #' @export
 #'
 #' @examples
@@ -284,34 +209,15 @@ call_llm_sweep <- function(base_config,
 #'     list(list(role = "user", content = "What is 10/2?"))
 #'   )
 #'
-#'   # setup paralle Environment
 #'   setup_llm_parallel(workers = 4, verbose = TRUE)
-#'
 #'   results <- call_llm_broadcast(config, messages_list)
-#'
-#'   # Reset to sequential
 #'   reset_llm_parallel(verbose = TRUE)
 #' }
 call_llm_broadcast <- function(config,
                                messages_list,
-                               tries = 10,
-                               wait_seconds = 2,
-                               backoff_factor = 2,
-                               verbose = FALSE,
-                               json = FALSE,
-                               memoize = FALSE,
-                               max_workers = NULL,
-                               progress = FALSE) {
-
-  if (!requireNamespace("future", quietly = TRUE)) {
-    stop("The 'future' package is required. Please install it with: install.packages('future')")
-  }
-  if (!requireNamespace("future.apply", quietly = TRUE)) {
-    stop("The 'future.apply' package is required. Please install it with: install.packages('future.apply')")
-  }
-  if (progress && !requireNamespace("progressr", quietly = TRUE)) {
-    warning("The 'progressr' package is not available. Progress tracking will be disabled.")
-    progress <- FALSE
+                               ...) {
+  if (!requireNamespace("tibble", quietly = TRUE)) {
+    stop("The 'tibble' package is required. Please install it with: install.packages('tibble')")
   }
 
   if (length(messages_list) == 0) {
@@ -321,120 +227,27 @@ call_llm_broadcast <- function(config,
       provider = character(0),
       model = character(0),
       response_text = character(0),
+      raw_response_json = character(0),
       success = logical(0),
       error_message = character(0)
     ))
   }
 
-  if (is.null(max_workers)) {
-    if (requireNamespace("future", quietly = TRUE)) {
-      max_workers <- min(future::availableCores() - 1, length(messages_list))
-      max_workers <- max(1, max_workers)
-    } else {
-      max_workers <- 1
-    }
-  }
+  # Build experiments tibble
+  experiments <- tibble::tibble(
+    message_index = seq_along(messages_list),
+    config = rep(list(config), length(messages_list)),
+    messages = messages_list
+  )
 
-  current_plan <- future::plan()
-  if (verbose) {
-    message(sprintf("Setting up parallel execution with %d workers using plan: %s", max_workers, class(current_plan)[1]))
-  }
-  on.exit(future::plan(current_plan), add = TRUE)
-  if (!inherits(current_plan, "FutureStrategy") || inherits(current_plan, "sequential")) {
-    future::plan(future::multisession, workers = max_workers)
-  }
+  # Run parallel processing
+  results_raw <- call_llm_par(experiments, ...)
 
-  if (verbose) {
-    message(sprintf("Broadcasting %d different messages", length(messages_list)))
-  }
+  ## Unnest config and remove config column
+  #results_final <- .unnest_config_to_cols(results_raw, config_col = "config")
+  results_final$config <- NULL
 
-  broadcast_worker <- function(i_val) {
-    current_messages <- messages_list[[i_val]]
-
-    tryCatch({
-      result_content <- call_llm_robust(
-        config = config,
-        messages = current_messages,
-        tries = tries,
-        wait_seconds = wait_seconds,
-        backoff_factor = backoff_factor,
-        verbose = FALSE,
-        json = json,
-        memoize = memoize
-      )
-      list(
-        message_index = i_val,
-        config_info = list(provider = config$provider, model = config$model),
-        config_params = config$model_params,
-        response = result_content,
-        success = TRUE,
-        error = NA_character_
-      )
-    }, error = function(e) {
-      list(
-        message_index = i_val,
-        config_info = list(provider = config$provider, model = config$model),
-        config_params = config$model_params,
-        response = NA_character_,
-        success = FALSE,
-        error = conditionMessage(e)
-      )
-    })
-  }
-
-  if (progress) {
-    progressr::with_progress({
-      p <- progressr::progressor(steps = length(messages_list))
-      results <- future.apply::future_lapply(seq_along(messages_list), function(k) {
-        res <- broadcast_worker(k)
-        p()
-        res
-      }, future.seed = TRUE, future.packages = "LLMR", future.globals = TRUE)
-    })
-  } else {
-    results <- future.apply::future_lapply(seq_along(messages_list), function(k) {
-      broadcast_worker(k)
-    }, future.seed = TRUE, future.packages = "LLMR", future.globals = TRUE)
-  }
-
-  if (!requireNamespace("tibble", quietly = TRUE)) {
-    stop("The 'tibble' package is required. Please install it with: install.packages('tibble')")
-  }
-  if (!requireNamespace("dplyr", quietly = TRUE)) { # For bind_rows, bind_cols
-    stop("The 'dplyr' package is required for result formatting. Please install it with: install.packages('dplyr')")
-  }
-
-  all_model_param_names <- unique(unlist(lapply(results, function(r) names(r$config_params))))
-
-  result_df_list <- lapply(results, function(res) {
-    core_data <- tibble::tibble(
-      message_index = res$message_index,
-      provider = res$config_info$provider,
-      model = res$config_info$model,
-      response_text = if (res$success) as.character(res$response) else NA_character_,
-      success = res$success,
-      error_message = if (!res$success) res$error else NA_character_
-    )
-    params_data <- stats::setNames(as.list(rep(NA, length(all_model_param_names))), all_model_param_names)
-    if (length(res$config_params) > 0) {
-      for(p_name in names(res$config_params)) {
-        if(p_name %in% all_model_param_names) {
-          params_data[[p_name]] <- res$config_params[[p_name]]
-        }
-      }
-    }
-    params_data <- lapply(params_data, function(x) if(is.null(x)) NA else x)
-    dplyr::bind_cols(core_data, tibble::as_tibble(params_data))
-  })
-
-  result_df <- dplyr::bind_rows(result_df_list)
-
-  if (verbose) {
-    successful_calls <- sum(result_df$success, na.rm = TRUE)
-    message(sprintf("Message broadcast completed: %d/%d calls successful", successful_calls, nrow(result_df)))
-  }
-
-  return(result_df)
+  return(results_final)
 }
 
 #' Mode 3: Model Comparison - Multiple Configs, Fixed Message
@@ -445,16 +258,10 @@ call_llm_broadcast <- function(config,
 #'
 #' @param configs_list A list of llm_config objects to compare.
 #' @param messages List of message objects (same for all configs).
-#' @param tries Integer. Number of retries for each call. Default is 10.
-#' @param wait_seconds Numeric. Initial wait time (seconds) before retry. Default is 2.
-#' @param backoff_factor Numeric. Multiplier for wait time after each failure. Default is 2.
-#' @param verbose Logical. If TRUE, prints processing information.
-#' @param json Logical. If TRUE, returns raw JSON responses.
-#' @param memoize Logical. If TRUE, enables caching for identical requests.
-#' @param max_workers Integer. Maximum number of parallel workers. If NULL, auto-detects.
-#' @param progress Logical. If TRUE, shows progress tracking.
+#' @param ... Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).
 #'
-#' @return A tibble with columns: config_index, provider, model, response_text, success, error_message, plus all model parameters as additional columns.
+#' @return A tibble with columns: config_index (metadata), provider, model,
+#'   all varying model parameters, response_text, raw_response_json, success, error_message.
 #' @export
 #'
 #' @examples
@@ -468,34 +275,15 @@ call_llm_broadcast <- function(config,
 #'   configs_list <- list(config1, config2)
 #'   messages <- list(list(role = "user", content = "Explain quantum computing"))
 #'
-#'   # setup paralle Environment
 #'   setup_llm_parallel(workers = 4, verbose = TRUE)
-#'
 #'   results <- call_llm_compare(configs_list, messages)
-#'
-#'   # Reset to sequential
 #'   reset_llm_parallel(verbose = TRUE)
 #' }
 call_llm_compare <- function(configs_list,
                              messages,
-                             tries = 10,
-                             wait_seconds = 2,
-                             backoff_factor = 2,
-                             verbose = FALSE,
-                             json = FALSE,
-                             memoize = FALSE,
-                             max_workers = NULL,
-                             progress = FALSE) {
-
-  if (!requireNamespace("future", quietly = TRUE)) {
-    stop("The 'future' package is required. Please install it with: install.packages('future')")
-  }
-  if (!requireNamespace("future.apply", quietly = TRUE)) {
-    stop("The 'future.apply' package is required. Please install it with: install.packages('future.apply')")
-  }
-  if (progress && !requireNamespace("progressr", quietly = TRUE)) {
-    warning("The 'progressr' package is not available. Progress tracking will be disabled.")
-    progress <- FALSE
+                             ...) {
+  if (!requireNamespace("tibble", quietly = TRUE)) {
+    stop("The 'tibble' package is required. Please install it with: install.packages('tibble')")
   }
 
   if (length(configs_list) == 0) {
@@ -505,172 +293,100 @@ call_llm_compare <- function(configs_list,
       provider = character(0),
       model = character(0),
       response_text = character(0),
+      raw_response_json = character(0),
       success = logical(0),
       error_message = character(0)
     ))
   }
 
-  if (is.null(max_workers)) {
-    if (requireNamespace("future", quietly = TRUE)) {
-      max_workers <- min(future::availableCores() - 1, length(configs_list))
-      max_workers <- max(1, max_workers)
-    } else {
-      max_workers <- 1
-    }
-  }
+  # Build experiments tibble
+  experiments <- tibble::tibble(
+    config_index = seq_along(configs_list),
+    config = configs_list,
+    messages = rep(list(messages), length(configs_list))
+  )
 
-  current_plan <- future::plan()
-  if (verbose) {
-    message(sprintf("Setting up parallel execution with %d workers using plan: %s", max_workers, class(current_plan)[1]))
-  }
-  on.exit(future::plan(current_plan), add = TRUE)
-  if (!inherits(current_plan, "FutureStrategy") || inherits(current_plan, "sequential")) {
-    future::plan(future::multisession, workers = max_workers)
-  }
+  # Run parallel processing
+  results_raw <- call_llm_par(experiments, ...)
 
-  if (verbose) {
-    message(sprintf("Comparing %d different configurations", length(configs_list)))
-  }
+  ## Unnest config and remove config column
+  #results_final <- .unnest_config_to_cols(results_raw, config_col = "config")
+  results_final$config <- NULL
 
-  compare_worker <- function(i_val) {
-    current_config <- configs_list[[i_val]]
-
-    tryCatch({
-      result_content <- call_llm_robust(
-        config = current_config,
-        messages = messages,
-        tries = tries,
-        wait_seconds = wait_seconds,
-        backoff_factor = backoff_factor,
-        verbose = FALSE,
-        json = json,
-        memoize = memoize
-      )
-      list(
-        config_index = i_val,
-        config_info = list(provider = current_config$provider, model = current_config$model),
-        config_params = current_config$model_params,
-        response = result_content,
-        success = TRUE,
-        error = NA_character_
-      )
-    }, error = function(e) {
-      list(
-        config_index = i_val,
-        config_info = list(provider = current_config$provider, model = current_config$model),
-        config_params = current_config$model_params,
-        response = NA_character_,
-        success = FALSE,
-        error = conditionMessage(e)
-      )
-    })
-  }
-
-  if (progress) {
-    progressr::with_progress({
-      p <- progressr::progressor(steps = length(configs_list))
-      results <- future.apply::future_lapply(seq_along(configs_list), function(k) {
-        res <- compare_worker(k)
-        p()
-        res
-      }, future.seed = TRUE, future.packages = "LLMR", future.globals = TRUE)
-    })
-  } else {
-    results <- future.apply::future_lapply(seq_along(configs_list), function(k) {
-      compare_worker(k)
-    }, future.seed = TRUE, future.packages = "LLMR", future.globals = TRUE)
-  }
-
-  if (!requireNamespace("tibble", quietly = TRUE)) {
-    stop("The 'tibble' package is required. Please install it with: install.packages('tibble')")
-  }
-  if (!requireNamespace("dplyr", quietly = TRUE)) {
-    stop("The 'dplyr' package is required for result formatting. Please install it with: install.packages('dplyr')")
-  }
-
-  all_model_param_names <- unique(unlist(lapply(results, function(r) names(r$config_params))))
-
-  result_df_list <- lapply(results, function(res) {
-    core_data <- tibble::tibble(
-      config_index = res$config_index,
-      provider = res$config_info$provider,
-      model = res$config_info$model,
-      response_text = if (res$success) as.character(res$response) else NA_character_,
-      success = res$success,
-      error_message = if (!res$success) res$error else NA_character_
-    )
-    params_data <- stats::setNames(as.list(rep(NA, length(all_model_param_names))), all_model_param_names)
-    if (length(res$config_params) > 0) {
-      for(p_name in names(res$config_params)) {
-        if(p_name %in% all_model_param_names) {
-          params_data[[p_name]] <- res$config_params[[p_name]]
-        }
-      }
-    }
-    params_data <- lapply(params_data, function(x) if(is.null(x)) NA else x)
-    dplyr::bind_cols(core_data, tibble::as_tibble(params_data))
-  })
-
-  result_df <- dplyr::bind_rows(result_df_list)
-
-  if (verbose) {
-    successful_calls <- sum(result_df$success, na.rm = TRUE)
-    message(sprintf("Model comparison completed: %d/%d configs successful", successful_calls, nrow(result_df)))
-  }
-
-  return(result_df)
+  return(results_final)
 }
 
-#' Mode 4: Parallel Processing - List of Config-Message Pairs
+#' Parallel LLM Processing with Tibble-Based Experiments (Core Engine)
 #'
-#' Processes a list where each element contains both a config and message pair.
-#' Maximum flexibility for complex workflows with different configs and messages.
+#' Processes experiments from a tibble where each row contains a config and message pair.
+#' This is the core parallel processing function. Metadata columns are preserved.
 #' This function requires setting up the parallel environment using `setup_llm_parallel`.
 #'
-#' @param config_message_pairs A list where each element is a list with 'config' and 'messages' elements.
+#' @param experiments A tibble/data.frame with required list-columns 'config' (llm_config objects)
+#'   and 'messages' (message lists). Additional columns are treated as metadata and preserved.
+#' @param simplify Whether to cbind 'experiments' to the output data frame or not.
 #' @param tries Integer. Number of retries for each call. Default is 10.
 #' @param wait_seconds Numeric. Initial wait time (seconds) before retry. Default is 2.
 #' @param backoff_factor Numeric. Multiplier for wait time after each failure. Default is 2.
 #' @param verbose Logical. If TRUE, prints progress and debug information.
-#' @param json Logical. If TRUE, returns raw JSON responses.
 #' @param memoize Logical. If TRUE, enables caching for identical requests.
 #' @param max_workers Integer. Maximum number of parallel workers. If NULL, auto-detects.
 #' @param progress Logical. If TRUE, shows progress bar.
+#' @param json_output Deprecated. Raw JSON string is always included as raw_response_json.
+#'                  This parameter is kept for backward compatibility but has no effect.
 #'
-#' @return A tibble with columns: pair_index, provider, model, response_text, success, error_message, plus all model parameters as additional columns.
+#' @return A tibble containing all original columns from experiments (metadata, config, messages),
+#'   plus new columns: response_text, raw_response_json (the raw JSON string from the API),
+#'   success, error_message, duration (in seconds).
 #' @export
 #'
 #' @examples
 #' \dontrun{
-#'   # Full flexibility with different configs and messages
-#'   config1 <- llm_config(provider = "openai", model = "gpt-4o-mini",
-#'                         api_key = Sys.getenv("OPENAI_API_KEY"))
-#'   config2 <- llm_config(provider = "openai", model = "gpt-3.5-turbo",
-#'                         api_key = Sys.getenv("OPENAI_API_KEY"))
+#'   library(dplyr)
+#'   library(tidyr)
 #'
-#'   pairs <- list(
-#'     list(config = config1, messages = list(list(role = "user", content = "What is AI?"))),
-#'     list(config = config2, messages = list(list(role = "user", content = "Explain ML")))
-#'   )
+#'   # Build experiments with expand_grid
+#'   experiments <- expand_grid(
+#'     condition = c("control", "treatment"),
+#'     model_type = c("small", "large"),
+#'     rep = 1:10
+#'   ) %>%
+#'     mutate(
+#'       config = case_when(
+#'         model_type == "small" ~ list(small_config),
+#'         model_type == "large" ~ list(large_config)
+#'       ),
+#'       messages = case_when(
+#'         condition == "control" ~ list(control_messages),
+#'         condition == "treatment" ~ list(treatment_messages)
+#'       )
+#'     )
 #'
-#'   # setup paralle Environment
-#'   setup_llm_parallel(workers = 4, verbose = TRUE)
+#'   setup_llm_parallel(workers = 4)
+#'   results <- call_llm_par(experiments, progress = TRUE)
+#'   reset_llm_parallel()
 #'
-#'   results <- call_llm_par(pairs)
-#'
-#'   # Reset to sequential
-#'   reset_llm_parallel(verbose = TRUE)
+#'   # All metadata preserved for analysis
+#'   results %>%
+#'     group_by(condition, model_type) %>%
+#'     summarise(mean_response = mean(as.numeric(response_text), na.rm = TRUE))
 #' }
-call_llm_par <- function(config_message_pairs,
+call_llm_par <- function(experiments,
+                         simplify = TRUE,
                          tries = 10,
                          wait_seconds = 2,
                          backoff_factor = 2,
                          verbose = FALSE,
-                         json = FALSE,
                          memoize = FALSE,
                          max_workers = NULL,
-                         progress = FALSE) {
+                         progress = FALSE,
+                         json_output = NULL) {
 
+  if (!is.null(json_output) && verbose) {
+    message("Note: The 'json_output' parameter in call_llm_par is deprecated. Raw JSON string is always included as 'raw_response_json'.")
+  }
+
+  # Package checks
   if (!requireNamespace("future", quietly = TRUE)) {
     stop("The 'future' package is required for parallel processing. Please install it with: install.packages('future')")
   }
@@ -681,42 +397,47 @@ call_llm_par <- function(config_message_pairs,
     warning("The 'progressr' package is not available. Progress tracking will be disabled.")
     progress <- FALSE
   }
+  if (!requireNamespace("tibble", quietly = TRUE)) {
+    stop("The 'tibble' package is required. Please install it with: install.packages('tibble')")
+  }
+  if (!requireNamespace("dplyr", quietly = TRUE)) {
+    stop("The 'dplyr' package is required. Please install it with: install.packages('dplyr')")
+  }
 
-  if (length(config_message_pairs) == 0) {
-    warning("No config-message pairs provided. Returning empty tibble.")
-    return(tibble::tibble(
-      pair_index = integer(0),
-      provider = character(0),
-      model = character(0),
+  # Input validation
+  if (!is.data.frame(experiments)) {
+    stop("experiments must be a tibble/data.frame")
+  }
+  if (!all(c("config", "messages") %in% names(experiments))) {
+    stop("experiments must have 'config' and 'messages' columns")
+  }
+  if (nrow(experiments) == 0) {
+    warning("No experiments provided. Returning empty input tibble with result columns.")
+    return(dplyr::bind_cols(experiments, tibble::tibble(
       response_text = character(0),
+      raw_response_json = character(0),
       success = logical(0),
       error_message = character(0)
-    ))
+    )))
   }
 
-  # Validate input structure
-  for (i in seq_along(config_message_pairs)) {
-    pair <- config_message_pairs[[i]]
-    if (!is.list(pair) || !("config" %in% names(pair)) || !("messages" %in% names(pair))) {
-      stop(sprintf("Element %d of config_message_pairs must be a list with 'config' and 'messages' named elements.", i))
-    }
-    if (!inherits(pair$config, "llm_config")) {
-      stop(sprintf("Element %d 'config' is not an llm_config object.", i))
+  # Validate configs
+  for (i in seq_len(nrow(experiments))) {
+    if (!inherits(experiments$config[[i]], "llm_config")) {
+      stop(sprintf("Row %d 'config' is not an llm_config object.", i))
     }
   }
 
+  # Setup workers
   if (is.null(max_workers)) {
-    if (requireNamespace("future", quietly = TRUE)) {
-      max_workers <- min(future::availableCores() - 1, length(config_message_pairs))
-      max_workers <- max(1, max_workers)
-    } else {
-      max_workers <- 1
-    }
+    max_workers <- min(future::availableCores(omit = 1L), nrow(experiments))
+    max_workers <- max(1, max_workers)
   }
 
   current_plan <- future::plan()
   if (verbose) {
-    message(sprintf("Setting up parallel execution with %d workers using plan: %s", max_workers, class(current_plan)[1]))
+    message(sprintf("Setting up parallel execution with %d workers using plan: %s",
+                    max_workers, class(current_plan)[1]))
   }
   on.exit(future::plan(current_plan), add = TRUE)
   if (!inherits(current_plan, "FutureStrategy") || inherits(current_plan, "sequential")) {
@@ -724,15 +445,20 @@ call_llm_par <- function(config_message_pairs,
   }
 
   if (verbose) {
-    message(sprintf("Processing %d config-message pairs", length(config_message_pairs)))
+    n_metadata_cols <- ncol(experiments) - 2
+    message(sprintf("Processing %d experiments with %d user metadata columns",
+                    nrow(experiments), n_metadata_cols))
   }
 
+  # Worker function
   par_worker <- function(i_val) {
-    pair <- config_message_pairs[[i_val]]
-    current_config <- pair$config
-    current_messages <- pair$messages
+    start_time <- Sys.time()                 # begin timer
+    current_config <- experiments$config[[i_val]]
+    current_messages <- experiments$messages[[i_val]]
+    raw_json_str <- NA_character_
 
     tryCatch({
+      # Always call with json=TRUE to get attributes for raw_json
       result_content <- call_llm_robust(
         config = current_config,
         messages = current_messages,
@@ -740,256 +466,104 @@ call_llm_par <- function(config_message_pairs,
         wait_seconds = wait_seconds,
         backoff_factor = backoff_factor,
         verbose = FALSE,
-        json = json,
+        json = TRUE, # Force TRUE to get raw_json attribute
         memoize = memoize
       )
+
+      # Extract raw JSON from attributes
+      raw_json_str <- attr(result_content, "raw_json") %||% NA_character_
+
       list(
-        pair_index = i_val,
-        config_info = list(provider = current_config$provider, model = current_config$model),
-        config_params = current_config$model_params,
-        response = result_content,
+        row_index = i_val,
+        response_text = as.character(result_content), # Strip attributes
+        raw_response_json = raw_json_str,
         success = TRUE,
-        error = NA_character_
+        error_message = NA_character_,
+        duration = as.numeric(difftime(Sys.time(), start_time, units = "secs"))
       )
     }, error = function(e) {
       list(
-        pair_index = i_val,
-        config_info = list(provider = current_config$provider, model = current_config$model),
-        config_params = current_config$model_params,
-        response = NA_character_,
+        row_index = i_val,
+        response_text = NA_character_,
+        raw_response_json = raw_json_str,
         success = FALSE,
-        error = conditionMessage(e)
+        error_message = conditionMessage(e),
+        duration = as.numeric(difftime(Sys.time(), start_time, units = "secs"))
       )
     })
   }
 
+  # Execute in parallel
   if (progress) {
     progressr::with_progress({
-      p <- progressr::progressor(steps = length(config_message_pairs))
-      results <- future.apply::future_lapply(seq_along(config_message_pairs), function(k) {
-        res <- par_worker(k)
-        p()
-        res
-      }, future.seed = TRUE, future.packages = "LLMR", future.globals = TRUE)
+      p <- progressr::progressor(steps = nrow(experiments))
+      api_call_results_list <- future.apply::future_lapply(
+        seq_len(nrow(experiments)),
+        function(k) {
+          res <- par_worker(k)
+          p()
+          res
+        },
+        future.seed = TRUE,
+        future.packages = "LLMR",
+        future.globals = TRUE
+      )
     })
   } else {
-    results <- future.apply::future_lapply(seq_along(config_message_pairs), function(k) {
-      par_worker(k)
-    }, future.seed = TRUE, future.packages = "LLMR", future.globals = TRUE)
-  }
-
-  if (!requireNamespace("tibble", quietly = TRUE)) {
-    stop("The 'tibble' package is required. Please install it with: install.packages('tibble')")
-  }
-  if (!requireNamespace("dplyr", quietly = TRUE)) {
-    stop("The 'dplyr' package is required for result formatting. Please install it with: install.packages('dplyr')")
-  }
-
-  all_model_param_names <- unique(unlist(lapply(results, function(r) names(r$config_params))))
-
-  result_df_list <- lapply(results, function(res) {
-    core_data <- tibble::tibble(
-      pair_index = res$pair_index,
-      provider = res$config_info$provider,
-      model = res$config_info$model,
-      response_text = if (res$success) as.character(res$response) else NA_character_,
-      success = res$success,
-      error_message = if (!res$success) res$error else NA_character_
+    api_call_results_list <- future.apply::future_lapply(
+      seq_len(nrow(experiments)),
+      par_worker,
+      future.seed = TRUE,
+      future.packages = "LLMR",
+      future.globals = TRUE
     )
-    params_data <- stats::setNames(as.list(rep(NA, length(all_model_param_names))), all_model_param_names)
-    if (length(res$config_params) > 0) {
-      for(p_name in names(res$config_params)) {
-        if(p_name %in% all_model_param_names) {
-          params_data[[p_name]] <- res$config_params[[p_name]]
-        }
-      }
-    }
-    params_data <- lapply(params_data, function(x) if(is.null(x)) NA else x) # Convert NULL to NA
-    dplyr::bind_cols(core_data, tibble::as_tibble(params_data))
-  })
-
-  result_df <- dplyr::bind_rows(result_df_list)
-
-  if (verbose) {
-    successful_calls <- sum(result_df$success, na.rm = TRUE)
-    message(sprintf("Parallel processing completed: %d/%d pairs successful", successful_calls, nrow(result_df)))
   }
 
-  return(result_df)
+  # Convert results to dataframe
+  api_results_df <- dplyr::bind_rows(api_call_results_list)
+
+  # Prepare output with all original columns plus results
+  output_df <- experiments
+  output_df$response_text <- NA_character_
+  output_df$raw_response_json <- NA_character_
+  output_df$success <- NA
+  output_df$error_message <- NA_character_
+  output_df$duration   <- NA_real_
+
+
+  # Fill in results by row index
+  output_df$response_text[api_results_df$row_index] <- as.character(api_results_df$response_text)
+  output_df$raw_response_json[api_results_df$row_index] <- as.character(api_results_df$raw_response_json)
+  output_df$success[api_results_df$row_index] <- as.logical(api_results_df$success)
+  output_df$error_message[api_results_df$row_index] <- as.character(api_results_df$error_message)
+  output_df$duration  [api_results_df$row_index] <- as.numeric(api_results_df$duration)
+
+  if (verbose) {
+    successful_calls <- sum(output_df$success, na.rm = TRUE)
+    message(sprintf("Parallel processing completed: %d/%d experiments successful",
+                    successful_calls, nrow(output_df)))
+  }
+
+  if (simplify) {
+     output_df <- .unnest_config_to_cols(output_df, config_col = "config")
+  }
+
+  return(output_df)
 }
-
-
-#' Call LLM API with Experimental Metadata
-#'
-#' An enhanced version of call_llm_par() that allows attaching metadata to each experiment.
-#' This eliminates the need to manually track experiment indices and join metadata afterward.
-#'
-#' @param experiments A list where each element represents one experiment. Each element
-#'   must contain 'config' and 'messages', and can contain additional named elements
-#'   that will be included as metadata columns in the results.
-#' @param tries Integer. Number of retries for each call. Default is 10.
-#' @param wait_seconds Numeric. Initial wait time (seconds) before retry. Default is 2.
-#' @param backoff_factor Numeric. Multiplier for wait time after each failure. Default is 2.
-#' @param verbose Logical. If TRUE, prints progress and debug information.
-#' @param json Logical. If TRUE, returns raw JSON responses.
-#' @param memoize Logical. If TRUE, enables caching for identical requests.
-#' @param max_workers Integer. Maximum number of parallel workers. If NULL, auto-detects.
-#' @param progress Logical. If TRUE, shows progress bar.
-#'
-#' @return A tibble with API results plus any metadata columns from the experiments.
-#'   The 'pair_index' column shows the position in the input list for debugging.
-#'
-#' @details
-#' This function accepts experiments in two formats:
-#'
-#' \strong{Simple format} (backward compatible with call_llm_par):
-#' \preformatted{
-#' list(config = my_config, messages = my_messages)
-#' }
-#'
-#' \strong{Enhanced format with metadata:}
-#' \preformatted{
-#' list(config = my_config, messages = my_messages,
-#'      condition = "treatment", repetition = 1, model_type = "large")
-#' }
-#'
-#' Any named elements beyond 'config' and 'messages' are treated as metadata
-#' and included as columns in the results tibble. This eliminates the need to
-#' manually track indices and join metadata afterward.
-#'
-#' @export
-#'
-#' @examples
-#' \dontrun{
-#'   # Enhanced usage with metadata
-#'   experiments <- list(
-#'     list(config = config1, messages = messages_control,
-#'          condition = "control", repetition = 1, model_size = "small"),
-#'     list(config = config1, messages = messages_treatment,
-#'          condition = "treatment", repetition = 1, model_size = "small"),
-#'     list(config = config2, messages = messages_control,
-#'          condition = "control", repetition = 1, model_size = "large")
-#'   )
-#'
-#'   setup_llm_parallel(workers = 4)
-#'   results <- call_llm_experiments(experiments, progress = TRUE)
-#'   reset_llm_parallel()
-#'
-#'   # Results include metadata columns automatically - no manual joining needed
-#'   print(results)
-#'
-#'   # Direct analysis with metadata
-#'   results %>% group_by(condition, model_size) %>%
-#'     summarise(mean_rating = mean(as.numeric(response_text), na.rm = TRUE))
-#' }
-call_llm_experiments <- function(experiments,
-                                 tries = 10,
-                                 wait_seconds = 2,
-                                 backoff_factor = 2,
-                                 verbose = FALSE,
-                                 json = FALSE,
-                                 memoize = FALSE,
-                                 max_workers = NULL,
-                                 progress = FALSE) {
-
-  if (length(experiments) == 0) {
-    warning("No experiments provided. Returning empty tibble.")
-    return(tibble::tibble(
-      pair_index = integer(0),
-      provider = character(0),
-      model = character(0),
-      response_text = character(0),
-      success = logical(0),
-      error_message = character(0)
-    ))
-  }
-
-  # Validate input and extract config-message pairs and metadata
-  config_message_pairs <- vector("list", length(experiments))
-  metadata_list <- vector("list", length(experiments))
-
-  for (i in seq_along(experiments)) {
-    exp <- experiments[[i]]
-
-    # Validate required elements
-    if (!is.list(exp) || !("config" %in% names(exp)) || !("messages" %in% names(exp))) {
-      stop(sprintf("Element %d of experiments must be a list with 'config' and 'messages' named elements.", i))
-    }
-    if (!inherits(exp$config, "llm_config")) {
-      stop(sprintf("Element %d 'config' is not an llm_config object.", i))
-    }
-
-    # Extract config and messages for API call
-    config_message_pairs[[i]] <- list(config = exp$config, messages = exp$messages)
-
-    # Extract any additional elements as metadata (preserve original order)
-    other_elements <- exp[!names(exp) %in% c("config", "messages")]
-    metadata_list[[i]] <- c(list(experiment_index = i), other_elements)
-  }
-
-  if (verbose) {
-    n_with_metadata <- sum(lengths(metadata_list) > 1)  # More than just experiment_index
-    message(sprintf("Processing %d experiments (%d with metadata)", length(experiments), n_with_metadata))
-  }
-
-  # Call the existing parallel function
-  api_results <- call_llm_par(
-    config_message_pairs = config_message_pairs,
-    tries = tries,
-    wait_seconds = wait_seconds,
-    backoff_factor = backoff_factor,
-    verbose = verbose,
-    json = json,
-    memoize = memoize,
-    max_workers = max_workers,
-    progress = progress
-  )
-
-  # Merge with metadata if any exists beyond just the index
-  has_metadata <- length(metadata_list) > 0 && any(lengths(metadata_list) > 1)
-
-  if (has_metadata) {
-    if (!requireNamespace("dplyr", quietly = TRUE)) {
-      stop("The 'dplyr' package is required. Please install it with: install.packages('dplyr')")
-    }
-
-    # Convert metadata list to dataframe
-    metadata_df <- dplyr::bind_rows(metadata_list)
-
-    # Join with API results
-    results <- dplyr::left_join(api_results, metadata_df, by = c("pair_index" = "experiment_index"))
-
-    # Reorder columns: metadata first, then API columns, keeping pair_index for debugging
-    metadata_cols <- setdiff(names(metadata_df), "experiment_index")
-    api_cols <- setdiff(names(api_results), "pair_index")
-    results <- results[, c("pair_index", metadata_cols, api_cols)]
-
-  } else {
-    results <- api_results
-  }
-
-  if (verbose) {
-    successful_calls <- sum(results$success, na.rm = TRUE)
-    message(sprintf("Experiment processing completed: %d/%d experiments successful", successful_calls, nrow(results)))
-  }
-
-  return(results)
-}
-
 
 #' Build Factorial Experiment Design
 #'
-#' Creates a list of experiments for factorial designs where you want to test
+#' Creates a tibble of experiments for factorial designs where you want to test
 #' all combinations of configs, messages, and repetitions with automatic metadata.
 #'
-#' @param configs List of llm_config objects to test
-#' @param messages_list List of message lists to test (each element is a message list for one condition)
+#' @param configs List of llm_config objects to test.
+#' @param messages_list List of message lists to test (each element is a message list for one condition).
 #' @param repetitions Integer. Number of repetitions per combination. Default is 1.
-#' @param config_labels Character vector of labels for configs. If NULL, uses config info.
-#' @param message_labels Character vector of labels for message sets. If NULL, uses indices.
+#' @param config_labels Character vector of labels for configs. If NULL, uses "provider_model".
+#' @param message_labels Character vector of labels for message sets. If NULL, uses "messages_1", etc.
 #'
-#' @return A list of experiments suitable for call_llm_experiments(), with metadata
-#'   columns for config_label, message_label, and repetition automatically attached.
+#' @return A tibble with columns: config (list-column), messages (list-column),
+#'   config_label, message_label, and repetition. Ready for use with call_llm_par().
 #' @export
 #'
 #' @examples
@@ -1006,14 +580,24 @@ call_llm_experiments <- function(experiments,
 #'     message_labels = c("control", "treatment")
 #'   )
 #'
-#'   # Metadata automatically included: config_label, message_label, repetition
-#'   results <- call_llm_experiments(experiments, progress = TRUE)
+#'   # Use with call_llm_par
+#'   results <- call_llm_par(experiments, progress = TRUE)
 #' }
 build_factorial_experiments <- function(configs,
                                         messages_list,
                                         repetitions = 1,
                                         config_labels = NULL,
                                         message_labels = NULL) {
+
+  if (!requireNamespace("tibble", quietly = TRUE)) {
+    stop("The 'tibble' package is required. Please install it with: install.packages('tibble')")
+  }
+  if (!requireNamespace("tidyr", quietly = TRUE)) {
+    stop("The 'tidyr' package is required for expand_grid. Please install it with: install.packages('tidyr')")
+  }
+  if (!requireNamespace("dplyr", quietly = TRUE)) {
+    stop("The 'dplyr' package is required for joins. Please install it with: install.packages('dplyr')")
+  }
 
   # Validate inputs
   if (length(configs) == 0 || length(messages_list) == 0) {
@@ -1023,7 +607,7 @@ build_factorial_experiments <- function(configs,
   # Create config labels if not provided
   if (is.null(config_labels)) {
     config_labels <- sapply(configs, function(cfg) {
-      paste(cfg$provider, cfg$model, sep = "_")
+      paste(cfg$provider %||% "NA", cfg$model %||% "NA", sep = "_")
     })
   } else if (length(config_labels) != length(configs)) {
     stop("config_labels must have the same length as configs")
@@ -1036,30 +620,34 @@ build_factorial_experiments <- function(configs,
     stop("message_labels must have the same length as messages_list")
   }
 
-  # Build all combinations
-  experiments <- list()
+  # Create lookup tables
+  configs_df <- tibble::tibble(
+    config_idx = seq_along(configs),
+    config = configs,
+    config_label = config_labels
+  )
 
-  for (i in seq_along(configs)) {
-    for (j in seq_along(messages_list)) {
-      for (rep in seq_len(repetitions)) {
-        experiments <- append(experiments, list(list(
-          config = configs[[i]],
-          messages = messages_list[[j]],
-          config_label = config_labels[i],
-          message_label = message_labels[j],
-          repetition = rep
-        )))
-      }
-    }
-  }
+  messages_df <- tibble::tibble(
+    message_idx = seq_along(messages_list),
+    messages = messages_list,
+    message_label = message_labels
+  )
+
+  # Create factorial design
+  experiments <- tidyr::expand_grid(
+    config_idx = configs_df$config_idx,
+    message_idx = messages_df$message_idx,
+    repetition = seq_len(repetitions)
+  ) %>%
+    dplyr::left_join(configs_df, by = "config_idx") %>%
+    dplyr::left_join(messages_df, by = "message_idx") %>%
+    dplyr::select(config, messages, config_label, message_label, repetition)
 
   message(sprintf("Built %d experiments: %d configs x %d message sets x %d repetitions",
-                  length(experiments), length(configs), length(messages_list), repetitions))
+                  nrow(experiments), length(configs), length(messages_list), repetitions))
 
   return(experiments)
 }
-
-
 
 #' Setup Parallel Environment for LLM Processing
 #'
@@ -1068,7 +656,8 @@ build_factorial_experiments <- function(configs,
 #'
 #' @param strategy Character. The future strategy to use. Options: "multisession", "multicore", "sequential".
 #'                If NULL (default), automatically chooses "multisession".
-#' @param workers Integer. Number of workers to use. If NULL, auto-detects optimal number (availableCores - 1, capped at 8).
+#' @param workers Integer. Number of workers to use. If NULL, auto-detects optimal number
+#'                (availableCores - 1, capped at 8).
 #' @param verbose Logical. If TRUE, prints setup information.
 #'
 #' @return Invisibly returns the previous future plan.
@@ -1094,18 +683,15 @@ setup_llm_parallel <- function(strategy = NULL, workers = NULL, verbose = FALSE)
     stop("The 'future' package is required. Please install it with: install.packages('future')")
   }
 
-  current_plan <- future::plan() # Store current plan to return
-
-  if (is.null(strategy)) {
-    strategy <- "multisession" # Default to multisession for broad compatibility
-  }
+  current_plan <- future::plan()
+  strategy <- strategy %||% "multisession"
 
   if (is.null(workers)) {
     available_cores <- future::availableCores()
-    workers <- max(1, available_cores - 1) # Leave one core free
-    workers <- min(workers, 8) # Cap at a reasonable maximum for API calls
+    workers <- max(1, available_cores - 1)
+    workers <- min(workers, 8) # Cap at reasonable maximum for API calls
   } else {
-    workers <- max(1, as.integer(workers)) # Ensure positive integer
+    workers <- max(1, as.integer(workers))
   }
 
   if (verbose) {
@@ -1131,7 +717,8 @@ setup_llm_parallel <- function(strategy = NULL, workers = NULL, verbose = FALSE)
   }
 
   if (verbose) {
-    message(sprintf("Parallel environment set to: %s with %d workers.", class(future::plan())[1], future::nbrOfWorkers()))
+    message(sprintf("Parallel environment set to: %s with %d workers.",
+                    class(future::plan())[1], future::nbrOfWorkers()))
   }
 
   invisible(current_plan)
@@ -1143,7 +730,7 @@ setup_llm_parallel <- function(strategy = NULL, workers = NULL, verbose = FALSE)
 #'
 #' @param verbose Logical. If TRUE, prints reset information.
 #'
-#' @return Invisibly returns the future plan that was in place before resetting to sequential (often the default sequential plan).
+#' @return Invisibly returns the future plan that was in place before resetting to sequential.
 #' @export
 #'
 #' @examples
@@ -1170,7 +757,7 @@ reset_llm_parallel <- function(verbose = FALSE) {
     message("Resetting parallel environment to sequential processing...")
   }
 
-  previous_plan <- future::plan(future::sequential) # Set to sequential and get the one before that
+  previous_plan <- future::plan(future::sequential)
 
   if (verbose) {
     message("Parallel environment reset complete. Previous plan was: ", class(previous_plan)[1])

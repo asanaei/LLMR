@@ -4,20 +4,7 @@
 \alias{call_llm_sweep}
 \title{Mode 1: Parameter Sweep - Vary One Parameter, Fixed Message}
 \usage{
-call_llm_sweep(
-  base_config,
-  param_name,
-  param_values,
-  messages,
-  tries = 10,
-  wait_seconds = 2,
-  backoff_factor = 2,
-  verbose = FALSE,
-  json = FALSE,
-  memoize = FALSE,
-  max_workers = NULL,
-  progress = FALSE
-)
+call_llm_sweep(base_config, param_name, param_values, messages, ...)
 }
 \arguments{
 \item{base_config}{Base llm_config object to modify.}
@@ -28,24 +15,11 @@ call_llm_sweep(
 
 \item{messages}{List of message objects (same for all calls).}
 
-\item{tries}{Integer. Number of retries for each call. Default is 10.}
-
-\item{wait_seconds}{Numeric. Initial wait time (seconds) before retry. Default is 2.}
-
-\item{backoff_factor}{Numeric. Multiplier for wait time after each failure. Default is 2.}
-
-\item{verbose}{Logical. If TRUE, prints progress and debug information.}
-
-\item{json}{Logical. If TRUE, requests raw JSON responses from the API (note: final tibble's `response_text` will be extracted text).}
-
-\item{memoize}{Logical. If TRUE, enables caching for identical requests via `call_llm_robust`.}
-
-\item{max_workers}{Integer. Maximum number of parallel workers. If NULL, auto-detects.}
-
-\item{progress}{Logical. If TRUE, shows progress bar.}
+\item{...}{Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).}
 }
 \value{
-A tibble with columns: param_name, param_value, provider, model, response_text, success, error_message, plus all model parameters as additional columns.
+A tibble with columns: swept_param_name, the varied parameter column, provider, model,
+  all other model parameters, response_text, raw_response_json, success, error_message.
 }
 \description{
 Sweeps through different values of a single parameter while keeping the message constant.
@@ -61,12 +35,8 @@ This function requires setting up the parallel environment using `setup_llm_para
   messages <- list(list(role = "user", content = "What is 15 * 23?"))
   temperatures <- c(0, 0.3, 0.7, 1.0, 1.5)
 
-  # set up the parallel enviornment
   setup_llm_parallel(workers = 4, verbose = TRUE)
-
   results <- call_llm_sweep(config, "temperature", temperatures, messages)
-
-  # Reset to sequential
   reset_llm_parallel(verbose = TRUE)
 }
 }

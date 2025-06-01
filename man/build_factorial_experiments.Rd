@@ -13,22 +13,22 @@ build_factorial_experiments(
 )
 }
 \arguments{
-\item{configs}{List of llm_config objects to test}
+\item{configs}{List of llm_config objects to test.}
 
-\item{messages_list}{List of message lists to test (each element is a message list for one condition)}
+\item{messages_list}{List of message lists to test (each element is a message list for one condition).}
 
 \item{repetitions}{Integer. Number of repetitions per combination. Default is 1.}
 
-\item{config_labels}{Character vector of labels for configs. If NULL, uses config info.}
+\item{config_labels}{Character vector of labels for configs. If NULL, uses "provider_model".}
 
-\item{message_labels}{Character vector of labels for message sets. If NULL, uses indices.}
+\item{message_labels}{Character vector of labels for message sets. If NULL, uses "messages_1", etc.}
 }
 \value{
-A list of experiments suitable for call_llm_experiments(), with metadata
-  columns for config_label, message_label, and repetition automatically attached.
+A tibble with columns: config (list-column), messages (list-column),
+  config_label, message_label, and repetition. Ready for use with call_llm_par().
 }
 \description{
-Creates a list of experiments for factorial designs where you want to test
+Creates a tibble of experiments for factorial designs where you want to test
 all combinations of configs, messages, and repetitions with automatic metadata.
 }
 \examples{
@@ -45,7 +45,7 @@ all combinations of configs, messages, and repetitions with automatic metadata.
     message_labels = c("control", "treatment")
   )
 
-  # Metadata automatically included: config_label, message_label, repetition
-  results <- call_llm_experiments(experiments, progress = TRUE)
+  # Use with call_llm_par
+  results <- call_llm_par(experiments, progress = TRUE)
 }
 }

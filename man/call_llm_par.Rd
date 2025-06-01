@@ -2,22 +2,26 @@
 % Please edit documentation in R/LLM_parallel_utils.R
 \name{call_llm_par}
 \alias{call_llm_par}
-\title{Mode 4: Parallel Processing - List of Config-Message Pairs}
+\title{Parallel LLM Processing with Tibble-Based Experiments (Core Engine)}
 \usage{
 call_llm_par(
-  config_message_pairs,
+  experiments,
+  simplify = TRUE,
   tries = 10,
   wait_seconds = 2,
   backoff_factor = 2,
   verbose = FALSE,
-  json = FALSE,
   memoize = FALSE,
   max_workers = NULL,
-  progress = FALSE
+  progress = FALSE,
+  json_output = NULL
 )
 }
 \arguments{
-\item{config_message_pairs}{A list where each element is a list with 'config' and 'messages' elements.}
+\item{experiments}{A tibble/data.frame with required list-columns 'config' (llm_config objects)
+and 'messages' (message lists). Additional columns are treated as metadata and preserved.}
+
+\item{simplify}{Whether to cbind 'experiments' to the output data frame or not.}
 
 \item{tries}{Integer. Number of retries for each call. Default is 10.}
 
@@ -27,41 +31,54 @@ call_llm_par(
 
 \item{verbose}{Logical. If TRUE, prints progress and debug information.}
 
-\item{json}{Logical. If TRUE, returns raw JSON responses.}
-
 \item{memoize}{Logical. If TRUE, enables caching for identical requests.}
 
 \item{max_workers}{Integer. Maximum number of parallel workers. If NULL, auto-detects.}
 
 \item{progress}{Logical. If TRUE, shows progress bar.}
+
+\item{json_output}{Deprecated. Raw JSON string is always included as raw_response_json.
+This parameter is kept for backward compatibility but has no effect.}
 }
 \value{
-A tibble with columns: pair_index, provider, model, response_text, success, error_message, plus all model parameters as additional columns.
+A tibble containing all original columns from experiments (metadata, config, messages),
+  plus new columns: response_text, raw_response_json (the raw JSON string from the API),
+  success, error_message, duration (in seconds).
 }
 \description{
-Processes a list where each element contains both a config and message pair.
-Maximum flexibility for complex workflows with different configs and messages.
+Processes experiments from a tibble where each row contains a config and message pair.
+This is the core parallel processing function. Metadata columns are preserved.
 This function requires setting up the parallel environment using `setup_llm_parallel`.
 }
 \examples{
 \dontrun{
-  # Full flexibility with different configs and messages
-  config1 <- llm_config(provider = "openai", model = "gpt-4o-mini",
-                        api_key = Sys.getenv("OPENAI_API_KEY"))
-  config2 <- llm_config(provider = "openai", model = "gpt-3.5-turbo",
-                        api_key = Sys.getenv("OPENAI_API_KEY"))
+  library(dplyr)
+  library(tidyr)
 
-  pairs <- list(
-    list(config = config1, messages = list(list(role = "user", content = "What is AI?"))),
-    list(config = config2, messages = list(list(role = "user", content = "Explain ML")))
-  )
+  # Build experiments with expand_grid
+  experiments <- expand_grid(
+    condition = c("control", "treatment"),
+    model_type = c("small", "large"),
+    rep = 1:10
+  ) \%>\%
+    mutate(
+      config = case_when(
+        model_type == "small" ~ list(small_config),
+        model_type == "large" ~ list(large_config)
+      ),
+      messages = case_when(
+        condition == "control" ~ list(control_messages),
+        condition == "treatment" ~ list(treatment_messages)
+      )
+    )
 
-  # setup paralle Environment
-  setup_llm_parallel(workers = 4, verbose = TRUE)
+  setup_llm_parallel(workers = 4)
+  results <- call_llm_par(experiments, progress = TRUE)
+  reset_llm_parallel()
 
-  results <- call_llm_par(pairs)
-
-  # Reset to sequential
-  reset_llm_parallel(verbose = TRUE)
+  # All metadata preserved for analysis
+  results \%>\%
+    group_by(condition, model_type) \%>\%
+    summarise(mean_response = mean(as.numeric(response_text), na.rm = TRUE))
 }
 }

@@ -10,7 +10,7 @@ reset_llm_parallel(verbose = FALSE)
 \item{verbose}{Logical. If TRUE, prints reset information.}
 }
 \value{
-Invisibly returns the future plan that was in place before resetting to sequential (often the default sequential plan).
+Invisibly returns the future plan that was in place before resetting to sequential.
 }
 \description{
 Resets the future plan to sequential processing.
