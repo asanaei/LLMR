@@ -4,42 +4,18 @@
 \alias{call_llm_compare}
 \title{Mode 3: Model Comparison - Multiple Configs, Fixed Message}
 \usage{
-call_llm_compare(
-  configs_list,
-  messages,
-  tries = 10,
-  wait_seconds = 2,
-  backoff_factor = 2,
-  verbose = FALSE,
-  json = FALSE,
-  memoize = FALSE,
-  max_workers = NULL,
-  progress = FALSE
-)
+call_llm_compare(configs_list, messages, ...)
 }
 \arguments{
 \item{configs_list}{A list of llm_config objects to compare.}
 
 \item{messages}{List of message objects (same for all configs).}
 
-\item{tries}{Integer. Number of retries for each call. Default is 10.}
-
-\item{wait_seconds}{Numeric. Initial wait time (seconds) before retry. Default is 2.}
-
-\item{backoff_factor}{Numeric. Multiplier for wait time after each failure. Default is 2.}
-
-\item{verbose}{Logical. If TRUE, prints processing information.}
-
-\item{json}{Logical. If TRUE, returns raw JSON responses.}
-
-\item{memoize}{Logical. If TRUE, enables caching for identical requests.}
-
-\item{max_workers}{Integer. Maximum number of parallel workers. If NULL, auto-detects.}
-
-\item{progress}{Logical. If TRUE, shows progress tracking.}
+\item{...}{Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).}
 }
 \value{
-A tibble with columns: config_index, provider, model, response_text, success, error_message, plus all model parameters as additional columns.
+A tibble with columns: config_index (metadata), provider, model,
+  all varying model parameters, response_text, raw_response_json, success, error_message.
 }
 \description{
 Compares different configurations (models, providers, settings) using the same message.
@@ -57,12 +33,8 @@ This function requires setting up the parallel environment using `setup_llm_para
   configs_list <- list(config1, config2)
   messages <- list(list(role = "user", content = "Explain quantum computing"))
 
-  # setup paralle Environment
   setup_llm_parallel(workers = 4, verbose = TRUE)
-
   results <- call_llm_compare(configs_list, messages)
-
-  # Reset to sequential
   reset_llm_parallel(verbose = TRUE)
 }
 }

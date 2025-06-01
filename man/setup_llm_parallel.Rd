@@ -10,7 +10,8 @@ setup_llm_parallel(strategy = NULL, workers = NULL, verbose = FALSE)
 \item{strategy}{Character. The future strategy to use. Options: "multisession", "multicore", "sequential".
 If NULL (default), automatically chooses "multisession".}
 
-\item{workers}{Integer. Number of workers to use. If NULL, auto-detects optimal number (availableCores - 1, capped at 8).}
+\item{workers}{Integer. Number of workers to use. If NULL, auto-detects optimal number
+(availableCores - 1, capped at 8).}
 
 \item{verbose}{Logical. If TRUE, prints setup information.}
 }
