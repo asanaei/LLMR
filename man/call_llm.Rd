@@ -9,59 +9,36 @@ call_llm(config, messages, verbose = FALSE, json = FALSE)
 \arguments{
 \item{config}{An `llm_config` object created by `llm_config()`.}
 
-\item{messages}{A list of message objects (or a character vector for embeddings) to send to the API.}
+\item{messages}{A list of message objects (or a character vector for embeddings).
+For multimodal requests, the `content` of a message can be a list of parts,
+e.g., `list(list(type="text", text="..."), list(type="file", path="..."))`.}
 
 \item{verbose}{Logical. If `TRUE`, prints the full API response.}
 
-\item{json}{Logical. If `TRUE`, returns the raw JSON response as an attribute.}
+\item{json}{Logical. If `TRUE`, the returned text will have the raw JSON response
+and the parsed list as attributes.}
 }
 \value{
-The generated text response or embedding results with additional attributes.
+The generated text response or embedding results. If `json=TRUE`,
+  attributes `raw_json` and `full_response` are attached.
 }
 \description{
 Sends a message to the specified LLM API and retrieves the response.
 }
 \examples{
 \dontrun{
-  # Voyage AI embedding Example:
-  voyage_config <- llm_config(
-    provider = "voyage",
-    model = "voyage-large-2",
-    embedding = TRUE,
-    api_key = Sys.getenv("VOYAGE_API_KEY")
-  )
+  # Standard text call
+  config <- llm_config(provider = "openai", model = "gpt-4o-mini", api_key = "...")
+  messages <- list(list(role = "user", content = "Hello!"))
+  response <- call_llm(config, messages)
 
-  embedding_response <- call_llm(voyage_config, text_input)
-  embeddings <- parse_embeddings(embedding_response)
-  embeddings |> cor() |> print()
-
-
-  # Gemini Example
-  gemini_config <- llm_config(
-    provider = "gemini",
-    model = "gemini-pro",          # Or another Gemini model
-    api_key = Sys.getenv("GEMINI_API_KEY"),
-    temperature = 0.9,               # Controls randomness
-    max_tokens = 800,              # Maximum tokens to generate
-    top_p = 0.9,                     # Nucleus sampling parameter
-    top_k = 10                      # Top K sampling parameter
-  )
-
-  gemini_message <- list(
-    list(role = "user", content = "Explain the theory of relativity to a curious 3-year-old!")
-  )
-
-  gemini_response <- call_llm(
-    config = gemini_config,
-    messages = gemini_message,
-    json = TRUE # Get raw JSON for inspection if needed
-  )
-
-  # Display the generated text response
-  cat("Gemini Response:", gemini_response, "\n")
-
-  # Access and print the raw JSON response
-  raw_json_gemini_response <- attr(gemini_response, "raw_json")
-  print(raw_json_gemini_response)
+  # Multimodal call (for supported providers like Gemini, Claude 3, GPT-4o)
+  # Make sure to use a vision-capable model in your config
+  multimodal_config <- llm_config(provider = "openai", model = "gpt-4o", api_key = "...")
+  multimodal_messages <- list(list(role = "user", content = list(
+    list(type = "text", text = "What is in this image?"),
+    list(type = "file", path = "path/to/your/image.png")
+  )))
+  image_response <- call_llm(multimodal_config, multimodal_messages)
 }
 }

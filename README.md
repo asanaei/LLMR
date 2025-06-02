@@ -195,7 +195,62 @@ conversation$print_history()
 #### compare with full history
 conversation$conversation_history_full
 
+```
 
+### Example of file uploads and multimodal chats
+
+Let us create a simple `.png` image and ask ChatGPT to see if there is a joke in it or not:
+
+```r
+
+# create image
+temp_png_path <- tempfile(fileext = ".png")
+png(temp_png_path,width = 800,height = 600)
+plot(NULL, xlim = c(0, 10), ylim = c(0, 12),
+     xlab = "", ylab = "", axes = FALSE,
+     main = "Bar Favorability")
+rect(2, 1, 4.5, 10, col = "saddlebrown")
+text(3.25, 5.5, "CHOCOLATE BAR", col = "white", cex = 1.25, srt = 90)
+rect(5.5, 1, 8, 5, col = "lightsteelblue")
+text(6.75, 3, "BAR CHART", col = "black", cex = 1.25, srt = 90)
+dev.off()
+
+# ask gpt-4.1-mini to interpret this
+llm_vision_config <- llm_config(
+  provider = "openai",
+  model = "gpt-4.1-mini",
+  api_key = Sys.getenv("OPENAI_API_KEY")
+)
+
+# Construct the multimodal message
+messages_to_send <- list(
+  list(
+    role = "user",
+    content = list(
+      # This part corresponds to the text of the prompt
+      list(type = "text", text = "interpret this. Is there a joke here?"),
+      # This part links to the local image file to be sent
+      list(type = "file", path = temp_png_path)
+    )
+  )
+)
+
+# Call the LLM and print the response
+# The `call_llm` function will automatically handle the file processing
+response <- call_llm(llm_vision_config, messages_to_send)
+
+# Print the final interpretation from the model
+cat("LLM Interpretation:\n")
+cat(response)
+```
+
+#### Example output
+```
+This image is a humorous visual pun. It has a title "Bar Favorability" and shows two bars side by side: one is a brown rectangle labeled "CHOCOLATE BAR," and the other is a blue square labeled "BAR CHART."
+
+The joke is that "Bar Favorability" could mean how much people favor different types of bars, but the graphic interprets it literally. Instead of comparing favorability ratings, it shows literal bars—a chocolate bar and a bar chart—as if they were competitors in a popularity contest.
+
+So yes, there is a joke here: it plays on the double meaning of the word "bar," blending a data visualization element (a bar chart) with a chocolate bar, using the concept of favorability in a funny, unexpected way.
 ```
 
 Contributions: are welcome.

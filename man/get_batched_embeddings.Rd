@@ -4,14 +4,15 @@
 \alias{get_batched_embeddings}
 \title{Generate Embeddings in Batches}
 \usage{
-get_batched_embeddings(texts, embed_config, batch_size = 5, verbose = TRUE)
+get_batched_embeddings(texts, embed_config, batch_size = 50, verbose = TRUE)
 }
 \arguments{
-\item{texts}{Character vector of texts to embed.}
+\item{texts}{Character vector of texts to embed. If named, the names will be
+used as row names in the output matrix.}
 
 \item{embed_config}{An \code{llm_config} object configured for embeddings.}
 
-\item{batch_size}{Integer. Number of texts to process in each batch. Default is 5.}
+\item{batch_size}{Integer. Number of texts to process in each batch. Default is 50.}
 
 \item{verbose}{Logical. If TRUE, prints progress messages. Default is TRUE.}
 }
@@ -30,11 +31,13 @@ batch and stitches the results together.
 \dontrun{
   # Basic usage
   texts <- c("Hello world", "How are you?", "Machine learning is great")
+  names(texts) <- c("greeting", "question", "statement")
 
   embed_cfg <- llm_config(
     provider = "voyage",
-    model = "voyage-3-large",
-    api_key = Sys.getenv("VOYAGE_KEY")
+    model = "voyage-large-2-instruct",
+    embedding = TRUE,
+    api_key = Sys.getenv("VOYAGE_API_KEY")
   )
 
   embeddings <- get_batched_embeddings(

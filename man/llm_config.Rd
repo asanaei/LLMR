@@ -25,9 +25,9 @@ llm_config(
 
 \item{base_url}{Optional base URL override}
 
-\item{embedding}{Logical indicating embedding mode: NULL (default, used for backward compatibility, uses prior defaults), TRUE (force embeddings), FALSE (force generative)}
+\item{embedding}{Logical indicating embedding mode: NULL (default, uses prior defaults), TRUE (force embeddings), FALSE (force generative)}
 
-\item{...}{Additional provider-specific parameters#'}
+\item{...}{Additional provider-specific parameters}
 }
 \value{
 Configuration object for use with call_llm()
@@ -37,36 +37,11 @@ Create LLM Configuration
 }
 \examples{
 \dontrun{
-### Generative example
   openai_config <- llm_config(
     provider = "openai",
-    model = "gpt-4.1-mini",
-    api_key = Sys.getenv("OPENAI_KEY"),
+    model = "gpt-4o-mini",
+    api_key = Sys.getenv("OPENAI_API_KEY"),
     temperature = 0.7,
     max_tokens = 500)
-
-the_message <- list(
-list(role = "system", content = "You are an expert data scientist."),
-list(role = "user", content = "When will you ever use the OLS?") )
-
-#Call the LLM api
-response <- call_llm(
-config = openai_config,
-messages = the_message)
-cat("Response:", response, "\n")
-
-### Embedding example
-  # Voyage AI Example:
-  voyage_config <- llm_config(
-    provider = "voyage",
-    model = "voyage-large-2",
-    api_key = Sys.getenv("VOYAGE_API_KEY"),
-    embedding = TRUE
-  )
-
-  embedding_response <- call_llm(voyage_config, text_input)
-  embeddings <- parse_embeddings(embedding_response)
-  # Additional processing:
-  embeddings |> cor() |> print()
 }
 }

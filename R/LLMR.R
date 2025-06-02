@@ -1,4 +1,45 @@
-# ----- Helper Functions -----
+# LLMR.R
+# -------------------------------------------------------------------
+# This file provides the core functionality for the LLMR package,
+# including configuration, API dispatching, and response parsing.
+# It defines the main S3 generic `call_llm()` and provides specific
+# implementations for various providers like OpenAI, Anthropic, Gemini, etc.
+#
+# Key Features:
+#   1. llm_config() - Standardized configuration object.
+#   2. call_llm() - S3 generic for dispatching to the correct provider API.
+#   3. Provider-specific implementations (e.g., call_llm.openai).
+#   4. Support for both generative and embedding models.
+#   5. (New) Support for multimodal inputs (text and files) for capable providers.
+# -------------------------------------------------------------------
+
+# ----- Internal Helper Functions -----
+
+#' Process a file for multimodal API calls
+#'
+#' Reads a file, determines its MIME type, and base64 encodes it.
+#' This is an internal helper function.
+#' @param file_path The path to the file.
+#' @return A list containing the mime_type and base64_data.
+#' @keywords internal
+#' @noRd
+#' @importFrom mime guess_type
+#' @importFrom base64enc base64encode
+.process_file_content <- function(file_path) {
+  if (!file.exists(file_path)) {
+    stop("File not found at path: ", file_path)
+  }
+  # Guess MIME type from file extension
+  mime_type <- mime::guess_type(file_path, empty = "application/octet-stream")
+
+  # Read file and encode using the reliable base64enc package
+  base64_data <- base64enc::base64encode(what = file_path)
+
+  return(list(
+    mime_type = mime_type,
+    base64_data = base64_data
+  ))
+}
 
 #' Perform API Request
 #'
@@ -15,29 +56,22 @@ perform_request <- function(req, verbose, json) {
   # Parse the response as JSON
   content <- httr2::resp_body_json(resp)
 
-  ## uncomment for diagnostics
-  # print(content)
-
   if (verbose) {
     cat("Full API Response:\n")
     print(content)
   }
 
+  text <- extract_text(content)
+  attr(text, "full_response") <- content
+  attr(text, "raw_json") <- raw_json
+
   if (json) {
-    # Return the text with attributes for full_response and raw_json
-    text <- extract_text(content)
-    attr(text, "full_response") <- content
-    attr(text, "raw_json") <- raw_json
     return(text)
   }
 
-  # Extract the text response (or embeddings for embedding calls)
-  text <- extract_text(content)
-  attr(text, "full_response") <- content
-  return(text)
+  # By default, for non-json output, just return the text
+  return(as.character(text))
 }
-
-
 
 #' Extract Text from API Response
 #'
@@ -54,7 +88,8 @@ extract_text <- function(content) {
   if (!is.null(content$choices)) {
     # For APIs like OpenAI, Groq, Together AI
     if (length(content$choices) == 0 || is.null(content$choices[[1]]$message$content)) {
-      stop("No choices returned from API.")
+      # Stop gracefully if no content is found
+      return(NA_character_)
     }
     return(content$choices[[1]]$message$content)
   }
@@ -62,64 +97,53 @@ extract_text <- function(content) {
   if (!is.null(content$content)) {
     # For Anthropic
     if (length(content$content) == 0 || is.null(content$content[[1]]$text)) {
-      stop("No content returned from Anthropic API.")
+      return(NA_character_)
     }
     return(content$content[[1]]$text)
   }
 
-  # --- ADD THIS GEMINI SPECIFIC BLOCK ---
   if (!is.null(content$candidates)) {
     # For Gemini API
     if (length(content$candidates) == 0 ||
-        is.null(content$candidates[[1]]$content$parts) || # Check for parts
-        length(content$candidates[[1]]$content$parts) == 0 || # Check if parts is empty
-        is.null(content$candidates[[1]]$content$parts[[1]]$text)) { # Finally check for text
-      stop("No content returned from Gemini API.")
+        is.null(content$candidates[[1]]$content$parts) ||
+        length(content$candidates[[1]]$content$parts) == 0 ||
+        is.null(content$candidates[[1]]$content$parts[[1]]$text)) {
+      return(NA_character_)
     }
     return(content$candidates[[1]]$content$parts[[1]]$text)
   }
-  # --- END GEMINI BLOCK ---
 
   stop("Unable to extract text from the API response.")
 }
 
-
-
-
-
-
 #' Format Anthropic Messages
 #'
 #' Internal helper function to format messages for Anthropic API.
+#' This helper is now simplified as logic is moved into call_llm.anthropic
 #'
 #' @keywords internal
 #' @noRd
 format_anthropic_messages <- function(messages) {
-  # Separate system messages from user/assistant messages
   system_messages <- purrr::keep(messages, ~ .x$role == "system")
   user_messages <- purrr::keep(messages, ~ .x$role != "system")
 
-  # Concatenate system messages if any
-  if (length(system_messages) > 0) {
-    system_text <- paste(sapply(system_messages, function(x) x$content), collapse = " ")
+  system_text <- if (length(system_messages) > 0) {
+    paste(sapply(system_messages, function(x) x$content), collapse = " ")
   } else {
-    system_text <- NULL
+    NULL
   }
 
-  # Convert user messages to Anthropic's expected format
-  formatted_messages <- lapply(user_messages, function(msg) {
-    list(
-      role = msg$role,
-      content = list(
-        list(
-          type = "text",
-          text = msg$content
-        )
-      )
-    )
-  })
+  # The complex formatting is now handled directly in call_llm.anthropic
+  # to support multimodal content. This function just separates system/user messages.
+  list(system_text = system_text, user_messages = user_messages)
+}
 
-  list(system_text = system_text, formatted_messages = formatted_messages)
+# Helper to determine the endpoint
+get_endpoint <- function(config, default_endpoint) {
+  if (!is.null(config$model_params$api_url)) {
+    return(config$model_params$api_url)
+  }
+  default_endpoint
 }
 
 # ----- Exported Functions -----
@@ -131,47 +155,25 @@ format_anthropic_messages <- function(messages) {
 #' @param api_key API key for authentication
 #' @param troubleshooting Prints out all api calls. USE WITH EXTREME CAUTION as it prints your API key.
 #' @param base_url Optional base URL override
-#' @param embedding Logical indicating embedding mode: NULL (default, used for backward compatibility, uses prior defaults), TRUE (force embeddings), FALSE (force generative)
-#' @param ... Additional provider-specific parameters#'
+#' @param embedding Logical indicating embedding mode: NULL (default, uses prior defaults), TRUE (force embeddings), FALSE (force generative)
+#' @param ... Additional provider-specific parameters
 #' @return Configuration object for use with call_llm()
 #' @export
-#'
 #' @examples
 #' \dontrun{
-#' ### Generative example
 #'   openai_config <- llm_config(
 #'     provider = "openai",
-#'     model = "gpt-4.1-mini",
-#'     api_key = Sys.getenv("OPENAI_KEY"),
+#'     model = "gpt-4o-mini",
+#'     api_key = Sys.getenv("OPENAI_API_KEY"),
 #'     temperature = 0.7,
 #'     max_tokens = 500)
-#'
-#' the_message <- list(
-#' list(role = "system", content = "You are an expert data scientist."),
-#' list(role = "user", content = "When will you ever use the OLS?") )
-#'
-#' #Call the LLM api
-#' response <- call_llm(
-#' config = openai_config,
-#' messages = the_message)
-#' cat("Response:", response, "\n")
-#'
-#' ### Embedding example
-#'   # Voyage AI Example:
-#'   voyage_config <- llm_config(
-#'     provider = "voyage",
-#'     model = "voyage-large-2",
-#'     api_key = Sys.getenv("VOYAGE_API_KEY"),
-#'     embedding = TRUE
-#'   )
-#'
-#'   embedding_response <- call_llm(voyage_config, text_input)
-#'   embeddings <- parse_embeddings(embedding_response)
-#'   # Additional processing:
-#'   embeddings |> cor() |> print()
 #' }
 llm_config <- function(provider, model, api_key, troubleshooting = FALSE, base_url = NULL, embedding = NULL, ...) {
   model_params <- list(...)
+  # Handle base_url passed via ... for backward compatibility, renaming to api_url internally
+  if (!is.null(base_url)) {
+    model_params$api_url <- base_url
+  }
   config <- list(
     provider = provider,
     model = model,
@@ -189,130 +191,85 @@ llm_config <- function(provider, model, api_key, troubleshooting = FALSE, base_u
 #' Sends a message to the specified LLM API and retrieves the response.
 #'
 #' @param config An `llm_config` object created by `llm_config()`.
-#' @param messages A list of message objects (or a character vector for embeddings) to send to the API.
+#' @param messages A list of message objects (or a character vector for embeddings).
+#'   For multimodal requests, the `content` of a message can be a list of parts,
+#'   e.g., `list(list(type="text", text="..."), list(type="file", path="..."))`.
 #' @param verbose Logical. If `TRUE`, prints the full API response.
-#' @param json Logical. If `TRUE`, returns the raw JSON response as an attribute.
+#' @param json Logical. If `TRUE`, the returned text will have the raw JSON response
+#'   and the parsed list as attributes.
 #'
-#' @return The generated text response or embedding results with additional attributes.
+#' @return The generated text response or embedding results. If `json=TRUE`,
+#'   attributes `raw_json` and `full_response` are attached.
 #' @export
-#'
 #' @examples
 #' \dontrun{
-#'   # Voyage AI embedding Example:
-#'   voyage_config <- llm_config(
-#'     provider = "voyage",
-#'     model = "voyage-large-2",
-#'     embedding = TRUE,
-#'     api_key = Sys.getenv("VOYAGE_API_KEY")
-#'   )
+#'   # Standard text call
+#'   config <- llm_config(provider = "openai", model = "gpt-4o-mini", api_key = "...")
+#'   messages <- list(list(role = "user", content = "Hello!"))
+#'   response <- call_llm(config, messages)
 #'
-#'   embedding_response <- call_llm(voyage_config, text_input)
-#'   embeddings <- parse_embeddings(embedding_response)
-#'   embeddings |> cor() |> print()
-#'
-#'
-#'   # Gemini Example
-#'   gemini_config <- llm_config(
-#'     provider = "gemini",
-#'     model = "gemini-pro",          # Or another Gemini model
-#'     api_key = Sys.getenv("GEMINI_API_KEY"),
-#'     temperature = 0.9,               # Controls randomness
-#'     max_tokens = 800,              # Maximum tokens to generate
-#'     top_p = 0.9,                     # Nucleus sampling parameter
-#'     top_k = 10                      # Top K sampling parameter
-#'   )
-#'
-#'   gemini_message <- list(
-#'     list(role = "user", content = "Explain the theory of relativity to a curious 3-year-old!")
-#'   )
-#'
-#'   gemini_response <- call_llm(
-#'     config = gemini_config,
-#'     messages = gemini_message,
-#'     json = TRUE # Get raw JSON for inspection if needed
-#'   )
-#'
-#'   # Display the generated text response
-#'   cat("Gemini Response:", gemini_response, "\n")
-#'
-#'   # Access and print the raw JSON response
-#'   raw_json_gemini_response <- attr(gemini_response, "raw_json")
-#'   print(raw_json_gemini_response)
+#'   # Multimodal call (for supported providers like Gemini, Claude 3, GPT-4o)
+#'   # Make sure to use a vision-capable model in your config
+#'   multimodal_config <- llm_config(provider = "openai", model = "gpt-4o", api_key = "...")
+#'   multimodal_messages <- list(list(role = "user", content = list(
+#'     list(type = "text", text = "What is in this image?"),
+#'     list(type = "file", path = "path/to/your/image.png")
+#'   )))
+#'   image_response <- call_llm(multimodal_config, multimodal_messages)
 #' }
 call_llm <- function(config, messages, verbose = FALSE, json = FALSE) {
   if (config$troubleshooting == TRUE){
-   print("\n\n Inside call_llm for troubleshooting\n")
-   print("\nBE CAREFUL THIS BIT CONTAINS YOUR API KEY! DO NOT REPORT IT AS IS!")
-   print(messages)
-   print(config)
-   print("\n\n")
-   }
-  UseMethod("call_llm", config)
-}
-
-# Helper to determine the endpoint
-get_endpoint <- function(config, default_endpoint) {
-  if (!is.null(config$model_params$api_url)) {
-    return(config$model_params$api_url)
+    print("\n\n Inside call_llm for troubleshooting\n")
+    print("\nBE CAREFUL THIS BIT CONTAINS YOUR API KEY! DO NOT REPORT IT AS IS!")
+    print(messages)
+    print(config)
+    print("\n\n")
   }
-  default_endpoint
+  UseMethod("call_llm", config)
 }
 
 #' @export
 call_llm.default <- function(config, messages, verbose = FALSE, json = FALSE) {
-  endpoint <- get_endpoint(config, default_endpoint = "https://api.openai.com/v1/chat/completions")
+  # This default is mapped to the OpenAI-compatible endpoint structure
   message("Provider-specific function not present, defaulting to OpenAI format.")
-
-  # Build the request body as in call_llm.openai
-  body <- list(
-    model = config$model,
-    messages = messages,
-    temperature = rlang::`%||%`(config$model_params$temperature, 1),
-    max_tokens = rlang::`%||%`(config$model_params$max_tokens, 1024),
-    top_p = rlang::`%||%`(config$model_params$top_p, 1),
-    frequency_penalty = rlang::`%||%`(config$model_params$frequency_penalty, 0),
-    presence_penalty = rlang::`%||%`(config$model_params$presence_penalty, 0)
-  )
-
-  req <- httr2::request(endpoint) |>
-    httr2::req_headers(
-      "Content-Type" = "application/json",
-      "Authorization" = paste("Bearer", config$api_key)
-    ) |>
-    httr2::req_body_json(body)
-
-  perform_request(req, verbose, json)
+  call_llm.openai(config, messages, verbose, json)
 }
 
 #' @export
 call_llm.openai <- function(config, messages, verbose = FALSE, json = FALSE) {
-    # Check explicit embedding request
-    if (isTRUE(config$embedding)) {
-      return(call_llm.openai_embedding(config, messages, verbose, json))
-    }
+  # --- START OF SURGICAL MODIFICATION FOR OPENAI ---
+  if (isTRUE(config$embedding)) {
+    return(call_llm.openai_embedding(config, messages, verbose, json))
+  }
 
-    # Check explicit non-embedding request (force chat mode)
-    if (isFALSE(config$embedding)) {
-      # Skip any auto-detection, go straight to chat completion
-      endpoint <- get_endpoint(config, default_endpoint = "https://api.openai.com/v1/chat/completions")
-      # ... existing chat logic continues ...
-    }
-
-    # If embedding is NULL, use existing OpenAI logic (backward compatibility)
-    if (is.null(config$embedding)) {
-      # Existing logic: check if api_url/endpoint suggests embeddings
-      endpoint <- get_endpoint(config, default_endpoint = "https://api.openai.com/v1/chat/completions")
-      if (grepl("embeddings", endpoint, ignore.case = TRUE)) {
-        return(call_llm.openai_embedding(config, messages, verbose, json))
-      }
-      # Continue with existing chat logic...
-    }
-  # Use overwrite if provided, otherwise default to openai chat completions endpoint.
-  # this can be used to call other providers which are openai-compatible
   endpoint <- get_endpoint(config, default_endpoint = "https://api.openai.com/v1/chat/completions")
+
+  # Format messages with multimodal support
+  formatted_messages <- lapply(messages, function(msg) {
+    if (msg$role != "user" || is.character(msg$content)) {
+      return(msg)
+    }
+
+    if (is.list(msg$content)) {
+      content_parts <- lapply(msg$content, function(part) {
+        if (part$type == "text") {
+          return(list(type = "text", text = part$text))
+        } else if (part$type == "file") {
+          file_data <- .process_file_content(part$path)
+          data_uri <- paste0("data:", file_data$mime_type, ";base64,", file_data$base64_data)
+          return(list(type = "image_url", image_url = list(url = data_uri)))
+        } else {
+          return(NULL)
+        }
+      })
+      msg$content <- purrr::compact(content_parts)
+    }
+    return(msg)
+  })
+
   body <- list(
     model = config$model,
-    messages = messages,
+    messages = formatted_messages,
     temperature = rlang::`%||%`(config$model_params$temperature, 1),
     max_tokens = rlang::`%||%`(config$model_params$max_tokens, 1024),
     top_p = rlang::`%||%`(config$model_params$top_p, 1),
@@ -328,56 +285,56 @@ call_llm.openai <- function(config, messages, verbose = FALSE, json = FALSE) {
     httr2::req_body_json(body)
 
   perform_request(req, verbose, json)
+  # --- END OF SURGICAL MODIFICATION FOR OPENAI ---
 }
-
-#' @export
-#' @keywords internal
-call_llm.openai_embedding <- function(config, messages, verbose = FALSE, json = FALSE) {
-  endpoint <- get_endpoint(config, default_endpoint = "https://api.openai.com/v1/embeddings")
-
-  texts <- if (is.character(messages)) {
-    messages
-  } else {
-    sapply(messages, function(msg) if (is.list(msg)) msg$content else as.character(msg))
-  }
-
-  body <- list(
-    model = config$model,
-    input = texts
-  )
-
-  req <- httr2::request(endpoint) |>
-    httr2::req_headers(
-      "Content-Type" = "application/json",
-      "Authorization" = paste("Bearer", config$api_key)
-    ) |>
-    httr2::req_body_json(body)
-
-  perform_request(req, verbose, json)
-}
-
-
 
 #' @export
 call_llm.anthropic <- function(config, messages, verbose = FALSE, json = FALSE) {
+  # --- START OF SURGICAL MODIFICATION FOR ANTHROPIC ---
   if (isTRUE(config$embedding)) {
-    stop("Embedding models are not currently built for Anthropic!")
+    stop("Embedding models are not currently supported for Anthropic!")
   }
   endpoint <- get_endpoint(config, default_endpoint = "https://api.anthropic.com/v1/messages")
+
+  # Use the helper to separate system messages
   formatted <- format_anthropic_messages(messages)
+
+  # Process user messages for multimodal content
+  processed_user_messages <- lapply(formatted$user_messages, function(msg) {
+    content_blocks <- list()
+    if (is.character(msg$content)) {
+      content_blocks <- list(list(type = "text", text = msg$content))
+    } else if (is.list(msg$content)) {
+      content_blocks <- lapply(msg$content, function(part) {
+        if (part$type == "text") {
+          return(list(type = "text", text = part$text))
+        } else if (part$type == "file") {
+          file_data <- .process_file_content(part$path)
+          return(list(
+            type = "image",
+            source = list(
+              type = "base64",
+              media_type = file_data$mime_type,
+              data = file_data$base64_data
+            )
+          ))
+        } else {
+          return(NULL)
+        }
+      })
+      content_blocks <- purrr::compact(content_blocks)
+    }
+    list(role = msg$role, content = content_blocks)
+  })
 
   body <- list(
     model = config$model,
     max_tokens = rlang::`%||%`(config$model_params$max_tokens, 1024),
-    temperature = rlang::`%||%`(config$model_params$temperature, 1)
+    temperature = rlang::`%||%`(config$model_params$temperature, 1),
+    messages = processed_user_messages
   )
-
   if (!is.null(formatted$system_text)) {
     body$system <- formatted$system_text
-  }
-
-  if (length(formatted$formatted_messages) > 0) {
-    body$messages <- formatted$formatted_messages
   }
 
   req <- httr2::request(endpoint) |>
@@ -389,11 +346,76 @@ call_llm.anthropic <- function(config, messages, verbose = FALSE, json = FALSE) 
     httr2::req_body_json(body)
 
   perform_request(req, verbose, json)
+  # --- END OF SURGICAL MODIFICATION FOR ANTHROPIC ---
 }
 
 #' @export
+call_llm.gemini <- function(config, messages, verbose = FALSE, json = FALSE) {
+  # --- START OF SURGICAL MODIFICATION FOR GEMINI ---
+  if (isTRUE(config$embedding) || grepl("embedding", config$model, ignore.case = TRUE)) {
+    return(call_llm.gemini_embedding(config, messages, verbose, json))
+  }
+
+  endpoint <- get_endpoint(config, default_endpoint = paste0("https://generativelanguage.googleapis.com/v1beta/models/", config$model, ":generateContent"))
+
+  system_messages <- purrr::keep(messages, ~ .x$role == "system")
+  other_messages <- purrr::keep(messages, ~ .x$role != "system")
+  system_instruction <- if (length(system_messages) > 0) {
+    list(parts = list(list(text = paste(sapply(system_messages, function(x) x$content), collapse = " "))))
+  } else {
+    NULL
+  }
+
+  formatted_messages <- lapply(other_messages, function(msg) {
+    role <- if (msg$role == "assistant") "model" else "user"
+    content_parts <- list()
+    if (is.character(msg$content)) {
+      content_parts <- list(list(text = msg$content))
+    } else if (is.list(msg$content)) {
+      content_parts <- lapply(msg$content, function(part) {
+        if (part$type == "text") {
+          return(list(text = part$text))
+        } else if (part$type == "file") {
+          file_data <- .process_file_content(part$path)
+          return(list(inlineData = list(mimeType = file_data$mime_type, data = file_data$base64_data)))
+        } else {
+          return(NULL)
+        }
+      })
+      content_parts <- purrr::compact(content_parts)
+    }
+    list(role = role, parts = content_parts)
+  })
+
+  body <- list(
+    contents = formatted_messages,
+    generationConfig = list(
+      temperature = rlang::`%||%`(config$model_params$temperature, 1),
+      maxOutputTokens = rlang::`%||%`(config$model_params$max_tokens, 2048),
+      topP = rlang::`%||%`(config$model_params$top_p, 1),
+      topK = rlang::`%||%`(config$model_params$top_k, 1)
+    )
+  )
+  if (!is.null(system_instruction)) {
+    body$systemInstruction <- system_instruction
+  }
+
+  req <- httr2::request(endpoint) |>
+    httr2::req_headers(
+      "Content-Type" = "application/json",
+      "x-goog-api-key" = config$api_key
+    ) |>
+    httr2::req_body_json(body)
+
+  perform_request(req, verbose, json)
+  # --- END OF SURGICAL MODIFICATION FOR GEMINI ---
+}
+
+
+# ----- Unmodified Provider Functions (for non-vision tasks) -----
+
+#' @export
 call_llm.groq <- function(config, messages, verbose = FALSE, json = FALSE) {
-  # Check if this is an embedding request
   if (isTRUE(config$embedding)) {
     stop("Embedding models are not currently supported for Groq!")
   }
@@ -404,32 +426,20 @@ call_llm.groq <- function(config, messages, verbose = FALSE, json = FALSE) {
     temperature = rlang::`%||%`(config$model_params$temperature, 0.7),
     max_tokens = rlang::`%||%`(config$model_params$max_tokens, 1024)
   )
-
   req <- httr2::request(endpoint) |>
     httr2::req_headers(
       "Content-Type" = "application/json",
       "Authorization" = paste("Bearer", config$api_key)
     ) |>
     httr2::req_body_json(body)
-
   perform_request(req, verbose, json)
 }
 
 #' @export
 call_llm.together <- function(config, messages, verbose = FALSE, json = FALSE) {
-    # Check explicit embedding request
-    if (isTRUE(config$embedding)) {
-      return(call_llm.together_embedding(config, messages, verbose, json))
-    }
-
-    # Check explicit non-embedding request (force chat mode)
-    # if (isFALSE(config$embedding)) {
-    #   # Skip any auto-detection, go straight to chat completion
-    # }
-    # # If embedding is NULL, use existing Together AI logic (backward compatibility)
-    # if (is.null(config$embedding)) {
-    # }
-
+  if (isTRUE(config$embedding)) {
+    return(call_llm.together_embedding(config, messages, verbose, json))
+  }
   endpoint <- get_endpoint(config, default_endpoint = "https://api.together.xyz/v1/chat/completions")
   body <- list(
     model = config$model,
@@ -438,79 +448,16 @@ call_llm.together <- function(config, messages, verbose = FALSE, json = FALSE) {
     temperature = rlang::`%||%`(config$model_params$temperature, 0.7),
     top_p = rlang::`%||%`(config$model_params$top_p, 0.7),
     top_k = rlang::`%||%`(config$model_params$top_k, 50),
-    repetition_penalty = rlang::`%||%`(config$model_params$repetition_penalty, 1),
-    stop = rlang::`%||%`(config$model_params$stop, c("<|eot_id|>", "<|eom_id|>")),
-    stream = rlang::`%||%`(config$model_params$stream, FALSE)
+    repetition_penalty = rlang::`%||%`(config$model_params$repetition_penalty, 1)
   )
-
   req <- httr2::request(endpoint) |>
     httr2::req_headers(
       "Content-Type" = "application/json",
       "Authorization" = paste("Bearer", config$api_key)
     ) |>
     httr2::req_body_json(body)
-
   perform_request(req, verbose, json)
 }
-
-#' Call LLM API for Together AI Embedding Models
-#'
-#' This function handles embedding requests specifically for Together AI embedding models.
-#' It processes text inputs and returns embedding vectors using Together AI's embeddings API.
-#'
-#' @param config A configuration object created by llm_config() with provider="together"
-#' @param messages Character vector of texts to embed, or list of message objects
-#' @param verbose Logical indicating whether to print request details (default: FALSE)
-#' @param json Logical indicating whether to return raw JSON response (default: FALSE)
-#' @return List containing embedding data in standard LLMR format
-#' @export
-#' @keywords internal
-call_llm.together_embedding <- function(config, messages, verbose = FALSE, json = FALSE) {
-  endpoint <- get_endpoint(config, default_endpoint = "https://api.together.xyz/v1/embeddings")
-
-  # Handle both character vectors and message lists
-  texts <- if (is.character(messages)) {
-    messages
-  } else {
-    sapply(messages, function(msg) if (is.list(msg)) msg$content else as.character(msg))
-  }
-
-  body <- list(
-    model = config$model,
-    input = texts
-  )
-
-  req <- httr2::request(endpoint) |>
-    httr2::req_headers(
-      "Content-Type" = "application/json",
-      "Authorization" = paste("Bearer", config$api_key)
-    ) |>
-    httr2::req_body_json(body)
-
-  if (verbose) {
-    cat("Making embedding request to:", endpoint, "\n")
-    cat("Model:", config$model, "\n")
-    cat("Number of texts:", length(texts), "\n")
-  }
-
-  response <- perform_request(req, verbose, json)
-
-  if (json) {
-    return(response)
-  }
-
-  # Transform Together AI response to LLMR standard format
-  embeddings_data <- lapply(response$data, function(item) {
-    list(embedding = item$embedding)
-  })
-
-  return(list(data = embeddings_data))
-}
-
-
-
-
-
 
 #' @export
 call_llm.deepseek <- function(config, messages, verbose = FALSE, json = FALSE) {
@@ -523,254 +470,136 @@ call_llm.deepseek <- function(config, messages, verbose = FALSE, json = FALSE) {
     messages = messages,
     temperature = rlang::`%||%`(config$model_params$temperature, 1),
     max_tokens = rlang::`%||%`(config$model_params$max_tokens, 1024),
-    top_p = rlang::`%||%`(config$model_params$top_p, 1),
-    frequency_penalty = rlang::`%||%`(config$model_params$frequency_penalty, 0),
-    presence_penalty = rlang::`%||%`(config$model_params$presence_penalty, 0)
+    top_p = rlang::`%||%`(config$model_params$top_p, 1)
   )
-
   req <- httr2::request(endpoint) |>
     httr2::req_headers(
       "Content-Type" = "application/json",
       "Authorization" = paste("Bearer", config$api_key)
     ) |>
     httr2::req_body_json(body)
-
   perform_request(req, verbose, json)
 }
 
+# ----- Embedding-specific Handlers -----
+
+#' @export
+#' @keywords internal
+call_llm.openai_embedding <- function(config, messages, verbose = FALSE, json = FALSE) {
+  endpoint <- get_endpoint(config, default_endpoint = "https://api.openai.com/v1/embeddings")
+  texts <- if (is.character(messages)) messages else sapply(messages, `[[`, "content")
+  body <- list(model = config$model, input = texts)
+  req <- httr2::request(endpoint) |>
+    httr2::req_headers("Content-Type" = "application/json", "Authorization" = paste("Bearer", config$api_key)) |>
+    httr2::req_body_json(body)
+  perform_request(req, verbose, json)
+}
 
 #' @export
 call_llm.voyage <- function(config, messages, verbose = FALSE, json = FALSE) {
-  # Check explicit embedding request
-  if (isTRUE(config$embedding)) {
-    return(call_llm.voyage_embedding(config, messages, verbose, json))
-  }
-
-  # Check explicit non-embedding request
-  if (isFALSE(config$embedding)) {
-    stop("Only embedding models are set up for Voyage")
-  }
-
-  # If embedding is NULL, use existing Voyage behavior (backward compatibility)
-  if (is.null(config$embedding)) {
-    # Existing behavior: Voyage is embeddings-only, so default to embeddings
-    return(call_llm.voyage_embedding(config, messages, verbose, json))
-  }
-
-  # Fallback: default to embeddings (Voyage's specialty)
+  # Voyage is embeddings-only in this implementation
   return(call_llm.voyage_embedding(config, messages, verbose, json))
 }
 
 #' @export
 #' @keywords internal
 call_llm.voyage_embedding <- function(config, messages, verbose = FALSE, json = FALSE) {
-  # Move existing voyage logic here
   endpoint <- get_endpoint(config, default_endpoint = "https://api.voyageai.com/v1/embeddings")
-  body <- list(
-    input = messages,
-    model = config$model
-  )
-
+  texts <- if (is.character(messages)) messages else sapply(messages, `[[`, "content")
+  body <- list(input = texts, model = config$model)
   req <- httr2::request(endpoint) |>
-    httr2::req_headers(
-      "Content-Type" = "application/json",
-      "Authorization" = paste("Bearer", config$api_key)
-    ) |>
+    httr2::req_headers("Content-Type" = "application/json", "Authorization" = paste("Bearer", config$api_key)) |>
     httr2::req_body_json(body)
-
   perform_request(req, verbose, json)
 }
-
-
 
 #' @export
-call_llm.gemini <- function(config, messages, verbose = FALSE, json = FALSE) {
-    # Check explicit embedding request
-    if (isTRUE(config$embedding)) {
-      return(call_llm.gemini_embedding(config, messages, verbose, json))
-    }
-
-  # Auto-detect embedding models and route to embedding handler
-    if (grepl("embedding", config$model, ignore.case = TRUE)) {
-      return(call_llm.gemini_embedding(config, messages, verbose, json))
-    }
-  # Define the API endpoint using the model from config
-  endpoint <- get_endpoint(config, default_endpoint = paste0("https://generativelanguage.googleapis.com/v1beta/models/", config$model, ":generateContent"))
-
-  # Extract system messages and combine their content
-  system_messages <- purrr::keep(messages, ~ .x$role == "system")
-  other_messages <- purrr::keep(messages, ~ .x$role != "system")
-  if (length(system_messages) > 0) {
-    system_text <- paste(sapply(system_messages, function(x) x$content), collapse = " ")
-    system_instruction <- list(parts = list(list(text = system_text)))
-  } else {
-    system_instruction <- NULL
-  }
-
-  # Format non-system messages, mapping "assistant" to "model" for Gemini
-  formatted_messages <- lapply(other_messages, function(msg) {
-    role <- if (msg$role == "assistant") "model" else "user"
-    list(
-      role = role,
-      parts = list(list(text = msg$content))
-    )
-  })
-
-  # Construct the request body with contents and optional systemInstruction
-  body <- list(
-    contents = formatted_messages,
-    generationConfig = list(
-      temperature = rlang::`%||%`(config$model_params$temperature, 1),
-      maxOutputTokens = rlang::`%||%`(config$model_params$max_tokens, 1024),
-      topP = rlang::`%||%`(config$model_params$top_p, 1),
-      topK = rlang::`%||%`(config$model_params$top_k, 1)
-    )
-  )
-  if (!is.null(system_instruction)) {
-    body$systemInstruction <- system_instruction
-  }
-
-  # Build and send the HTTP request
+#' @keywords internal
+call_llm.together_embedding <- function(config, messages, verbose = FALSE, json = FALSE) {
+  endpoint <- get_endpoint(config, default_endpoint = "https://api.together.xyz/v1/embeddings")
+  texts <- if (is.character(messages)) messages else sapply(messages, `[[`, "content")
+  body <- list(model = config$model, input = texts)
   req <- httr2::request(endpoint) |>
-    httr2::req_headers(
-      "Content-Type" = "application/json",
-      "x-goog-api-key" = config$api_key
-    ) |>
+    httr2::req_headers("Content-Type" = "application/json", "Authorization" = paste("Bearer", config$api_key)) |>
     httr2::req_body_json(body)
-
-  # Perform the request and return the response
   perform_request(req, verbose, json)
 }
 
-# call_llm.gemini <- function(config, messages, verbose = FALSE, json = FALSE) {
-#   endpoint <- get_endpoint(config, default_endpoint = paste0("https://generativelanguage.googleapis.com/v1beta/models/", config$model, ":generateContent"))
-#
-#   # Format messages for Gemini API
-#   formatted_messages <- lapply(messages, function(msg) {
-#     list(
-#       role = msg$role,
-#       parts = list(list(text = msg$content)) # Gemini expects content in 'parts' as a list of lists
-#     )
-#   })
-#
-#   body <- list(
-#     contents = formatted_messages,
-#     generationConfig = list(
-#       temperature = rlang::`%||%`(config$model_params$temperature, 1),
-#       maxOutputTokens = rlang::`%||%`(config$model_params$max_tokens, 1024), # Gemini uses maxOutputTokens
-#       topP = rlang::`%||%`(config$model_params$top_p, 1),
-#       topK = rlang::`%||%`(config$model_params$top_k, 1) # Added topK as it's common
-#       # frequency_penalty and presence_penalty are not standard Gemini parameters.
-#     )
-#   )
-#
-#   req <- httr2::request(endpoint) |>
-#     httr2::req_headers(
-#       "Content-Type" = "application/json",
-#       "x-goog-api-key" = config$api_key # Gemini uses x-goog-api-key header
-#     ) |>
-#     httr2::req_body_json(body)
-#
-#   perform_request(req, verbose, json)
-# }
-
-#' Call LLM API for Gemini Embedding Models
-#'
-#' This function handles embedding requests specifically for Gemini embedding models.
-#' It processes text inputs and returns embedding vectors using Google's Generative Language API.
-#'
-#' @param config A configuration object created by llm_config() with provider="gemini"
-#' @param messages Character vector of texts to embed, or list of message objects
-#' @param verbose Logical indicating whether to print request details (default: FALSE)
-#' @param json Logical indicating whether to return raw JSON response (default: FALSE)
-#' @return List containing embedding data in standard LLMR format
 #' @export
 #' @keywords internal
 call_llm.gemini_embedding <- function(config, messages, verbose = FALSE, json = FALSE) {
-  endpoint <- paste0("https://generativelanguage.googleapis.com/v1beta/models/", config$model, ":embedContent")
+  endpoint <- paste0("https://generativelanguage.googleapis.com/v1beta/models/", config$model, ":batchEmbedContents")
+  texts <- if (is.character(messages)) messages else sapply(messages, `[[`, "content")
 
-  # Handle both character vectors and message lists
-  texts <- if (is.character(messages)) {
-    messages
-  } else {
-    sapply(messages, function(msg) if (is.list(msg)) msg$content else as.character(msg))
-  }
-
-  results <- list()
-
-  for (i in seq_along(texts)) {
-    body <- list(
-      content = list(
-        parts = list(list(text = texts[i]))
-      )
+  # Create a list of requests for the batch endpoint
+  requests <- lapply(texts, function(txt) {
+    list(
+      model = paste0("models/", config$model),
+      content = list(parts = list(list(text = txt)))
     )
+  })
 
-    req <- httr2::request(endpoint) |>
-      httr2::req_url_query(key = config$api_key) |>
-      httr2::req_headers("Content-Type" = "application/json") |>
-      httr2::req_body_json(body)
+  body <- list(requests = requests)
 
-    if (verbose) {
-      cat("Making embedding request to:", endpoint, "\n")
-      cat("Text length:", nchar(texts[i]), "characters\n")
-    }
+  req <- httr2::request(endpoint) |>
+    httr2::req_headers("Content-Type" = "application/json", "x-goog-api-key" = config$api_key) |>
+    httr2::req_body_json(body)
 
-    resp <- httr2::req_perform(req)
+  # Perform request and then re-format the response to match other embedding providers
+  response_with_attrs <- perform_request(req, verbose, json = TRUE)
+  full_response <- attr(response_with_attrs, "full_response")
 
-    if (json) {
-      results[[i]] <- httr2::resp_body_json(resp)
-    } else {
-      result <- httr2::resp_body_json(resp)
-      results[[i]] <- list(embedding = result$embedding$values)
-    }
+  # Re-structure to the {data: [{embedding: [...]}]} format
+  embeddings_data <- lapply(full_response$embeddings, function(item) {
+    list(embedding = item$values)
+  })
+
+  structured_response <- list(data = embeddings_data)
+
+  # Re-attach attributes to the structured response before returning
+  attr(structured_response, "raw_json") <- attr(response_with_attrs, "raw_json")
+  attr(structured_response, "full_response") <- full_response
+
+  if (json) {
+    # If json output is requested, we need to decide what to return as the main object.
+    # Returning the structured list is more consistent with other providers.
+    return(structured_response)
   }
 
-  return(list(data = results))
+  return(structured_response)
 }
 
-
-
-
-
-
-
+# ----- Embedding Utility Functions -----
 
 #' Parse Embedding Response into a Numeric Matrix
 #'
 #' Converts the embedding response data to a numeric matrix.
 #'
 #' @param embedding_response The response returned from an embedding API call.
-#'
-#' @return A numeric matrix of embeddings with column names as sequence numbers.
+#' @return A numeric matrix of embeddings.
 #' @export
-#'
-#' @examples
-#' \dontrun{
-#'   text_input <- c("Political science is a useful subject",
-#'                   "We love sociology",
-#'                   "German elections are different",
-#'                   "A student was always curious.")
-#'
-#'   # Configure the embedding API provider (example with Voyage API)
-#'   voyage_config <- llm_config(
-#'     provider = "voyage",
-#'     model = "voyage-large-2",
-#'     api_key = Sys.getenv("VOYAGE_API_KEY")
-#'   )
-#'
-#'   embedding_response <- call_llm(voyage_config, text_input)
-#'   embeddings <- parse_embeddings(embedding_response)
-#'   # Additional processing:
-#'   embeddings |> cor() |> print()
-#' }
 parse_embeddings <- function(embedding_response) {
+  if (is.null(embedding_response$data)) {
+    stop("Embedding response does not contain a 'data' element.")
+  }
+
+  # The voyage/openai structure is embedding_response$data[[i]]$embedding
+  # The gemini structure is embedding_response$data[[i]]$embedding
+  # This unified structure works for both.
   embeddings <- embedding_response$data |>
     purrr::map(~ as.numeric(.x$embedding)) |>
+    purrr::list_transpose() |>
     as.data.frame() |>
     as.matrix()
-  colnames(embeddings) <- seq_len(ncol(embeddings))
-  embeddings
+
+  # Transpose the result so that rows are documents and columns are dimensions
+  if (ncol(embeddings) > 0) {
+    return(t(embeddings))
+  } else {
+    return(matrix(nrow = 0, ncol = 0))
+  }
 }
+
 
 #' Generate Embeddings in Batches
 #'
@@ -778,9 +607,10 @@ parse_embeddings <- function(embedding_response) {
 #' avoiding rate limits. This function calls \code{\link{call_llm_robust}} for each
 #' batch and stitches the results together.
 #'
-#' @param texts Character vector of texts to embed.
+#' @param texts Character vector of texts to embed. If named, the names will be
+#'   used as row names in the output matrix.
 #' @param embed_config An \code{llm_config} object configured for embeddings.
-#' @param batch_size Integer. Number of texts to process in each batch. Default is 5.
+#' @param batch_size Integer. Number of texts to process in each batch. Default is 50.
 #' @param verbose Logical. If TRUE, prints progress messages. Default is TRUE.
 #'
 #' @return A numeric matrix where each row is an embedding vector for the corresponding text.
@@ -794,11 +624,13 @@ parse_embeddings <- function(embedding_response) {
 #' \dontrun{
 #'   # Basic usage
 #'   texts <- c("Hello world", "How are you?", "Machine learning is great")
+#'   names(texts) <- c("greeting", "question", "statement")
 #'
 #'   embed_cfg <- llm_config(
 #'     provider = "voyage",
-#'     model = "voyage-3-large",
-#'     api_key = Sys.getenv("VOYAGE_KEY")
+#'     model = "voyage-large-2-instruct",
+#'     embedding = TRUE,
+#'     api_key = Sys.getenv("VOYAGE_API_KEY")
 #'   )
 #'
 #'   embeddings <- get_batched_embeddings(
@@ -809,19 +641,23 @@ parse_embeddings <- function(embedding_response) {
 #' }
 get_batched_embeddings <- function(texts,
                                    embed_config,
-                                   batch_size = 5,
+                                   batch_size = 50,
                                    verbose = TRUE) {
 
   # Input validation
-  if (length(texts) == 0) {
+  if (!is.character(texts) || length(texts) == 0) {
     if (verbose) message("No texts provided. Returning NULL.")
     return(NULL)
+  }
+  if (!inherits(embed_config, "llm_config")) {
+    stop("embed_config must be a valid llm_config object.")
   }
 
   # Setup
   n_docs <- length(texts)
   batches <- split(seq_len(n_docs), ceiling(seq_len(n_docs) / batch_size))
   emb_list <- vector("list", n_docs)
+  first_emb_dim <- NULL
 
   if (verbose) {
     message("Processing ", n_docs, " texts in ", length(batches), " batches of up to ", batch_size, " texts each")
@@ -837,11 +673,13 @@ get_batched_embeddings <- function(texts,
     }
 
     tryCatch({
-      # Call LLM for this batch
-      resp <- call_llm_robust(embed_config, batch_texts, verbose = FALSE)
+      # Call LLM for this batch using the robust caller
+      resp <- call_llm_robust(embed_config, batch_texts, verbose = FALSE, json = TRUE)
+      emb_chunk <- parse_embeddings(resp)
 
-      # Parse embeddings and transpose to get one row per text
-      emb_chunk <- parse_embeddings(resp) |> t()
+      if (is.null(first_emb_dim)) {
+        first_emb_dim <- ncol(emb_chunk)
+      }
 
       # Store per-document embeddings
       for (i in seq_along(idx)) {
@@ -860,21 +698,35 @@ get_batched_embeddings <- function(texts,
     })
   }
 
-  # Check if we have any successful embeddings
-  if (all(vapply(emb_list, function(x) length(x) == 1 && is.na(x), TRUE))) {
-    if (verbose) message("No embeddings were successfully generated.")
-    return(NULL)
+  # Determine the dimension of the embeddings from the first successful result
+  if (is.null(first_emb_dim)) {
+    # Find the first non-NA element to determine dimensionality
+    successful_emb <- purrr::detect(emb_list, ~ !all(is.na(.x)))
+    if (!is.null(successful_emb)) {
+      first_emb_dim <- length(successful_emb)
+    } else {
+      if (verbose) message("No embeddings were successfully generated.")
+      return(NULL)
+    }
   }
+
+  # Replace NA placeholders with vectors of NAs of the correct dimension
+  emb_list <- lapply(emb_list, function(emb) {
+    if (length(emb) == 1 && is.na(emb)) {
+      return(rep(NA_real_, first_emb_dim))
+    }
+    return(emb)
+  })
 
   # Combine all embeddings into final matrix
   final_embeddings <- do.call(rbind, emb_list)
 
   if(!is.null(names(texts))){
-    row.names(final_embeddings) = names(texts)
+    rownames(final_embeddings) <- names(texts)
   }
 
   if (verbose) {
-    n_successful <- sum(!is.na(final_embeddings[, 1]))
+    n_successful <- sum(stats::complete.cases(final_embeddings))
     message("Successfully generated embeddings for ", n_successful,
             "/", n_docs, " texts (", ncol(final_embeddings), " dimensions)")
   }
