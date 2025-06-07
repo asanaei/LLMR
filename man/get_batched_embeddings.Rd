@@ -4,7 +4,7 @@
 \alias{get_batched_embeddings}
 \title{Generate Embeddings in Batches}
 \usage{
-get_batched_embeddings(texts, embed_config, batch_size = 50, verbose = TRUE)
+get_batched_embeddings(texts, embed_config, batch_size = 50, verbose = FALSE)
 }
 \arguments{
 \item{texts}{Character vector of texts to embed. If named, the names will be

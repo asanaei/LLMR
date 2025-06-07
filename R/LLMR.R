@@ -80,40 +80,40 @@ perform_request <- function(req, verbose, json) {
 #' @keywords internal
 #' @noRd
 extract_text <- function(content) {
-  # If the content contains embedding results, return it as is.
-  if (!is.null(content$data) && is.list(content$data)) {
+    # Handle embeddings FIRST with more flexible logic
+    if (is.list(content) && (!is.null(content$data) || !is.null(content$embedding))) {
+      return(content)
+    }
+
+    if (!is.null(content$choices)) {
+      # For APIs like OpenAI, Groq, Together AI
+      if (length(content$choices) == 0 || is.null(content$choices[[1]]$message$content)) {
+        return(NA_character_)
+      }
+      return(content$choices[[1]]$message$content)
+    }
+
+    if (!is.null(content$content)) {
+      # For Anthropic
+      if (length(content$content) == 0 || is.null(content$content[[1]]$text)) {
+        return(NA_character_)
+      }
+      return(content$content[[1]]$text)
+    }
+
+    if (!is.null(content$candidates)) {
+      # For Gemini API
+      if (length(content$candidates) == 0 ||
+          is.null(content$candidates[[1]]$content$parts) ||
+          length(content$candidates[[1]]$content$parts) == 0 ||
+          is.null(content$candidates[[1]]$content$parts[[1]]$text)) {
+        return(NA_character_)
+      }
+      return(content$candidates[[1]]$content$parts[[1]]$text)
+    }
+
+    # Fallback - return content as-is instead of throwing error
     return(content)
-  }
-
-  if (!is.null(content$choices)) {
-    # For APIs like OpenAI, Groq, Together AI
-    if (length(content$choices) == 0 || is.null(content$choices[[1]]$message$content)) {
-      # Stop gracefully if no content is found
-      return(NA_character_)
-    }
-    return(content$choices[[1]]$message$content)
-  }
-
-  if (!is.null(content$content)) {
-    # For Anthropic
-    if (length(content$content) == 0 || is.null(content$content[[1]]$text)) {
-      return(NA_character_)
-    }
-    return(content$content[[1]]$text)
-  }
-
-  if (!is.null(content$candidates)) {
-    # For Gemini API
-    if (length(content$candidates) == 0 ||
-        is.null(content$candidates[[1]]$content$parts) ||
-        length(content$candidates[[1]]$content$parts) == 0 ||
-        is.null(content$candidates[[1]]$content$parts[[1]]$text)) {
-      return(NA_character_)
-    }
-    return(content$candidates[[1]]$content$parts[[1]]$text)
-  }
-
-  stop("Unable to extract text from the API response.")
 }
 
 #' Format Anthropic Messages
@@ -237,7 +237,6 @@ call_llm.default <- function(config, messages, verbose = FALSE, json = FALSE) {
 
 #' @export
 call_llm.openai <- function(config, messages, verbose = FALSE, json = FALSE) {
-  # --- START OF SURGICAL MODIFICATION FOR OPENAI ---
   if (isTRUE(config$embedding)) {
     return(call_llm.openai_embedding(config, messages, verbose, json))
   }
@@ -285,12 +284,10 @@ call_llm.openai <- function(config, messages, verbose = FALSE, json = FALSE) {
     httr2::req_body_json(body)
 
   perform_request(req, verbose, json)
-  # --- END OF SURGICAL MODIFICATION FOR OPENAI ---
 }
 
 #' @export
 call_llm.anthropic <- function(config, messages, verbose = FALSE, json = FALSE) {
-  # --- START OF SURGICAL MODIFICATION FOR ANTHROPIC ---
   if (isTRUE(config$embedding)) {
     stop("Embedding models are not currently supported for Anthropic!")
   }
@@ -346,12 +343,10 @@ call_llm.anthropic <- function(config, messages, verbose = FALSE, json = FALSE) 
     httr2::req_body_json(body)
 
   perform_request(req, verbose, json)
-  # --- END OF SURGICAL MODIFICATION FOR ANTHROPIC ---
 }
 
 #' @export
 call_llm.gemini <- function(config, messages, verbose = FALSE, json = FALSE) {
-  # --- START OF SURGICAL MODIFICATION FOR GEMINI ---
   if (isTRUE(config$embedding) || grepl("embedding", config$model, ignore.case = TRUE)) {
     return(call_llm.gemini_embedding(config, messages, verbose, json))
   }
@@ -408,7 +403,6 @@ call_llm.gemini <- function(config, messages, verbose = FALSE, json = FALSE) {
     httr2::req_body_json(body)
 
   perform_request(req, verbose, json)
-  # --- END OF SURGICAL MODIFICATION FOR GEMINI ---
 }
 
 
@@ -492,7 +486,7 @@ call_llm.openai_embedding <- function(config, messages, verbose = FALSE, json = 
   req <- httr2::request(endpoint) |>
     httr2::req_headers("Content-Type" = "application/json", "Authorization" = paste("Bearer", config$api_key)) |>
     httr2::req_body_json(body)
-  perform_request(req, verbose, json)
+  perform_request(req, verbose, json=TRUE)
 }
 
 #' @export
@@ -510,7 +504,7 @@ call_llm.voyage_embedding <- function(config, messages, verbose = FALSE, json = 
   req <- httr2::request(endpoint) |>
     httr2::req_headers("Content-Type" = "application/json", "Authorization" = paste("Bearer", config$api_key)) |>
     httr2::req_body_json(body)
-  perform_request(req, verbose, json)
+  perform_request(req, verbose, json = TRUE)
 }
 
 #' @export
@@ -522,52 +516,89 @@ call_llm.together_embedding <- function(config, messages, verbose = FALSE, json 
   req <- httr2::request(endpoint) |>
     httr2::req_headers("Content-Type" = "application/json", "Authorization" = paste("Bearer", config$api_key)) |>
     httr2::req_body_json(body)
-  perform_request(req, verbose, json)
+  perform_request(req, verbose, json=TRUE)
 }
 
 #' @export
 #' @keywords internal
 call_llm.gemini_embedding <- function(config, messages, verbose = FALSE, json = FALSE) {
-  endpoint <- paste0("https://generativelanguage.googleapis.com/v1beta/models/", config$model, ":batchEmbedContents")
-  texts <- if (is.character(messages)) messages else sapply(messages, `[[`, "content")
+  # Endpoint for single content embedding
+  endpoint <- paste0("https://generativelanguage.googleapis.com/v1beta/models/", config$model, ":embedContent")
 
-  # Create a list of requests for the batch endpoint
-  requests <- lapply(texts, function(txt) {
-    list(
-      model = paste0("models/", config$model),
-      content = list(parts = list(list(text = txt)))
-    )
-  })
-
-  body <- list(requests = requests)
-
-  req <- httr2::request(endpoint) |>
-    httr2::req_headers("Content-Type" = "application/json", "x-goog-api-key" = config$api_key) |>
-    httr2::req_body_json(body)
-
-  # Perform request and then re-format the response to match other embedding providers
-  response_with_attrs <- perform_request(req, verbose, json = TRUE)
-  full_response <- attr(response_with_attrs, "full_response")
-
-  # Re-structure to the {data: [{embedding: [...]}]} format
-  embeddings_data <- lapply(full_response$embeddings, function(item) {
-    list(embedding = item$values)
-  })
-
-  structured_response <- list(data = embeddings_data)
-
-  # Re-attach attributes to the structured response before returning
-  attr(structured_response, "raw_json") <- attr(response_with_attrs, "raw_json")
-  attr(structured_response, "full_response") <- full_response
-
-  if (json) {
-    # If json output is requested, we need to decide what to return as the main object.
-    # Returning the structured list is more consistent with other providers.
-    return(structured_response)
+  # Handle both character vectors and message lists to get texts
+  texts <- if (is.character(messages)) {
+    messages
+  } else {
+    # Assuming messages is a list of lists like list(list(role="user", content="..."))
+    # or just a list of character strings if not strictly following message format.
+    # This part might need adjustment if 'messages' can be complex lists.
+    # For get_batched_embeddings, 'messages' will be a character vector (batch_texts).
+    sapply(messages, function(msg) {
+      if (is.list(msg) && !is.null(msg$content)) {
+        msg$content
+      } else if (is.character(msg)) {
+        msg
+      } else {
+        as.character(msg) # Fallback
+      }
+    })
   }
 
-  return(structured_response)
+  results <- vector("list", length(texts)) # Pre-allocate list
+
+  for (i in seq_along(texts)) {
+    current_text <- texts[i]
+    body <- list(
+      content = list(
+        parts = list(list(text = current_text))
+      )
+    )
+
+    req <- httr2::request(endpoint) |>
+      httr2::req_url_query(key = config$api_key) |>
+      httr2::req_headers("Content-Type" = "application/json") |>
+      httr2::req_body_json(body)
+
+    if (verbose) {
+      cat("Making single embedding request to:", endpoint, "for text", i, "\n")
+      # cat("Text snippet:", substr(current_text, 1, 50), "...\n") # Optional: for debugging
+    }
+
+    api_response_content <- NULL # Initialize
+    tryCatch({
+      resp <- httr2::req_perform(req)
+      api_response_content <- httr2::resp_body_json(resp)
+    }, error = function(e) {
+      if (verbose) {
+        message("LLMR Error during Gemini embedding for text ", i, ": ", conditionMessage(e))
+      }
+      # api_response_content remains NULL if error
+    })
+
+    if (!is.null(api_response_content) && !is.null(api_response_content$embedding$values)) {
+      results[[i]] <- list(embedding = api_response_content$embedding$values)
+    } else {
+      # Store a placeholder that parse_embeddings can handle (e.g., leading to NAs)
+      # The dimension of NA_real_ doesn't matter here, as parse_embeddings and get_batched_embeddings
+      # will determine dimensionality from successful calls or handle it.
+      results[[i]] <- list(embedding = NA_real_)
+      if (verbose && !is.null(api_response_content)) {
+        message("Unexpected response structure or missing embedding values for text ", i)
+      } else if (verbose && is.null(api_response_content)) {
+        message("No response content (likely due to API error) for text ", i)
+      }
+    }
+  }
+
+  # The 'json' parameter in the function signature is a bit tricky here.
+  # we ignore it here
+  final_output <- list(data = results)
+  # If json=TRUE was intended to get the raw responses, this structure doesn't fully provide that
+  # but this was really made for the generative calls!
+  return(final_output)
 }
+
+
 
 # ----- Embedding Utility Functions -----
 
@@ -576,29 +607,83 @@ call_llm.gemini_embedding <- function(config, messages, verbose = FALSE, json = 
 #' Converts the embedding response data to a numeric matrix.
 #'
 #' @param embedding_response The response returned from an embedding API call.
-#' @return A numeric matrix of embeddings.
+#'
+#' @return A numeric matrix of embeddings with column names as sequence numbers.
 #' @export
+#'
+#' @examples
+#' \dontrun{
+#'   text_input <- c("Political science is a useful subject",
+#'                   "We love sociology",
+#'                   "German elections are different",
+#'                   "A student was always curious.")
+#'
+#'   # Configure the embedding API provider (example with Voyage API)
+#'   voyage_config <- llm_config(
+#'     provider = "voyage",
+#'     model = "voyage-large-2",
+#'     api_key = Sys.getenv("VOYAGE_API_KEY")
+#'   )
+#'
+#'   embedding_response <- call_llm(voyage_config, text_input)
+#'   embeddings <- parse_embeddings(embedding_response)
+#'   # Additional processing:
+#'   embeddings |> cor() |> print()
+#' }
 parse_embeddings <- function(embedding_response) {
-  if (is.null(embedding_response$data)) {
-    stop("Embedding response does not contain a 'data' element.")
+   if (is.null(embedding_response$data) || length(embedding_response$data) == 0)
+     return(matrix(nrow = 0, ncol = 0))
+   valid_embeddings_data <- purrr::keep(embedding_response$data, ~is.list(.x) && !is.null(.x$embedding) && !all(is.na(.x$embedding)))
+
+  if (length(valid_embeddings_data) == 0)
+    num_expected_rows <- length(embedding_response$data)
+
+
+  list_of_vectors <- purrr::map(embedding_response$data, ~ {
+    if (is.list(.x) && !is.null(.x$embedding) && !all(is.na(.x$embedding))) {
+      as.numeric(.x$embedding)
+    } else {
+      NA_real_ # This will be treated as a vector of length 1 by list_transpose if not handled
+    }
+  })
+
+  first_valid_vector <- purrr::detect(list_of_vectors, ~!all(is.na(.x)))
+  true_embedding_dim <- if (!is.null(first_valid_vector)) length(first_valid_vector) else 0
+
+  processed_list_of_vectors <- purrr::map(list_of_vectors, ~ {
+    if (length(.x) == 1 && all(is.na(.x))) { # Was a placeholder for a failed embedding
+      if (true_embedding_dim > 0) rep(NA_real_, true_embedding_dim) else NA_real_ # vector of NAs
+    } else if (length(.x) == true_embedding_dim) {
+      .x # Already correct
+    } else {
+      # This case should ideally not happen if API is consistent or errors are NA_real_
+      if (true_embedding_dim > 0) rep(NA_real_, true_embedding_dim) else NA_real_
+    }
+  })
+
+  if (true_embedding_dim == 0 && length(processed_list_of_vectors) > 0) {
+    # All embeddings failed, and we couldn't determine dimension.
+    # Return a matrix of NAs with rows = num_texts_in_batch, cols = 1 (placeholder)
+    # get_batched_embeddings will later reconcile this with first_emb_dim if known from other batches.
+    return(matrix(NA_real_, nrow = length(processed_list_of_vectors), ncol = 1))
+  }
+  if (length(processed_list_of_vectors) == 0) { # No data to process
+    return(matrix(nrow = 0, ncol = 0))
   }
 
-  # The voyage/openai structure is embedding_response$data[[i]]$embedding
-  # The gemini structure is embedding_response$data[[i]]$embedding
-  # This unified structure works for both.
-  embeddings <- embedding_response$data |>
-    purrr::map(~ as.numeric(.x$embedding)) |>
+  embeddings_matrix <- processed_list_of_vectors |>
     purrr::list_transpose() |>
     as.data.frame() |>
     as.matrix()
 
-  # Transpose the result so that rows are documents and columns are dimensions
-  if (ncol(embeddings) > 0) {
-    return(t(embeddings))
-  } else {
-    return(matrix(nrow = 0, ncol = 0))
-  }
+  return(embeddings_matrix)
 }
+
+
+
+
+
+
 
 
 #' Generate Embeddings in Batches
@@ -642,7 +727,7 @@ parse_embeddings <- function(embedding_response) {
 get_batched_embeddings <- function(texts,
                                    embed_config,
                                    batch_size = 50,
-                                   verbose = TRUE) {
+                                   verbose = FALSE) {
 
   # Input validation
   if (!is.character(texts) || length(texts) == 0) {
