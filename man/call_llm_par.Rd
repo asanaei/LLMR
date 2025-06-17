@@ -60,7 +60,7 @@ This function requires setting up the parallel environment using `setup_llm_para
     condition = c("control", "treatment"),
     model_type = c("small", "large"),
     rep = 1:10
-  ) \%>\%
+  ) |>
     mutate(
       config = case_when(
         model_type == "small" ~ list(small_config),
@@ -77,8 +77,8 @@ This function requires setting up the parallel environment using `setup_llm_para
   reset_llm_parallel()
 
   # All metadata preserved for analysis
-  results \%>\%
-    group_by(condition, model_type) \%>\%
+  results |>
+    group_by(condition, model_type) |>
     summarise(mean_response = mean(as.numeric(response_text), na.rm = TRUE))
 }
 }

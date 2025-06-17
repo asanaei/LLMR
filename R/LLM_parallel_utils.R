@@ -350,7 +350,7 @@ call_llm_compare <- function(configs_list,
 #'     condition = c("control", "treatment"),
 #'     model_type = c("small", "large"),
 #'     rep = 1:10
-#'   ) %>%
+#'   ) |>
 #'     mutate(
 #'       config = case_when(
 #'         model_type == "small" ~ list(small_config),
@@ -367,8 +367,8 @@ call_llm_compare <- function(configs_list,
 #'   reset_llm_parallel()
 #'
 #'   # All metadata preserved for analysis
-#'   results %>%
-#'     group_by(condition, model_type) %>%
+#'   results |>
+#'     group_by(condition, model_type) |>
 #'     summarise(mean_response = mean(as.numeric(response_text), na.rm = TRUE))
 #' }
 call_llm_par <- function(experiments,
@@ -638,9 +638,9 @@ build_factorial_experiments <- function(configs,
     config_idx = configs_df$config_idx,
     message_idx = messages_df$message_idx,
     repetition = seq_len(repetitions)
-  ) %>%
-    dplyr::left_join(configs_df, by = "config_idx") %>%
-    dplyr::left_join(messages_df, by = "message_idx") %>%
+  ) |>
+    dplyr::left_join(configs_df, by = "config_idx") |>
+    dplyr::left_join(messages_df, by = "message_idx") |>
     dplyr::select(config, messages, config_label, message_label, repetition)
 
   message(sprintf("Built %d experiments: %d configs x %d message sets x %d repetitions",
