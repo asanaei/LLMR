@@ -6,7 +6,7 @@ test_that("call_llm works with OpenAI API", {
   skip_on_cran()  # Skip this test on CRAN
   config <- llm_config(
     provider = "openai",
-    model = "gpt-4o-mini",
+    model = "gpt-4.1-nano",
     # if OPENAI_KEY exists, make it the api_key, otherwise use "fake_api
     api_key = Sys.getenv("OPENAI_API_KEY", unset = "default_fake_key"),
     temperature = 1,

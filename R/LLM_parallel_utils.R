@@ -147,9 +147,6 @@ call_llm_sweep <- function(base_config,
 
   # Run parallel processing
   results_raw <- call_llm_par(experiments, ...)
-
-  ## Unnest config and remove config column
-  #results_final <- .unnest_config_to_cols(results_raw, config_col = "config")
   results_final$config <- NULL
 
   # Create the parameter column with actual name
@@ -242,11 +239,8 @@ call_llm_broadcast <- function(config,
 
   # Run parallel processing
   results_raw <- call_llm_par(experiments, ...)
-
-  ## Unnest config and remove config column
-  #results_final <- .unnest_config_to_cols(results_raw, config_col = "config")
+  results_final <- results_raw
   results_final$config <- NULL
-
   return(results_final)
 }
 
@@ -308,11 +302,9 @@ call_llm_compare <- function(configs_list,
 
   # Run parallel processing
   results_raw <- call_llm_par(experiments, ...)
-
-  ## Unnest config and remove config column
-  #results_final <- .unnest_config_to_cols(results_raw, config_col = "config")
+  results_final <- results_raw
   results_final$config <- NULL
-
+  results_final
   return(results_final)
 }
 
