@@ -27,6 +27,11 @@ A character vector the same length as \code{x}.
 \description{
 Vectorised LLM transformer
 }
+\details{
+Runs each prompt through `call_llm_broadcast()`, which dispatches the requests
+in parallel via `call_llm_par()` according to the current *future* plan
+(see `setup_llm_parallel()`).
+}
 \examples{
 ## --- Vector input ------------------------------------------------------
 \dontrun{

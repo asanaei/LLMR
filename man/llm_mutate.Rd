@@ -37,6 +37,10 @@ llm_mutate(
 A convenience wrapper around \link{llm_fn} that inserts the result as a new
 column via \link[dplyr]{mutate}.
 }
+\details{
+The new column is created with `llm_fn()`, so the underlying API calls are
+executed in parallel whenever a non-sequential *future* plan is active.
+}
 \examples{
 ## See examples under \link{llm_fn}.
 }
