@@ -38,9 +38,13 @@ A convenience wrapper around \link{llm_fn} that inserts the result as a new
 column via \link[dplyr]{mutate}.
 }
 \details{
-The new column is created with `llm_fn()`, so the underlying API calls are
-executed in parallel whenever a non-sequential *future* plan is active.
+Internally calls `llm_fn()`, so the API requests inherit the same
+parallel behaviour.  Activate parallelism with
+`setup_llm_parallel()` and shut it off with `reset_llm_parallel()`.
 }
 \examples{
 ## See examples under \link{llm_fn}.
+}
+\seealso{
+llm_fn, setup_llm_parallel, reset_llm_parallel
 }
