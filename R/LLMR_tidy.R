@@ -21,9 +21,13 @@
 #' @return A character vector the same length as \code{x}.
 #'   Failed calls yield \code{NA}.
 #' @details
-#' Runs each prompt through `call_llm_broadcast()`, which dispatches the requests
-#' in parallel via `call_llm_par()` according to the current *future* plan
-#' (see `setup_llm_parallel()`).
+#' Runs each prompt through `call_llm_broadcast()`, which forwards the
+#' requests to `call_llm_par()`.  That core engine executes them **in
+#' parallel** according to the current *future* plan.  For instant
+#' multi-core use, call `setup_llm_parallel(workers = 4)` (or whatever
+#' number you prefer) once per session; revert with `reset_llm_parallel()`.
+#'
+#' @seealso setup_llm_parallel, reset_llm_parallel, call_llm_par
 #' @export
 #'
 #' @examples
@@ -105,8 +109,11 @@ llm_fn <- function(x,
 #' @param output Unquoted name of the new column you want to add.
 #' @param .before,.after Standard \link[dplyr]{mutate} column-placement helpers.
 #' @details
-#' The new column is created with `llm_fn()`, so the underlying API calls are
-#' executed in parallel whenever a non-sequential *future* plan is active.
+#' Internally calls `llm_fn()`, so the API requests inherit the same
+#' parallel behaviour.  Activate parallelism with
+#' `setup_llm_parallel()` and shut it off with `reset_llm_parallel()`.
+#'
+#' @seealso llm_fn, setup_llm_parallel, reset_llm_parallel
 #' @export
 #'
 #' @examples

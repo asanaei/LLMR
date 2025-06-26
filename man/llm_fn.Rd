@@ -28,9 +28,11 @@ A character vector the same length as \code{x}.
 Vectorised LLM transformer
 }
 \details{
-Runs each prompt through `call_llm_broadcast()`, which dispatches the requests
-in parallel via `call_llm_par()` according to the current *future* plan
-(see `setup_llm_parallel()`).
+Runs each prompt through `call_llm_broadcast()`, which forwards the
+requests to `call_llm_par()`.  That core engine executes them **in
+parallel** according to the current *future* plan.  For instant
+multi-core use, call `setup_llm_parallel(workers = 4)` (or whatever
+number you prefer) once per session; revert with `reset_llm_parallel()`.
 }
 \examples{
 ## --- Vector input ------------------------------------------------------
@@ -67,4 +69,7 @@ reviews |>
     .system_prompt = "Respond with Positive, Negative, or Neutral."
   )
 }
+}
+\seealso{
+setup_llm_parallel, reset_llm_parallel, call_llm_par
 }
