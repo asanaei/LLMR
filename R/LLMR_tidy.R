@@ -128,15 +128,14 @@ llm_mutate <- function(.data,
                        ...) {
 
   out <- rlang::enquo(output)
-
+  new_vals <- llm_fn(.data,
+                     prompt         = prompt,
+                     .config        = .config,
+                     .system_prompt = .system_prompt,
+                     ...)
   .data |>
     dplyr::mutate(
-      !!out :=
-        llm_fn(.data,
-               prompt         = prompt,
-               .config        = .config,
-               .system_prompt = .system_prompt,
-               ...),
+      !!out := new_vals,
       .before = {{ .before }},
       .after  = {{ .after }}
     )
