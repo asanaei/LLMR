@@ -20,6 +20,10 @@
 #'
 #' @return A character vector the same length as \code{x}.
 #'   Failed calls yield \code{NA}.
+#' @details
+#' Runs each prompt through `call_llm_broadcast()`, which dispatches the requests
+#' in parallel via `call_llm_par()` according to the current *future* plan
+#' (see `setup_llm_parallel()`).
 #' @export
 #'
 #' @examples
@@ -100,6 +104,9 @@ llm_fn <- function(x,
 #' @param .data  A data frame / tibble.
 #' @param output Unquoted name of the new column you want to add.
 #' @param .before,.after Standard \link[dplyr]{mutate} column-placement helpers.
+#' @details
+#' The new column is created with `llm_fn()`, so the underlying API calls are
+#' executed in parallel whenever a non-sequential *future* plan is active.
 #' @export
 #'
 #' @examples
