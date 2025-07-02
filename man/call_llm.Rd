@@ -27,6 +27,9 @@ Sends a message to the specified LLM API and retrieves the response.
 }
 \examples{
 \dontrun{
+  # simple call
+  config <- llm_config(provider = "openai", model = "gpt-4o-mini", api_key = "...")
+  call_llm(config, "What is prompt engineering?")
   # Standard text call
   config <- llm_config(provider = "openai", model = "gpt-4o-mini", api_key = "...")
   messages <- list(list(role = "user", content = "Hello!"))
