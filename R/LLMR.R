@@ -15,6 +15,37 @@
 
 # ----- Internal Helper Functions -----
 
+#' Normalise message inputs
+#'
+#' - character vector           ---> each element becomes a `"user"` message
+#' - **named** character vector ---> the names are taken as `role`s
+#' - already-well-formed list    ---> returned untouched
+#' Called once in `call_llm()` (only when **not** in embedding mode).
+#' @keywords internal
+#' @noRd
+.normalize_messages <- function(messages) {
+  # 1. leave proper message objects unchanged
+  if (is.list(messages) &&
+      length(messages) > 0 &&
+      is.list(messages[[1]]) &&
+      !is.null(messages[[1]]$role) &&
+      !is.null(messages[[1]]$content)) {
+    return(messages)
+  }
+
+  # 2. named character ---> role = names(messages)
+  if (is.character(messages) && !is.null(names(messages))) {
+    return(purrr::imap(messages, \(txt, role) list(role = role, content = txt)))
+  }
+
+  # 3. bare character ---> assume user
+  if (is.character(messages)) {
+    return(lapply(messages, \(txt) list(role = "user", content = txt)))
+  }
+
+  stop("`messages` must be a character vector or a list of message objects.")
+}
+
 #' Process a file for multimodal API calls
 #'
 #' Reads a file, determines its MIME type, and base64 encodes it.
@@ -203,6 +234,9 @@ llm_config <- function(provider, model, api_key, troubleshooting = FALSE, base_u
 #' @export
 #' @examples
 #' \dontrun{
+#'   # simple call
+#'   config <- llm_config(provider = "openai", model = "gpt-4o-mini", api_key = "...")
+#'   call_llm(config, "What is prompt engineering?")
 #'   # Standard text call
 #'   config <- llm_config(provider = "openai", model = "gpt-4o-mini", api_key = "...")
 #'   messages <- list(list(role = "user", content = "Hello!"))
@@ -220,11 +254,17 @@ llm_config <- function(provider, model, api_key, troubleshooting = FALSE, base_u
 call_llm <- function(config, messages, verbose = FALSE, json = FALSE) {
   if (config$troubleshooting == TRUE){
     print("\n\n Inside call_llm for troubleshooting\n")
-    print("\nBE CAREFUL THIS BIT CONTAINS YOUR API KEY! DO NOT REPORT IT AS IS!")
+    print("\n****\nBE CAREFUL THIS BIT CONTAINS YOUR API KEY! DO NOT REPORT IT AS IS!\n****\n")
     print(messages)
     print(config)
     print("\n\n")
   }
+
+  # Coerce only for *generative* calls so embeddings stay unchanged
+  # this allows simple characters to be fed to call_llm
+    if (!isTRUE(config$embedding)) {
+        messages <- .normalize_messages(messages)
+      }
   UseMethod("call_llm", config)
 }
 
