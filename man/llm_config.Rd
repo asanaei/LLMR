@@ -37,11 +37,13 @@ Create LLM Configuration
 }
 \examples{
 \dontrun{
-  openai_config <- llm_config(
-    provider = "openai",
-    model = "gpt-4o-mini",
-    api_key = Sys.getenv("OPENAI_API_KEY"),
+  cfg <- llm_config(
+    provider   = "openai",
+    model      = "gpt-4o-mini",
+    api_key    = Sys.getenv("OPENAI_API_KEY"),
     temperature = 0.7,
-    max_tokens = 500)
+    max_tokens  = 500)
+
+  call_llm(cfg, "Hello!")  # one-shot, bare string
 }
 }
