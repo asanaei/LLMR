@@ -35,8 +35,14 @@
 
   # 2. named character ---> role = names(messages)
   if (is.character(messages) && !is.null(names(messages))) {
-    return(purrr::imap(messages, \(txt, role) list(role = role, content = txt)))
+    return(unname(
+      purrr::imap(messages, \(txt, role)
+                  list(role = role, content = txt)
+      )
+    ))
   }
+
+
 
   # 3. bare character ---> assume user
   if (is.character(messages)) {
@@ -192,12 +198,14 @@ get_endpoint <- function(config, default_endpoint) {
 #' @export
 #' @examples
 #' \dontrun{
-#'   openai_config <- llm_config(
-#'     provider = "openai",
-#'     model = "gpt-4o-mini",
-#'     api_key = Sys.getenv("OPENAI_API_KEY"),
+#'   cfg <- llm_config(
+#'     provider   = "openai",
+#'     model      = "gpt-4o-mini",
+#'     api_key    = Sys.getenv("OPENAI_API_KEY"),
 #'     temperature = 0.7,
-#'     max_tokens = 500)
+#'     max_tokens  = 500)
+#'
+#'   call_llm(cfg, "Hello!")  # one-shot, bare string
 #' }
 llm_config <- function(provider, model, api_key, troubleshooting = FALSE, base_url = NULL, embedding = NULL, ...) {
   model_params <- list(...)
@@ -222,9 +230,15 @@ llm_config <- function(provider, model, api_key, troubleshooting = FALSE, base_u
 #' Sends a message to the specified LLM API and retrieves the response.
 #'
 #' @param config An `llm_config` object created by `llm_config()`.
-#' @param messages A list of message objects (or a character vector for embeddings).
-#'   For multimodal requests, the `content` of a message can be a list of parts,
-#'   e.g., `list(list(type="text", text="..."), list(type="file", path="..."))`.
+#' @param messages Either
+#'   \itemize{
+#'     \item a bare character vector (each element becomes a `"user"` message);
+#'     \item a **named** character vector whose names are taken as `role`s,
+#'           e.g.\ \code{c(system = "Be concise.", user = "Hi")};
+#'     \item the classical list-of-lists with explicit \code{role}/\code{content}.
+#'   }
+#'   For multimodal requests the \code{content} field of a message can itself be
+#'   a list of parts, e.g.\ \code{list(type = "file", path = "image.png")}.
 #' @param verbose Logical. If `TRUE`, prints the full API response.
 #' @param json Logical. If `TRUE`, the returned text will have the raw JSON response
 #'   and the parsed list as attributes.
@@ -234,22 +248,23 @@ llm_config <- function(provider, model, api_key, troubleshooting = FALSE, base_u
 #' @export
 #' @examples
 #' \dontrun{
-#'   # simple call
-#'   config <- llm_config(provider = "openai", model = "gpt-4o-mini", api_key = "...")
-#'   call_llm(config, "What is prompt engineering?")
-#'   # Standard text call
-#'   config <- llm_config(provider = "openai", model = "gpt-4o-mini", api_key = "...")
-#'   messages <- list(list(role = "user", content = "Hello!"))
-#'   response <- call_llm(config, messages)
+#'   cfg <- llm_config("openai", "gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"))
 #'
-#'   # Multimodal call (for supported providers like Gemini, Claude 3, GPT-4o)
-#'   # Make sure to use a vision-capable model in your config
-#'   multimodal_config <- llm_config(provider = "openai", model = "gpt-4o", api_key = "...")
-#'   multimodal_messages <- list(list(role = "user", content = list(
-#'     list(type = "text", text = "What is in this image?"),
-#'     list(type = "file", path = "path/to/your/image.png")
-#'   )))
-#'   image_response <- call_llm(multimodal_config, multimodal_messages)
+#'   # 1. Bare string
+#'   call_llm(cfg, "What is prompt engineering?")
+#'
+#'   # 2. Named character vector (quick system + user)
+#'   call_llm(cfg, c(system = "Be brief.", user = "Summarise the Kuznets curve."))
+#'
+#'   # 3. Classic list form (still works)
+#'   call_llm(cfg, list(list(role = "user", content = "Hello!")))
+#'
+#'   # 4. Multimodal (vision-capable model required)
+#'   multi_cfg <- llm_config("openai", "gpt-4o", Sys.getenv("OPENAI_API_KEY"))
+#'   msg <- list(list(role = "user", content = list(
+#'            list(type = "text", text = "Describe this picture"),
+#'            list(type = "file", path = "path/to/image.png"))))
+#'   call_llm(multi_cfg, msg)
 #' }
 call_llm <- function(config, messages, verbose = FALSE, json = FALSE) {
   if (config$troubleshooting == TRUE){
@@ -260,11 +275,6 @@ call_llm <- function(config, messages, verbose = FALSE, json = FALSE) {
     print("\n\n")
   }
 
-  # Coerce only for *generative* calls so embeddings stay unchanged
-  # this allows simple characters to be fed to call_llm
-    if (!isTRUE(config$embedding)) {
-        messages <- .normalize_messages(messages)
-      }
   UseMethod("call_llm", config)
 }
 
@@ -280,7 +290,7 @@ call_llm.openai <- function(config, messages, verbose = FALSE, json = FALSE) {
   if (isTRUE(config$embedding)) {
     return(call_llm.openai_embedding(config, messages, verbose, json))
   }
-
+  messages <- .normalize_messages(messages)
   endpoint <- get_endpoint(config, default_endpoint = "https://api.openai.com/v1/chat/completions")
 
   # Format messages with multimodal support
@@ -331,6 +341,7 @@ call_llm.anthropic <- function(config, messages, verbose = FALSE, json = FALSE) 
   if (isTRUE(config$embedding)) {
     stop("Embedding models are not currently supported for Anthropic!")
   }
+  messages <- .normalize_messages(messages)
   endpoint <- get_endpoint(config, default_endpoint = "https://api.anthropic.com/v1/messages")
 
   # Use the helper to separate system messages
@@ -390,7 +401,7 @@ call_llm.gemini <- function(config, messages, verbose = FALSE, json = FALSE) {
   if (isTRUE(config$embedding) || grepl("embedding", config$model, ignore.case = TRUE)) {
     return(call_llm.gemini_embedding(config, messages, verbose, json))
   }
-
+  messages <- .normalize_messages(messages)
   endpoint <- get_endpoint(config, default_endpoint = paste0("https://generativelanguage.googleapis.com/v1beta/models/", config$model, ":generateContent"))
 
   system_messages <- purrr::keep(messages, ~ .x$role == "system")
@@ -453,6 +464,7 @@ call_llm.groq <- function(config, messages, verbose = FALSE, json = FALSE) {
   if (isTRUE(config$embedding)) {
     stop("Embedding models are not currently supported for Groq!")
   }
+  messages <- .normalize_messages(messages)
   endpoint <- get_endpoint(config, default_endpoint = "https://api.groq.com/openai/v1/chat/completions")
   body <- list(
     model = config$model,
@@ -474,6 +486,7 @@ call_llm.together <- function(config, messages, verbose = FALSE, json = FALSE) {
   if (isTRUE(config$embedding)) {
     return(call_llm.together_embedding(config, messages, verbose, json))
   }
+  messages <- .normalize_messages(messages)
   endpoint <- get_endpoint(config, default_endpoint = "https://api.together.xyz/v1/chat/completions")
   body <- list(
     model = config$model,
@@ -498,6 +511,7 @@ call_llm.deepseek <- function(config, messages, verbose = FALSE, json = FALSE) {
   if (isTRUE(config$embedding)) {
     stop("Embedding models are not currently supported for DeepSeek!")
   }
+  messages <- .normalize_messages(messages)
   endpoint <- get_endpoint(config, default_endpoint = "https://api.deepseek.com/chat/completions")
   body <- list(
     model = rlang::`%||%`(config$model, "deepseek-chat"),

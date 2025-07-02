@@ -9,9 +9,15 @@ call_llm(config, messages, verbose = FALSE, json = FALSE)
 \arguments{
 \item{config}{An `llm_config` object created by `llm_config()`.}
 
-\item{messages}{A list of message objects (or a character vector for embeddings).
-For multimodal requests, the `content` of a message can be a list of parts,
-e.g., `list(list(type="text", text="..."), list(type="file", path="..."))`.}
+\item{messages}{Either
+\itemize{
+  \item a bare character vector (each element becomes a `"user"` message);
+  \item a **named** character vector whose names are taken as `role`s,
+        e.g.\ \code{c(system = "Be concise.", user = "Hi")};
+  \item the classical list-of-lists with explicit \code{role}/\code{content}.
+}
+For multimodal requests the \code{content} field of a message can itself be
+a list of parts, e.g.\ \code{list(type = "file", path = "image.png")}.}
 
 \item{verbose}{Logical. If `TRUE`, prints the full API response.}
 
@@ -27,21 +33,22 @@ Sends a message to the specified LLM API and retrieves the response.
 }
 \examples{
 \dontrun{
-  # simple call
-  config <- llm_config(provider = "openai", model = "gpt-4o-mini", api_key = "...")
-  call_llm(config, "What is prompt engineering?")
-  # Standard text call
-  config <- llm_config(provider = "openai", model = "gpt-4o-mini", api_key = "...")
-  messages <- list(list(role = "user", content = "Hello!"))
-  response <- call_llm(config, messages)
+  cfg <- llm_config("openai", "gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"))
 
-  # Multimodal call (for supported providers like Gemini, Claude 3, GPT-4o)
-  # Make sure to use a vision-capable model in your config
-  multimodal_config <- llm_config(provider = "openai", model = "gpt-4o", api_key = "...")
-  multimodal_messages <- list(list(role = "user", content = list(
-    list(type = "text", text = "What is in this image?"),
-    list(type = "file", path = "path/to/your/image.png")
-  )))
-  image_response <- call_llm(multimodal_config, multimodal_messages)
+  # 1. Bare string
+  call_llm(cfg, "What is prompt engineering?")
+
+  # 2. Named character vector (quick system + user)
+  call_llm(cfg, c(system = "Be brief.", user = "Summarise the Kuznets curve."))
+
+  # 3. Classic list form (still works)
+  call_llm(cfg, list(list(role = "user", content = "Hello!")))
+
+  # 4. Multimodal (vision-capable model required)
+  multi_cfg <- llm_config("openai", "gpt-4o", Sys.getenv("OPENAI_API_KEY"))
+  msg <- list(list(role = "user", content = list(
+           list(type = "text", text = "Describe this picture"),
+           list(type = "file", path = "path/to/image.png"))))
+  call_llm(multi_cfg, msg)
 }
 }
