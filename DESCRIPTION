@@ -1,6 +1,6 @@
 Package: LLMR
 Title: Interface for Large Language Model APIs in R
-Version: 0.4.3
+Version: 0.4.4
 Depends: R (>= 4.1.0)
 Authors@R: 
     person("Ali", "Sanaei", , "sanaei@uchicago.edu", role = c("aut", "cre"))
