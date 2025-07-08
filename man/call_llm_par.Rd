@@ -19,7 +19,7 @@ call_llm_par(
 }
 \arguments{
 \item{experiments}{A tibble/data.frame with required list-columns 'config' (llm_config objects)
-and 'messages' (message lists). Additional columns are treated as metadata and preserved.}
+and 'messages' (character vector OR message list).}
 
 \item{simplify}{Whether to cbind 'experiments' to the output data frame or not.}
 

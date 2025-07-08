@@ -29,9 +29,13 @@ Vectorised LLM transformer
 }
 \details{
 Runs each prompt through `call_llm_broadcast()`, which forwards the
-requests to `call_llm_par()`.  That core engine executes them **in
-parallel** according to the current *future* plan.  For instant
-multi-core use, call `setup_llm_parallel(workers = 4)` (or whatever
+requests to `call_llm_par()`.
+Internally each prompt is passed as a
+**plain character vector** (or a
+named character vector when `.system_prompt` is supplied).
+That core engine executes them *in parallel* according
+to the current *future* plan.
+For instant multi-core use, call `setup_llm_parallel(workers = 4)` (or whatever
 number you prefer) once per session; revert with `reset_llm_parallel()`.
 }
 \examples{

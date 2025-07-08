@@ -6,7 +6,7 @@
 \usage{
 build_factorial_experiments(
   configs,
-  messages_list,
+  messages,
   repetitions = 1,
   config_labels = NULL,
   message_labels = NULL
@@ -15,7 +15,7 @@ build_factorial_experiments(
 \arguments{
 \item{configs}{List of llm_config objects to test.}
 
-\item{messages_list}{List of message lists to test (each element is a message list for one condition).}
+\item{messages}{List of message lists to test (each element is a message list for one condition).}
 
 \item{repetitions}{Integer. Number of repetitions per combination. Default is 1.}
 
@@ -35,11 +35,11 @@ all combinations of configs, messages, and repetitions with automatic metadata.
 \dontrun{
   # Factorial design: 3 configs x 2 message conditions x 10 reps = 60 experiments
   configs <- list(gpt4_config, claude_config, llama_config)
-  messages_list <- list(control_messages, treatment_messages)
+  messages <- list("Control prompt", "Treatment prompt")
 
   experiments <- build_factorial_experiments(
     configs = configs,
-    messages_list = messages_list,
+    messages = messages,
     repetitions = 10,
     config_labels = c("gpt4", "claude", "llama"),
     message_labels = c("control", "treatment")

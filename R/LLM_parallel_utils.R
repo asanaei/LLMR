@@ -89,7 +89,7 @@
 #' @param base_config Base llm_config object to modify.
 #' @param param_name Character. Name of the parameter to vary (e.g., "temperature", "max_tokens").
 #' @param param_values Vector. Values to test for the parameter.
-#' @param messages List of message objects (same for all calls).
+#' @param messages A character vector or a list of message objects (same for all calls).
 #' @param ... Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).
 #'
 #' @return A tibble with columns: swept_param_name, the varied parameter column, provider, model,
@@ -102,7 +102,7 @@
 #'   config <- llm_config(provider = "openai", model = "gpt-4o-mini",
 #'                        api_key = Sys.getenv("OPENAI_API_KEY"))
 #'
-#'   messages <- list(list(role = "user", content = "What is 15 * 23?"))
+#'   messages <- "What is 15 * 23?"
 #'   temperatures <- c(0, 0.3, 0.7, 1.0, 1.5)
 #'
 #'   setup_llm_parallel(workers = 4, verbose = TRUE)
@@ -187,7 +187,8 @@ call_llm_sweep <- function(base_config,
 #' This function requires setting up the parallel environment using `setup_llm_parallel`.
 #'
 #' @param config Single llm_config object to use for all calls.
-#' @param messages_list A list of message lists, each for one API call.
+#' @param messages A character vector (each element is a prompt) OR
+#'   a list where each element is a pre-formatted message list.
 #' @param ... Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).
 #'
 #' @return A tibble with columns: message_index (metadata), provider, model,
@@ -200,24 +201,29 @@ call_llm_sweep <- function(base_config,
 #'   config <- llm_config(provider = "openai", model = "gpt-4o-mini",
 #'                        api_key = Sys.getenv("OPENAI_API_KEY"))
 #'
-#'   messages_list <- list(
+#'   messages <- list(
 #'     list(list(role = "user", content = "What is 2+2?")),
 #'     list(list(role = "user", content = "What is 3*5?")),
 #'     list(list(role = "user", content = "What is 10/2?"))
 #'   )
 #'
 #'   setup_llm_parallel(workers = 4, verbose = TRUE)
-#'   results <- call_llm_broadcast(config, messages_list)
+#'   results <- call_llm_broadcast(config, messages)
 #'   reset_llm_parallel(verbose = TRUE)
 #' }
 call_llm_broadcast <- function(config,
-                               messages_list,
+                               messages,
                                ...) {
+
+  # Allow plain character vectors for convenience
+  if (is.character(messages))
+    messages <- as.list(messages)
+
   if (!requireNamespace("tibble", quietly = TRUE)) {
     stop("The 'tibble' package is required. Please install it with: install.packages('tibble')")
   }
 
-  if (length(messages_list) == 0) {
+  if (length(messages) == 0) {
     warning("No messages provided. Returning empty tibble.")
     return(tibble::tibble(
       message_index = integer(0),
@@ -232,9 +238,9 @@ call_llm_broadcast <- function(config,
 
   # Build experiments tibble
   experiments <- tibble::tibble(
-    message_index = seq_along(messages_list),
-    config = rep(list(config), length(messages_list)),
-    messages = messages_list
+    message_index = seq_along(messages),
+    config = rep(list(config), length(messages)),
+    messages = messages
   )
 
   # Run parallel processing
@@ -251,7 +257,7 @@ call_llm_broadcast <- function(config,
 #' This function requires setting up the parallel environment using `setup_llm_parallel`.
 #'
 #' @param configs_list A list of llm_config objects to compare.
-#' @param messages List of message objects (same for all configs).
+#' @param messages A character vector or a list of message objects (same for all configs).
 #' @param ... Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).
 #'
 #' @return A tibble with columns: config_index (metadata), provider, model,
@@ -267,7 +273,7 @@ call_llm_broadcast <- function(config,
 #'                         api_key = Sys.getenv("OPENAI_API_KEY"))
 #'
 #'   configs_list <- list(config1, config2)
-#'   messages <- list(list(role = "user", content = "Explain quantum computing"))
+#'   messages <- "Explain quantum computing"
 #'
 #'   setup_llm_parallel(workers = 4, verbose = TRUE)
 #'   results <- call_llm_compare(configs_list, messages)
@@ -315,7 +321,7 @@ call_llm_compare <- function(configs_list,
 #' This function requires setting up the parallel environment using `setup_llm_parallel`.
 #'
 #' @param experiments A tibble/data.frame with required list-columns 'config' (llm_config objects)
-#'   and 'messages' (message lists). Additional columns are treated as metadata and preserved.
+#'   and 'messages' (character vector OR message list).
 #' @param simplify Whether to cbind 'experiments' to the output data frame or not.
 #' @param tries Integer. Number of retries for each call. Default is 10.
 #' @param wait_seconds Numeric. Initial wait time (seconds) before retry. Default is 2.
@@ -549,7 +555,7 @@ call_llm_par <- function(experiments,
 #' all combinations of configs, messages, and repetitions with automatic metadata.
 #'
 #' @param configs List of llm_config objects to test.
-#' @param messages_list List of message lists to test (each element is a message list for one condition).
+#' @param messages List of message lists to test (each element is a message list for one condition).
 #' @param repetitions Integer. Number of repetitions per combination. Default is 1.
 #' @param config_labels Character vector of labels for configs. If NULL, uses "provider_model".
 #' @param message_labels Character vector of labels for message sets. If NULL, uses "messages_1", etc.
@@ -562,11 +568,11 @@ call_llm_par <- function(experiments,
 #' \dontrun{
 #'   # Factorial design: 3 configs x 2 message conditions x 10 reps = 60 experiments
 #'   configs <- list(gpt4_config, claude_config, llama_config)
-#'   messages_list <- list(control_messages, treatment_messages)
+#'   messages <- list("Control prompt", "Treatment prompt")
 #'
 #'   experiments <- build_factorial_experiments(
 #'     configs = configs,
-#'     messages_list = messages_list,
+#'     messages = messages,
 #'     repetitions = 10,
 #'     config_labels = c("gpt4", "claude", "llama"),
 #'     message_labels = c("control", "treatment")
@@ -576,7 +582,7 @@ call_llm_par <- function(experiments,
 #'   results <- call_llm_par(experiments, progress = TRUE)
 #' }
 build_factorial_experiments <- function(configs,
-                                        messages_list,
+                                        messages,
                                         repetitions = 1,
                                         config_labels = NULL,
                                         message_labels = NULL) {
@@ -592,8 +598,8 @@ build_factorial_experiments <- function(configs,
   }
 
   # Validate inputs
-  if (length(configs) == 0 || length(messages_list) == 0) {
-    stop("Both configs and messages_list must have at least one element")
+  if (length(configs) == 0 || length(messages) == 0) {
+    stop("Both configs and messages must have at least one element")
   }
 
   # Create config labels if not provided
@@ -607,9 +613,9 @@ build_factorial_experiments <- function(configs,
 
   # Create message labels if not provided
   if (is.null(message_labels)) {
-    message_labels <- paste0("messages_", seq_along(messages_list))
-  } else if (length(message_labels) != length(messages_list)) {
-    stop("message_labels must have the same length as messages_list")
+    message_labels <- paste0("messages_", seq_along(messages))
+  } else if (length(message_labels) != length(messages)) {
+    stop("message_labels must have the same length as messages")
   }
 
   # Create lookup tables
@@ -620,8 +626,8 @@ build_factorial_experiments <- function(configs,
   )
 
   messages_df <- tibble::tibble(
-    message_idx = seq_along(messages_list),
-    messages = messages_list,
+    message_idx = seq_along(messages),
+    messages = messages,
     message_label = message_labels
   )
 
@@ -636,7 +642,7 @@ build_factorial_experiments <- function(configs,
     dplyr::select(config, messages, config_label, message_label, repetition)
 
   message(sprintf("Built %d experiments: %d configs x %d message sets x %d repetitions",
-                  nrow(experiments), length(configs), length(messages_list), repetitions))
+                  nrow(experiments), length(configs), length(messages), repetitions))
 
   return(experiments)
 }

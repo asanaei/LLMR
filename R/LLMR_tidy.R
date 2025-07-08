@@ -22,9 +22,13 @@
 #'   Failed calls yield \code{NA}.
 #' @details
 #' Runs each prompt through `call_llm_broadcast()`, which forwards the
-#' requests to `call_llm_par()`.  That core engine executes them **in
-#' parallel** according to the current *future* plan.  For instant
-#' multi-core use, call `setup_llm_parallel(workers = 4)` (or whatever
+#' requests to `call_llm_par()`.
+#' Internally each prompt is passed as a
+#' **plain character vector** (or a
+#' named character vector when `.system_prompt` is supplied).
+#' That core engine executes them *in parallel* according
+#' to the current *future* plan.
+#' For instant multi-core use, call `setup_llm_parallel(workers = 4)` (or whatever
 #' number you prefer) once per session; revert with `reset_llm_parallel()`.
 #'
 #' @seealso setup_llm_parallel, reset_llm_parallel, call_llm_par
@@ -81,12 +85,9 @@ llm_fn <- function(x,
 
   msgs <- lapply(user_txt, function(txt) {
     if (is.null(.system_prompt)) {
-      list(list(role = "user", content = txt))
+      txt                                   # single-turn chat
     } else {
-      list(
-        list(role = "system", content = .system_prompt),
-        list(role = "user",   content = txt)
-      )
+      c(system = .system_prompt, user = txt)  # named vector: system then user
     }
   })
 

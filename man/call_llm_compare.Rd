@@ -9,7 +9,7 @@ call_llm_compare(configs_list, messages, ...)
 \arguments{
 \item{configs_list}{A list of llm_config objects to compare.}
 
-\item{messages}{List of message objects (same for all configs).}
+\item{messages}{A character vector or a list of message objects (same for all configs).}
 
 \item{...}{Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).}
 }
@@ -31,7 +31,7 @@ This function requires setting up the parallel environment using `setup_llm_para
                         api_key = Sys.getenv("OPENAI_API_KEY"))
 
   configs_list <- list(config1, config2)
-  messages <- list(list(role = "user", content = "Explain quantum computing"))
+  messages <- "Explain quantum computing"
 
   setup_llm_parallel(workers = 4, verbose = TRUE)
   results <- call_llm_compare(configs_list, messages)

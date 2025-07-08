@@ -4,12 +4,13 @@
 \alias{call_llm_broadcast}
 \title{Mode 2: Message Broadcast - Fixed Config, Multiple Messages}
 \usage{
-call_llm_broadcast(config, messages_list, ...)
+call_llm_broadcast(config, messages, ...)
 }
 \arguments{
 \item{config}{Single llm_config object to use for all calls.}
 
-\item{messages_list}{A list of message lists, each for one API call.}
+\item{messages}{A character vector (each element is a prompt) OR
+a list where each element is a pre-formatted message list.}
 
 \item{...}{Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).}
 }
@@ -28,14 +29,14 @@ This function requires setting up the parallel environment using `setup_llm_para
   config <- llm_config(provider = "openai", model = "gpt-4o-mini",
                        api_key = Sys.getenv("OPENAI_API_KEY"))
 
-  messages_list <- list(
+  messages <- list(
     list(list(role = "user", content = "What is 2+2?")),
     list(list(role = "user", content = "What is 3*5?")),
     list(list(role = "user", content = "What is 10/2?"))
   )
 
   setup_llm_parallel(workers = 4, verbose = TRUE)
-  results <- call_llm_broadcast(config, messages_list)
+  results <- call_llm_broadcast(config, messages)
   reset_llm_parallel(verbose = TRUE)
 }
 }

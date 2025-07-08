@@ -78,6 +78,12 @@
   ))
 }
 
+## keep only NULL-free elements -----
+## this makes sure innocent api calls (what the user doesn't explicitly mention
+## is not mentioned in the api call)
+.drop_null <- function(x) purrr::compact(x)
+
+
 #' Perform API Request
 #'
 #' Internal helper function to perform the API request and process the response.
@@ -87,6 +93,11 @@
 #' @importFrom httr2 req_perform resp_body_raw resp_body_json
 perform_request <- function(req, verbose, json) {
   resp <- httr2::req_perform(req)
+
+  if (httr2::resp_status(resp) >= 400) {
+    stop(rawToChar(httr2::resp_body_raw(resp)), call. = FALSE)
+  }
+
   # Get the raw response as text
   raw_response <- httr2::resp_body_raw(resp)
   raw_json <- rawToChar(raw_response)
@@ -138,16 +149,37 @@ extract_text <- function(content) {
       return(content$content[[1]]$text)
     }
 
-    if (!is.null(content$candidates)) {
-      # For Gemini API
-      if (length(content$candidates) == 0 ||
-          is.null(content$candidates[[1]]$content$parts) ||
-          length(content$candidates[[1]]$content$parts) == 0 ||
-          is.null(content$candidates[[1]]$content$parts[[1]]$text)) {
-        return(NA_character_)
-      }
-      return(content$candidates[[1]]$content$parts[[1]]$text)
-    }
+
+  if (!is.null(content$candidates)) {        # Gemini
+    cand <- content$candidates[[1]]
+    parts <- cand$content$parts
+
+    # identify answer vs. thoughts
+    is_thought <- vapply(parts,
+                         function(p) isTRUE(p$thought),
+                         logical(1))
+
+    answer_idx <- which(!is_thought)
+    if (length(answer_idx) == 0) answer_idx <- 1   # fallback
+
+    answer_text  <- parts[[answer_idx[1]]]$text
+    thoughts_txt <- paste(vapply(parts[is_thought], `[[`, "", "text"),
+                          collapse = "\n\n")
+
+    attr(answer_text, "thoughts") <- thoughts_txt
+    return(answer_text)
+  }
+
+    # if (!is.null(content$candidates)) {
+    #   # For Gemini API
+    #   if (length(content$candidates) == 0 ||
+    #       is.null(content$candidates[[1]]$content$parts) ||
+    #       length(content$candidates[[1]]$content$parts) == 0 ||
+    #       is.null(content$candidates[[1]]$content$parts[[1]]$text)) {
+    #     return(NA_character_)
+    #   }
+    #   return(content$candidates[[1]]$content$parts[[1]]$text)
+    # }
 
     # Fallback - return content as-is instead of throwing error
     return(content)
@@ -316,15 +348,15 @@ call_llm.openai <- function(config, messages, verbose = FALSE, json = FALSE) {
     return(msg)
   })
 
-  body <- list(
-    model = config$model,
-    messages = formatted_messages,
-    temperature = rlang::`%||%`(config$model_params$temperature, 1),
-    max_tokens = rlang::`%||%`(config$model_params$max_tokens, 1024),
-    top_p = rlang::`%||%`(config$model_params$top_p, 1),
-    frequency_penalty = rlang::`%||%`(config$model_params$frequency_penalty, 0),
-    presence_penalty = rlang::`%||%`(config$model_params$presence_penalty, 0)
-  )
+  body <- .drop_null(list(
+    model             = config$model,
+    messages          = formatted_messages,
+    temperature       = config$model_params$temperature,
+    max_tokens        = config$model_params$max_tokens,
+    top_p             = config$model_params$top_p,
+    frequency_penalty = config$model_params$frequency_penalty,
+    presence_penalty  = config$model_params$presence_penalty
+  ))
 
   req <- httr2::request(endpoint) |>
     httr2::req_headers(
@@ -344,111 +376,154 @@ call_llm.anthropic <- function(config, messages, verbose = FALSE, json = FALSE) 
   messages <- .normalize_messages(messages)
   endpoint <- get_endpoint(config, default_endpoint = "https://api.anthropic.com/v1/messages")
 
+  use_thinking_beta <- !is.null(config$model_params$thinking_budget) ||
+    isTRUE(config$model_params$include_thoughts)
+
   # Use the helper to separate system messages
   formatted <- format_anthropic_messages(messages)
 
   # Process user messages for multimodal content
   processed_user_messages <- lapply(formatted$user_messages, function(msg) {
-    content_blocks <- list()
+    # ── KEEP STRING CONTENT AS-IS ─────────────────────────────
     if (is.character(msg$content)) {
-      content_blocks <- list(list(type = "text", text = msg$content))
-    } else if (is.list(msg$content)) {
-      content_blocks <- lapply(msg$content, function(part) {
-        if (part$type == "text") {
-          return(list(type = "text", text = part$text))
-        } else if (part$type == "file") {
-          file_data <- .process_file_content(part$path)
-          return(list(
-            type = "image",
-            source = list(
-              type = "base64",
-              media_type = file_data$mime_type,
-              data = file_data$base64_data
-            )
-          ))
-        } else {
-          return(NULL)
-        }
-      })
-      content_blocks <- purrr::compact(content_blocks)
+      return(list(role = msg$role, content = msg$content))
     }
-    list(role = msg$role, content = content_blocks)
+
+    # ── OTHERWISE (images / tools) BUILD BLOCKS ───────────────
+    content_blocks <- lapply(msg$content, function(part) {
+      if (part$type == "text")
+        list(type = "text", text = part$text)
+      else if (part$type == "file") {
+        fd <- .process_file_content(part$path)
+        list(type = "image",
+             source = list(type = "base64",
+                           media_type = fd$mime_type,
+                           data = fd$base64_data))
+      } else NULL
+    })
+    list(role = msg$role, content = content_blocks |> purrr::compact())
   })
 
-  body <- list(
-    model = config$model,
-    max_tokens = rlang::`%||%`(config$model_params$max_tokens, 1024),
-    temperature = rlang::`%||%`(config$model_params$temperature, 1),
-    messages = processed_user_messages
-  )
-  if (!is.null(formatted$system_text)) {
-    body$system <- formatted$system_text
-  }
+  ### translate & pull out Anthropic-specific aliases
+  params <- .translate_params("anthropic", config$model_params)
+
+  if (is.null(params$max_tokens))
+    warning('Anthropic requires max_tokens; setting it at 2048.')
+
+
+
+  body <- .drop_null(list(
+    model      = config$model,
+    max_tokens = params$max_tokens %||% 2048,
+    temperature= params$temperature,
+    top_p      = params$top_p,
+    messages   = processed_user_messages,
+    thinking   = if (!is.null(params$thinking_budget) &&
+                     !is.null(params$include_thoughts))
+      list(
+        type          = "enabled",
+        budget_tokens = params$thinking_budget
+      )
+  ))
 
   req <- httr2::request(endpoint) |>
     httr2::req_headers(
-      "Content-Type" = "application/json",
-      "x-api-key" = config$api_key,
-      "anthropic-version" = "2023-06-01"
+      "Content-Type"      = "application/json",
+      "x-api-key"         = config$api_key,
+      "anthropic-version" = "2023-06-01",
+      !!! (
+        if (!is.null(body$thinking))
+          list("anthropic-beta" = "extended-thinking-2025-05-14")
+      )
     ) |>
     httr2::req_body_json(body)
 
   perform_request(req, verbose, json)
 }
 
+
+# --- Gemini ------------------------------------------------------------------
+
 #' @export
 call_llm.gemini <- function(config, messages, verbose = FALSE, json = FALSE) {
-  if (isTRUE(config$embedding) || grepl("embedding", config$model, ignore.case = TRUE)) {
+
+  ## ---- 1. Routing to embedding --------------------------------------------
+  if (isTRUE(config$embedding) ||
+      grepl("embedding", config$model, ignore.case = TRUE)) {
     return(call_llm.gemini_embedding(config, messages, verbose, json))
   }
-  messages <- .normalize_messages(messages)
-  endpoint <- get_endpoint(config, default_endpoint = paste0("https://generativelanguage.googleapis.com/v1beta/models/", config$model, ":generateContent"))
 
-  system_messages <- purrr::keep(messages, ~ .x$role == "system")
-  other_messages <- purrr::keep(messages, ~ .x$role != "system")
-  system_instruction <- if (length(system_messages) > 0) {
-    list(parts = list(list(text = paste(sapply(system_messages, function(x) x$content), collapse = " "))))
-  } else {
-    NULL
-  }
+  ## ---- 2. Prep -------------------------------------------------------------
+  messages  <- .normalize_messages(messages)
+  endpoint  <- get_endpoint(
+    config,
+    default_endpoint = paste0(
+      "https://generativelanguage.googleapis.com/v1beta/models/",
+      config$model,
+      ":generateContent")
+  )
+  params    <- .translate_params("gemini", config$model_params)
 
-  formatted_messages <- lapply(other_messages, function(msg) {
-    role <- if (msg$role == "assistant") "model" else "user"
-    content_parts <- list()
-    if (is.character(msg$content)) {
-      content_parts <- list(list(text = msg$content))
+  ## ---- 3. Separate system vs chat lines -----------------------------------
+  sys_msgs   <- purrr::keep(messages, ~ .x$role == "system")
+  other_msgs <- purrr::keep(messages, ~ .x$role != "system")
+
+  system_instruction <- if (length(sys_msgs) > 0L) {
+    list(parts = list(
+      list(text = paste(vapply(sys_msgs, `[[`, "", "content"),
+                        collapse = " "))
+    ))
+  } else NULL
+
+  ## ---- 4. Convert each message to Gemini schema ---------------------------
+  formatted_messages <- lapply(other_msgs, function(msg) {
+
+    role_out <- if (msg$role == "assistant") "model" else "user"
+
+    parts <- if (is.character(msg$content)) {
+      list(list(text = msg$content))
     } else if (is.list(msg$content)) {
-      content_parts <- lapply(msg$content, function(part) {
+      purrr::compact(lapply(msg$content, function(part) {
         if (part$type == "text") {
-          return(list(text = part$text))
+          list(text = part$text)
         } else if (part$type == "file") {
-          file_data <- .process_file_content(part$path)
-          return(list(inlineData = list(mimeType = file_data$mime_type, data = file_data$base64_data)))
-        } else {
-          return(NULL)
-        }
-      })
-      content_parts <- purrr::compact(content_parts)
+          fd <- .process_file_content(part$path)
+          list(inlineData = list(
+            mimeType = fd$mime_type,
+            data     = fd$base64_data
+          ))
+        } else NULL
+      }))
+    } else {
+      list(list(text = as.character(msg$content)))
     }
-    list(role = role, parts = content_parts)
+
+    list(role = role_out, parts = parts)
   })
 
-  body <- list(
-    contents = formatted_messages,
-    generationConfig = list(
-      temperature = rlang::`%||%`(config$model_params$temperature, 1),
-      maxOutputTokens = rlang::`%||%`(config$model_params$max_tokens, 2048),
-      topP = rlang::`%||%`(config$model_params$top_p, 1),
-      topK = rlang::`%||%`(config$model_params$top_k, 1)
-    )
-  )
-  if (!is.null(system_instruction)) {
-    body$systemInstruction <- system_instruction
-  }
+  ## ---- 5. Assemble request body -------------------------------------------
+  body <- .drop_null(list(
+    contents          = formatted_messages,
+    generationConfig  = .drop_null(list(
+      temperature       = params$temperature,
+      maxOutputTokens   = params$maxOutputTokens,
+      topP              = params$topP,
+      topK              = params$topK,
+      responseMimeType  = "text/plain",
+      thinkingConfig    = if (!is.null(params$thinkingBudget) ||
+                              !is.null(params$includeThoughts))
+        .drop_null(list(
+          thinkingBudget = params$thinkingBudget,
+          includeThoughts= isTRUE(params$includeThoughts)
+        ))
+    )),
+    system_instruction = system_instruction       # NOTE: snake_case per REST spec
+  ))
 
+  ## ---- 6. Fire -------------------------------------------------------------
   req <- httr2::request(endpoint) |>
     httr2::req_headers(
-      "Content-Type" = "application/json",
+      "Content-Type"   = "application/json",
       "x-goog-api-key" = config$api_key
     ) |>
     httr2::req_body_json(body)
@@ -457,7 +532,85 @@ call_llm.gemini <- function(config, messages, verbose = FALSE, json = FALSE) {
 }
 
 
-# ----- Unmodified Provider Functions (for non-vision tasks) -----
+# call_llm.gemini <- function(config, messages, verbose = FALSE, json = FALSE) {
+#   if (isTRUE(config$embedding) || grepl("embedding", config$model, ignore.case = TRUE)) {
+#     return(call_llm.gemini_embedding(config, messages, verbose, json))
+#   }
+#   messages <- .normalize_messages(messages)
+#   endpoint <- get_endpoint(config, default_endpoint = paste0("https://generativelanguage.googleapis.com/v1beta/models/", config$model, ":generateContent"))
+#
+#   ## convert canonical names ---> Gemini native
+#   params <- .translate_params("gemini", config$model_params)
+#
+#   system_messages <- purrr::keep(messages, ~ .x$role == "system")
+#   other_messages <- purrr::keep(messages, ~ .x$role != "system")
+#   system_instruction <- if (length(system_messages) > 0) {
+#     list(parts = list(list(text = paste(sapply(system_messages, function(x) x$content), collapse = " "))))
+#   } else {
+#     NULL
+#   }
+#
+#   formatted_messages <- lapply(other_messages, function(msg) {
+#     role <- if (msg$role == "assistant") "model" else "user"
+#     content_parts <- list()
+#     if (is.character(msg$content)) {
+#       content_parts <- list(list(text = msg$content))
+#     } else if (is.list(msg$content)) {
+#       content_parts <- lapply(msg$content, function(part) {
+#         if (part$type == "text") {
+#           return(list(text = part$text))
+#         } else if (part$type == "file") {
+#           file_data <- .process_file_content(part$path)
+#           return(list(inlineData = list(mimeType = file_data$mime_type, data = file_data$base64_data)))
+#         } else {
+#           return(NULL)
+#         }
+#       })
+#       content_parts <- purrr::compact(content_parts)
+#     }
+#     list(role = role, parts = content_parts)
+#   })
+#
+#   body <- .drop_null(list(
+#     contents = formatted_messages,
+#     generationConfig = .drop_null(list(
+#       temperature     = params$temperature,
+#       maxOutputTokens = params$maxOutputTokens,
+#       topP            = params$topP,
+#       topK            = params$topK
+#     )),
+#     generationConfig = .drop_null(list(
+#       temperature       = params$temperature,
+#       maxOutputTokens   = params$maxOutputTokens,
+#       topP              = params$topP,
+#       topK              = params$topK,
+#       responseMimeType  = "text/plain",
+#       thinkingConfig    = if (!is.null(params$thinkingBudget) ||
+#                               !is.null(params$includeThoughts))
+#         .drop_null(list(
+#           thinkingBudget = params$thinkingBudget,
+#           includeThoughts= isTRUE(params$includeThoughts)))
+#     )),
+#     # thinkingConfig = if (!is.null(params$thinkingBudget) ||
+#     #                      !is.null(params$includeThoughts))
+#     #   .drop_null(list(
+#     #     budgetTokens   = params$thinkingBudget,
+#     #     includeThoughts= isTRUE(params$includeThoughts)))
+#   ))
+#
+#
+#   if (!is.null(system_instruction))
+#     body$systemInstruction <- system_instruction
+#
+#   req <- httr2::request(endpoint) |>
+#     httr2::req_headers(
+#       "Content-Type" = "application/json",
+#       "x-goog-api-key" = config$api_key
+#     ) |>
+#     httr2::req_body_json(body)
+#
+#   perform_request(req, verbose, json)
+# }
 
 #' @export
 call_llm.groq <- function(config, messages, verbose = FALSE, json = FALSE) {
@@ -466,12 +619,15 @@ call_llm.groq <- function(config, messages, verbose = FALSE, json = FALSE) {
   }
   messages <- .normalize_messages(messages)
   endpoint <- get_endpoint(config, default_endpoint = "https://api.groq.com/openai/v1/chat/completions")
-  body <- list(
-    model = config$model,
-    messages = messages,
-    temperature = rlang::`%||%`(config$model_params$temperature, 0.7),
-    max_tokens = rlang::`%||%`(config$model_params$max_tokens, 1024)
-  )
+
+  body <- .drop_null(list(
+    model      = config$model,
+    messages   = messages,
+    temperature= config$model_params$temperature,
+    max_tokens = config$model_params$max_tokens
+  ))
+
+
   req <- httr2::request(endpoint) |>
     httr2::req_headers(
       "Content-Type" = "application/json",
@@ -488,15 +644,17 @@ call_llm.together <- function(config, messages, verbose = FALSE, json = FALSE) {
   }
   messages <- .normalize_messages(messages)
   endpoint <- get_endpoint(config, default_endpoint = "https://api.together.xyz/v1/chat/completions")
-  body <- list(
-    model = config$model,
-    messages = messages,
-    max_tokens = rlang::`%||%`(config$model_params$max_tokens, 1024),
-    temperature = rlang::`%||%`(config$model_params$temperature, 0.7),
-    top_p = rlang::`%||%`(config$model_params$top_p, 0.7),
-    top_k = rlang::`%||%`(config$model_params$top_k, 50),
-    repetition_penalty = rlang::`%||%`(config$model_params$repetition_penalty, 1)
-  )
+
+  body <- .drop_null(list(
+    model              = config$model,
+    messages           = messages,
+    max_tokens         = config$model_params$max_tokens,
+    temperature        = config$model_params$temperature,
+    top_p              = config$model_params$top_p,
+    top_k              = config$model_params$top_k,
+    repetition_penalty = config$model_params$repetition_penalty
+  ))
+
   req <- httr2::request(endpoint) |>
     httr2::req_headers(
       "Content-Type" = "application/json",
@@ -513,13 +671,15 @@ call_llm.deepseek <- function(config, messages, verbose = FALSE, json = FALSE) {
   }
   messages <- .normalize_messages(messages)
   endpoint <- get_endpoint(config, default_endpoint = "https://api.deepseek.com/chat/completions")
-  body <- list(
-    model = rlang::`%||%`(config$model, "deepseek-chat"),
-    messages = messages,
-    temperature = rlang::`%||%`(config$model_params$temperature, 1),
-    max_tokens = rlang::`%||%`(config$model_params$max_tokens, 1024),
-    top_p = rlang::`%||%`(config$model_params$top_p, 1)
-  )
+
+  body <- .drop_null(list(
+    model      = config$model %||% "deepseek-chat",
+    messages   = messages,
+    temperature= config$model_params$temperature,
+    max_tokens = config$model_params$max_tokens,
+    top_p      = config$model_params$top_p
+  ))
+
   req <- httr2::request(endpoint) |>
     httr2::req_headers(
       "Content-Type" = "application/json",
