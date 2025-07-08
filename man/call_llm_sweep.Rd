@@ -13,7 +13,7 @@ call_llm_sweep(base_config, param_name, param_values, messages, ...)
 
 \item{param_values}{Vector. Values to test for the parameter.}
 
-\item{messages}{List of message objects (same for all calls).}
+\item{messages}{A character vector or a list of message objects (same for all calls).}
 
 \item{...}{Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).}
 }
@@ -32,7 +32,7 @@ This function requires setting up the parallel environment using `setup_llm_para
   config <- llm_config(provider = "openai", model = "gpt-4o-mini",
                        api_key = Sys.getenv("OPENAI_API_KEY"))
 
-  messages <- list(list(role = "user", content = "What is 15 * 23?"))
+  messages <- "What is 15 * 23?"
   temperatures <- c(0, 0.3, 0.7, 1.0, 1.5)
 
   setup_llm_parallel(workers = 4, verbose = TRUE)
