@@ -1,4 +1,5 @@
 # LLMR_tidy.R ---------------------------------------------------------------
+
 #' Vectorised LLM transformer
 #'
 #' @importFrom tidyr expand_grid
@@ -92,8 +93,8 @@ llm_fn <- function(x,
   })
 
   res <- call_llm_broadcast(
-    config        = .config,
-    messages_list = msgs,
+    config   = .config,
+    messages = msgs,
     ...
   )
 

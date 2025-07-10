@@ -24,9 +24,15 @@ chat_session(config, system = NULL, ...)
 
 \item{system}{Optional system prompt inserted once at the beginning.}
 
-\item{...}{Default arguments forwarded to every
-[\code{call_llm_robust()}] call (e.g.
-\code{verbose = TRUE}, \code{json = TRUE}).}
+\item{...}{Additional arguments (unused).}
+
+\item{x}{An `llm_chat_session` object.}
+
+\item{object}{An `llm_chat_session` object.}
+
+\item{n}{Number of turns to display.}
+
+\item{width}{Character width for truncating long messages.}
 }
 \value{
 An object of class **\code{llm_chat_session}** with the methods
