@@ -2,6 +2,8 @@
 # Stateful chat wrapper for LLMR (list-based, no closure trickery)
 # ---------------------------------------------------------------------------
 
+#' @importFrom utils head tail
+
 ## helper: make a well-formed message ---------------------------------------
 .msg <- function(role, content) list(role = role, content = as.character(content)[1])
 
@@ -146,13 +148,15 @@ chat_session <- function(config, system = NULL, ...) {
 # S3 helpers so base verbs behave naturally                                  #
 # ---------------------------------------------------------------------------#
 
-
+#' @param x An `llm_chat_session` object.
+#' @param ... Additional arguments (unused).
 #' @describeIn chat_session Coerce a session to a two-column data frame.
 #' @export
 as.data.frame.llm_chat_session <- function(x, ...) {
   x$history_df()
 }
 
+#' @param object An `llm_chat_session` object.
 #' @describeIn chat_session Summary statistics for a chat session.
 #' @export
 summary.llm_chat_session <- function(object, ...) {
@@ -194,6 +198,8 @@ print.summary.llm_chat_session <- function(x, ...) {
   }
 }
 
+#' @param n Number of turns to display.
+#' @param width Character width for truncating long messages.
 #' @describeIn chat_session First *n* rows of the conversation.
 #' @export
 head.llm_chat_session <- function(x, n = 6L, width = getOption("width") - 15, ...) {
@@ -202,6 +208,8 @@ head.llm_chat_session <- function(x, n = 6L, width = getOption("width") - 15, ..
   invisible(slice)
 }
 
+#' @param n Number of turns to display.
+#' @param width Character width for truncating long messages.
 #' @describeIn chat_session Last *n* rows of the conversation.
 #' @export
 tail.llm_chat_session <- function(x, n = 6L, width = getOption("width") - 15, ...) {

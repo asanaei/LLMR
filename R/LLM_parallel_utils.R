@@ -134,8 +134,7 @@ call_llm_sweep <- function(base_config,
 
   # Build experiments tibble
   experiments <- tibble::tibble(
-    .param_name_sweep = param_name,
-    .param_value_sweep = param_values,
+    !!param_name := param_values, # Use the actual parameter name directly
     config = lapply(param_values, function(val) {
       modified_config <- base_config
       if (is.null(modified_config$model_params)) modified_config$model_params <- list()
@@ -146,36 +145,37 @@ call_llm_sweep <- function(base_config,
   )
 
   # Run parallel processing
-  results_raw <- call_llm_par(experiments, ...)
-  results_final$config <- NULL
+  results_final <- call_llm_par(experiments, ...)
 
-  # Create the parameter column with actual name
-  results_final[[param_name]] <- results_final$.param_value_sweep
-  results_final$swept_param_name <- results_final$.param_name_sweep
-
-  # Remove temporary columns
-  results_final$.param_name_sweep <- NULL
-  results_final$.param_value_sweep <- NULL
-
-  # Identify column groups
-  meta_cols <- setdiff(names(results_final), c("swept_param_name", param_name, "provider", "model",
-                                               "response_text", "raw_response_json", "success", "error_message"))
-
-  all_model_param_names_unnested <- setdiff(
-    names(results_final)[!names(results_final) %in% c(meta_cols, "swept_param_name", param_name,
-                                                      "provider", "model", "response_text",
-                                                      "raw_response_json", "success", "error_message")],
-    param_name
-  )
-
-  # Final column ordering
-  final_order <- c("swept_param_name", param_name, meta_cols, "provider", "model",
-                   all_model_param_names_unnested,
-                   "response_text", "raw_response_json", "success", "error_message")
-  final_order_existing <- final_order[final_order %in% names(results_final)]
-  remaining_cols <- setdiff(names(results_final), final_order_existing)
-
-  results_final <- results_final[, c(final_order_existing, remaining_cols)]
+  # results_final$config <- NULL
+  #
+  # # Create the parameter column with actual name
+  # results_final[[param_name]] <- results_final$.param_value_sweep
+  # results_final$swept_param_name <- results_final$.param_name_sweep
+  #
+  # # Remove temporary columns
+  # results_final$.param_name_sweep <- NULL
+  # results_final$.param_value_sweep <- NULL
+  #
+  # # Identify column groups
+  # meta_cols <- setdiff(names(results_final), c("swept_param_name", param_name, "provider", "model",
+  #                                              "response_text", "raw_response_json", "success", "error_message"))
+  #
+  # all_model_param_names_unnested <- setdiff(
+  #   names(results_final)[!names(results_final) %in% c(meta_cols, "swept_param_name", param_name,
+  #                                                     "provider", "model", "response_text",
+  #                                                     "raw_response_json", "success", "error_message")],
+  #   param_name
+  # )
+  #
+  # # Final column ordering
+  # final_order <- c("swept_param_name", param_name, meta_cols, "provider", "model",
+  #                  all_model_param_names_unnested,
+  #                  "response_text", "raw_response_json", "success", "error_message")
+  # final_order_existing <- final_order[final_order %in% names(results_final)]
+  # remaining_cols <- setdiff(names(results_final), final_order_existing)
+  #
+  # results_final <- results_final[, c(final_order_existing, remaining_cols)]
 
   return(results_final)
 }
