@@ -26,10 +26,19 @@ Sweeps through different values of a single parameter while keeping the message 
 Perfect for hyperparameter tuning, temperature experiments, etc.
 This function requires setting up the parallel environment using `setup_llm_parallel`.
 }
+\section{Parallel Workflow}{
+
+All parallel functions require the `future` backend to be configured.
+The recommended workflow is:
+1. Call `setup_llm_parallel()` once at the start of your script.
+2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
+3. Call `reset_llm_parallel()` at the end to restore sequential processing.
+}
+
 \examples{
 \dontrun{
   # Temperature sweep
-  config <- llm_config(provider = "openai", model = "gpt-4o-mini",
+  config <- llm_config(provider = "openai", model = "gpt-4.1-nano",
                        api_key = Sys.getenv("OPENAI_API_KEY"))
 
   messages <- "What is 15 * 23?"
@@ -37,6 +46,10 @@ This function requires setting up the parallel environment using `setup_llm_para
 
   setup_llm_parallel(workers = 4, verbose = TRUE)
   results <- call_llm_sweep(config, "temperature", temperatures, messages)
+  results |> dplyr::select(temperature, response_text)
   reset_llm_parallel(verbose = TRUE)
 }
+}
+\seealso{
+[setup_llm_parallel()], [reset_llm_parallel()]
 }

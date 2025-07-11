@@ -50,35 +50,35 @@ Processes experiments from a tibble where each row contains a config and message
 This is the core parallel processing function. Metadata columns are preserved.
 This function requires setting up the parallel environment using `setup_llm_parallel`.
 }
+\section{Parallel Workflow}{
+
+All parallel functions require the `future` backend to be configured.
+The recommended workflow is:
+1. Call `setup_llm_parallel()` once at the start of your script.
+2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
+3. Call `reset_llm_parallel()` at the end to restore sequential processing.
+}
+
 \examples{
 \dontrun{
-  library(dplyr)
-  library(tidyr)
+# Simple example: Compare two models on one prompt
+cfg1 <- llm_config("openai", "gpt-4.1-nano", Sys.getenv("OPENAI_API_KEY"))
+cfg2 <- llm_config("groq", "llama-3.3-70b-versatile", Sys.getenv("GROQ_API_KEY"))
 
-  # Build experiments with expand_grid
-  experiments <- expand_grid(
-    condition = c("control", "treatment"),
-    model_type = c("small", "large"),
-    rep = 1:10
-  ) |>
-    mutate(
-      config = case_when(
-        model_type == "small" ~ list(small_config),
-        model_type == "large" ~ list(large_config)
-      ),
-      messages = case_when(
-        condition == "control" ~ list(control_messages),
-        condition == "treatment" ~ list(treatment_messages)
-      )
-    )
+experiments <- tibble::tibble(
+  model_id = c("gpt-4.1-nano", "groq-llama-3.3"),
+  config = list(cfg1, cfg2),
+  messages = "Count the number of the letter e in this word: Freundschaftsbeziehungen "
+)
 
-  setup_llm_parallel(workers = 4)
-  results <- call_llm_par(experiments, progress = TRUE)
-  reset_llm_parallel()
+setup_llm_parallel(workers = 2)
+results <- call_llm_par(experiments, progress = TRUE)
+reset_llm_parallel()
 
-  # All metadata preserved for analysis
-  results |>
-    group_by(condition, model_type) |>
-    summarise(mean_response = mean(as.numeric(response_text), na.rm = TRUE))
+print(results[, c("model_id", "response_text")])
+
 }
+}
+\seealso{
+[setup_llm_parallel()], [reset_llm_parallel()]
 }

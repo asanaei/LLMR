@@ -36,8 +36,18 @@
   }
 
   # Extract provider and model
-  results_df$provider <- sapply(results_df[[config_col]], function(cfg) cfg$provider %||% NA_character_)
-  results_df$model    <- sapply(results_df[[config_col]], function(cfg) cfg$model %||% NA_character_)
+  #results_df$provider <- sapply(results_df[[config_col]], function(cfg) cfg$provider %||% NA_character_)
+  #results_df$model    <- sapply(results_df[[config_col]], function(cfg) cfg$model %||% NA_character_)
+
+  if (!"provider" %in% names(results_df)) {
+    results_df$provider <- sapply(results_df[[config_col]],
+                                  function(cfg) cfg$provider %||% NA_character_)
+  }
+  if (!"model" %in% names(results_df)) {
+    results_df$model <- sapply(results_df[[config_col]],
+                               function(cfg) cfg$model %||% NA_character_)
+  }
+
 
   # Extract all model parameters
   all_model_param_names <- unique(unlist(lapply(results_df[[config_col]], function(cfg) names(cfg$model_params))))
@@ -50,8 +60,28 @@
       })
     })
     names(param_cols_list) <- all_model_param_names
+    #params_df <- tibble::as_tibble(param_cols_list)
+    #results_df <- dplyr::bind_cols(results_df, params_df)
+
     params_df <- tibble::as_tibble(param_cols_list)
+    # ------------------------------------------------------------------
+    # avoid duplicate names coming from the input tibble
+    # ------------------------------------------------------------------
+    dup_params <- intersect(names(params_df), names(results_df))
+    if (length(dup_params) > 0) {
+      # If both columns exist but differ, keep the one already in results_df
+      for (p in dup_params) {
+        if (!identical(params_df[[p]], results_df[[p]])) {
+          warning(sprintf(
+            "Parameter '%s' is present both in the input data and in the config; keeping the existing column.",
+            p))
+        }
+      }
+      params_df <- params_df[, setdiff(names(params_df), dup_params), drop = FALSE]
+    }
+
     results_df <- dplyr::bind_cols(results_df, params_df)
+
   }
 
   # Identify metadata columns (everything except standard columns)
@@ -94,12 +124,20 @@
 #'
 #' @return A tibble with columns: swept_param_name, the varied parameter column, provider, model,
 #'   all other model parameters, response_text, raw_response_json, success, error_message.
+#' @section Parallel Workflow:
+#' All parallel functions require the `future` backend to be configured.
+#' The recommended workflow is:
+#' 1. Call `setup_llm_parallel()` once at the start of your script.
+#' 2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
+#' 3. Call `reset_llm_parallel()` at the end to restore sequential processing.
+#'
+#' @seealso [setup_llm_parallel()], [reset_llm_parallel()]
 #' @export
 #'
 #' @examples
 #' \dontrun{
 #'   # Temperature sweep
-#'   config <- llm_config(provider = "openai", model = "gpt-4o-mini",
+#'   config <- llm_config(provider = "openai", model = "gpt-4.1-nano",
 #'                        api_key = Sys.getenv("OPENAI_API_KEY"))
 #'
 #'   messages <- "What is 15 * 23?"
@@ -107,6 +145,7 @@
 #'
 #'   setup_llm_parallel(workers = 4, verbose = TRUE)
 #'   results <- call_llm_sweep(config, "temperature", temperatures, messages)
+#'   results |> dplyr::select(temperature, response_text)
 #'   reset_llm_parallel(verbose = TRUE)
 #' }
 call_llm_sweep <- function(base_config,
@@ -146,37 +185,7 @@ call_llm_sweep <- function(base_config,
 
   # Run parallel processing
   results_final <- call_llm_par(experiments, ...)
-
-  # results_final$config <- NULL
-  #
-  # # Create the parameter column with actual name
-  # results_final[[param_name]] <- results_final$.param_value_sweep
-  # results_final$swept_param_name <- results_final$.param_name_sweep
-  #
-  # # Remove temporary columns
-  # results_final$.param_name_sweep <- NULL
-  # results_final$.param_value_sweep <- NULL
-  #
-  # # Identify column groups
-  # meta_cols <- setdiff(names(results_final), c("swept_param_name", param_name, "provider", "model",
-  #                                              "response_text", "raw_response_json", "success", "error_message"))
-  #
-  # all_model_param_names_unnested <- setdiff(
-  #   names(results_final)[!names(results_final) %in% c(meta_cols, "swept_param_name", param_name,
-  #                                                     "provider", "model", "response_text",
-  #                                                     "raw_response_json", "success", "error_message")],
-  #   param_name
-  # )
-  #
-  # # Final column ordering
-  # final_order <- c("swept_param_name", param_name, meta_cols, "provider", "model",
-  #                  all_model_param_names_unnested,
-  #                  "response_text", "raw_response_json", "success", "error_message")
-  # final_order_existing <- final_order[final_order %in% names(results_final)]
-  # remaining_cols <- setdiff(names(results_final), final_order_existing)
-  #
-  # results_final <- results_final[, c(final_order_existing, remaining_cols)]
-
+  results_final$config <- NULL
   return(results_final)
 }
 
@@ -193,12 +202,21 @@ call_llm_sweep <- function(base_config,
 #'
 #' @return A tibble with columns: message_index (metadata), provider, model,
 #'   all model parameters, response_text, raw_response_json, success, error_message.
+#' @section Parallel Workflow:
+#' All parallel functions require the `future` backend to be configured.
+#' The recommended workflow is:
+#' 1. Call `setup_llm_parallel()` once at the start of your script.
+#' 2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
+#' 3. Call `reset_llm_parallel()` at the end to restore sequential processing.
+#'
+#' @seealso [setup_llm_parallel()], [reset_llm_parallel()]
+#'
 #' @export
 #'
 #' @examples
 #' \dontrun{
 #'   # Broadcast different questions
-#'   config <- llm_config(provider = "openai", model = "gpt-4o-mini",
+#'   config <- llm_config(provider = "openai", model = "gpt-4.1-nano",
 #'                        api_key = Sys.getenv("OPENAI_API_KEY"))
 #'
 #'   messages <- list(
@@ -244,8 +262,7 @@ call_llm_broadcast <- function(config,
   )
 
   # Run parallel processing
-  results_raw <- call_llm_par(experiments, ...)
-  results_final <- results_raw
+  results_final <- call_llm_par(experiments, ...)
   results_final$config <- NULL
   return(results_final)
 }
@@ -262,6 +279,14 @@ call_llm_broadcast <- function(config,
 #'
 #' @return A tibble with columns: config_index (metadata), provider, model,
 #'   all varying model parameters, response_text, raw_response_json, success, error_message.
+#' @section Parallel Workflow:
+#' All parallel functions require the `future` backend to be configured.
+#' The recommended workflow is:
+#' 1. Call `setup_llm_parallel()` once at the start of your script.
+#' 2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
+#' 3. Call `reset_llm_parallel()` at the end to restore sequential processing.
+#'
+#' @seealso [setup_llm_parallel()], [reset_llm_parallel()]
 #' @export
 #'
 #' @examples
@@ -269,7 +294,7 @@ call_llm_broadcast <- function(config,
 #'   # Compare different models
 #'   config1 <- llm_config(provider = "openai", model = "gpt-4o-mini",
 #'                         api_key = Sys.getenv("OPENAI_API_KEY"))
-#'   config2 <- llm_config(provider = "openai", model = "gpt-3.5-turbo",
+#'   config2 <- llm_config(provider = "openai", model = "gpt-4.1-nano",
 #'                         api_key = Sys.getenv("OPENAI_API_KEY"))
 #'
 #'   configs_list <- list(config1, config2)
@@ -336,38 +361,38 @@ call_llm_compare <- function(configs_list,
 #' @return A tibble containing all original columns from experiments (metadata, config, messages),
 #'   plus new columns: response_text, raw_response_json (the raw JSON string from the API),
 #'   success, error_message, duration (in seconds).
+#'
+
+#' @section Parallel Workflow:
+#' All parallel functions require the `future` backend to be configured.
+#' The recommended workflow is:
+#' 1. Call `setup_llm_parallel()` once at the start of your script.
+#' 2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
+#' 3. Call `reset_llm_parallel()` at the end to restore sequential processing.
+#'
+#' @seealso [setup_llm_parallel()], [reset_llm_parallel()]
 #' @export
 #'
 #' @examples
+
+#' @examples
 #' \dontrun{
-#'   library(dplyr)
-#'   library(tidyr)
+#' # Simple example: Compare two models on one prompt
+#' cfg1 <- llm_config("openai", "gpt-4.1-nano", Sys.getenv("OPENAI_API_KEY"))
+#' cfg2 <- llm_config("groq", "llama-3.3-70b-versatile", Sys.getenv("GROQ_API_KEY"))
 #'
-#'   # Build experiments with expand_grid
-#'   experiments <- expand_grid(
-#'     condition = c("control", "treatment"),
-#'     model_type = c("small", "large"),
-#'     rep = 1:10
-#'   ) |>
-#'     mutate(
-#'       config = case_when(
-#'         model_type == "small" ~ list(small_config),
-#'         model_type == "large" ~ list(large_config)
-#'       ),
-#'       messages = case_when(
-#'         condition == "control" ~ list(control_messages),
-#'         condition == "treatment" ~ list(treatment_messages)
-#'       )
-#'     )
+#' experiments <- tibble::tibble(
+#'   model_id = c("gpt-4.1-nano", "groq-llama-3.3"),
+#'   config = list(cfg1, cfg2),
+#'   messages = "Count the number of the letter e in this word: Freundschaftsbeziehungen "
+#' )
 #'
-#'   setup_llm_parallel(workers = 4)
-#'   results <- call_llm_par(experiments, progress = TRUE)
-#'   reset_llm_parallel()
+#' setup_llm_parallel(workers = 2)
+#' results <- call_llm_par(experiments, progress = TRUE)
+#' reset_llm_parallel()
 #'
-#'   # All metadata preserved for analysis
-#'   results |>
-#'     group_by(condition, model_type) |>
-#'     summarise(mean_response = mean(as.numeric(response_text), na.rm = TRUE))
+#' print(results[, c("model_id", "response_text")])
+#'
 #' }
 call_llm_par <- function(experiments,
                          simplify = TRUE,
@@ -543,7 +568,7 @@ call_llm_par <- function(experiments,
   }
 
   if (simplify) {
-     output_df <- .unnest_config_to_cols(output_df, config_col = "config")
+    output_df <- .unnest_config_to_cols(output_df, config_col = "config")
   }
 
   return(output_df)

@@ -23,10 +23,19 @@ Broadcasts different messages using the same configuration in parallel.
 Perfect for batch processing different prompts with consistent settings.
 This function requires setting up the parallel environment using `setup_llm_parallel`.
 }
+\section{Parallel Workflow}{
+
+All parallel functions require the `future` backend to be configured.
+The recommended workflow is:
+1. Call `setup_llm_parallel()` once at the start of your script.
+2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
+3. Call `reset_llm_parallel()` at the end to restore sequential processing.
+}
+
 \examples{
 \dontrun{
   # Broadcast different questions
-  config <- llm_config(provider = "openai", model = "gpt-4o-mini",
+  config <- llm_config(provider = "openai", model = "gpt-4.1-nano",
                        api_key = Sys.getenv("OPENAI_API_KEY"))
 
   messages <- list(
@@ -39,4 +48,7 @@ This function requires setting up the parallel environment using `setup_llm_para
   results <- call_llm_broadcast(config, messages)
   reset_llm_parallel(verbose = TRUE)
 }
+}
+\seealso{
+[setup_llm_parallel()], [reset_llm_parallel()]
 }
