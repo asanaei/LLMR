@@ -22,12 +22,21 @@ Compares different configurations (models, providers, settings) using the same m
 Perfect for benchmarking across different models or providers.
 This function requires setting up the parallel environment using `setup_llm_parallel`.
 }
+\section{Parallel Workflow}{
+
+All parallel functions require the `future` backend to be configured.
+The recommended workflow is:
+1. Call `setup_llm_parallel()` once at the start of your script.
+2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
+3. Call `reset_llm_parallel()` at the end to restore sequential processing.
+}
+
 \examples{
 \dontrun{
   # Compare different models
   config1 <- llm_config(provider = "openai", model = "gpt-4o-mini",
                         api_key = Sys.getenv("OPENAI_API_KEY"))
-  config2 <- llm_config(provider = "openai", model = "gpt-3.5-turbo",
+  config2 <- llm_config(provider = "openai", model = "gpt-4.1-nano",
                         api_key = Sys.getenv("OPENAI_API_KEY"))
 
   configs_list <- list(config1, config2)
@@ -37,4 +46,7 @@ This function requires setting up the parallel environment using `setup_llm_para
   results <- call_llm_compare(configs_list, messages)
   reset_llm_parallel(verbose = TRUE)
 }
+}
+\seealso{
+[setup_llm_parallel()], [reset_llm_parallel()]
 }
