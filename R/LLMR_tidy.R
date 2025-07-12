@@ -32,8 +32,13 @@
 #' For instant multi-core use, call `setup_llm_parallel(workers = 4)` (or whatever
 #' number you prefer) once per session; revert with `reset_llm_parallel()`.
 #'
-#' @seealso setup_llm_parallel, reset_llm_parallel, call_llm_par
 #' @export
+#'
+#' @seealso
+#' \code{\link{setup_llm_parallel}},
+#' \code{\link{reset_llm_parallel}},
+#' \code{\link{call_llm_par}}, and
+#' \code{\link{llm_mutate}} which is a tidy-friendly wrapper around `llm_fn()`.
 #'
 #' @examples
 #' ## --- Vector input ------------------------------------------------------
@@ -115,8 +120,13 @@ llm_fn <- function(x,
 #' parallel behaviour.  Activate parallelism with
 #' `setup_llm_parallel()` and shut it off with `reset_llm_parallel()`.
 #'
-#' @seealso llm_fn, setup_llm_parallel, reset_llm_parallel
 #' @export
+#'
+#' @seealso
+#' \code{\link{setup_llm_parallel}},
+#' \code{\link{reset_llm_parallel}},
+#' \code{\link{call_llm_par}},
+#' \code{\link{llm_fn}}
 #'
 #' @examples
 #' ## See examples under \link{llm_fn}.

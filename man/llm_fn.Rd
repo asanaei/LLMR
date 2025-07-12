@@ -75,5 +75,8 @@ reviews |>
 }
 }
 \seealso{
-setup_llm_parallel, reset_llm_parallel, call_llm_par
+\code{\link{setup_llm_parallel}},
+\code{\link{reset_llm_parallel}},
+\code{\link{call_llm_par}}, and
+\code{\link{llm_mutate}} which is a tidy-friendly wrapper around `llm_fn()`.
 }
