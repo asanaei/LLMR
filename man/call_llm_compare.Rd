@@ -48,5 +48,5 @@ The recommended workflow is:
 }
 }
 \seealso{
-[setup_llm_parallel()], [reset_llm_parallel()]
+\code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}}
 }

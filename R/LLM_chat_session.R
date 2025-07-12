@@ -3,6 +3,7 @@
 # ---------------------------------------------------------------------------
 
 #' @importFrom utils head tail
+#' @importFrom utils modifyList
 
 ## helper: make a well-formed message ---------------------------------------
 .msg <- function(role, content) list(role = role, content = as.character(content)[1])

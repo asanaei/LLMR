@@ -9,7 +9,7 @@ call_llm_par(
   simplify = TRUE,
   tries = 10,
   wait_seconds = 2,
-  backoff_factor = 2,
+  backoff_factor = 3,
   verbose = FALSE,
   memoize = FALSE,
   max_workers = NULL,
@@ -80,5 +80,5 @@ print(results[, c("model_id", "response_text")])
 }
 }
 \seealso{
-[setup_llm_parallel()], [reset_llm_parallel()]
+\code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}}
 }

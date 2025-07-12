@@ -46,5 +46,8 @@ parallel behaviour.  Activate parallelism with
 ## See examples under \link{llm_fn}.
 }
 \seealso{
-llm_fn, setup_llm_parallel, reset_llm_parallel
+\code{\link{setup_llm_parallel}},
+\code{\link{reset_llm_parallel}},
+\code{\link{call_llm_par}},
+\code{\link{llm_fn}}
 }

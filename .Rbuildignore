@@ -2,4 +2,5 @@
 ^\.Rproj\.user$
 ^LICENSE\.md$
 ^\.DS_Store$
+^\\.DS_Store$
 paper.md

@@ -241,6 +241,24 @@ get_endpoint <- function(config, default_endpoint) {
 #' }
 llm_config <- function(provider, model, api_key, troubleshooting = FALSE, base_url = NULL, embedding = NULL, ...) {
   model_params <- list(...)
+  ##clamp temperature to valid range
+  if (!is.null(model_params$temperature)) {
+    temp <- model_params$temperature
+    if (identical(provider, "anthropic")) {
+      if (temp < 0 || temp > 1) {
+        temp <- min(max(temp, 0), 1)
+        warning(paste0("Anthropic temperature must be between 0 and 1; setting it at: ", temp))
+      }
+    } else {
+      if (temp < 0 || temp > 2) {
+        temp <- min(max(temp, 0), 2)
+        warning(paste0("Temperature must be between 0 and 2; setting it at: ",temp))
+      }
+    }
+    model_params$temperature <- temp
+  }
+  ## end clamp
+
   # Handle base_url passed via ... for backward compatibility, renaming to api_url internally
   if (!is.null(base_url)) {
     model_params$api_url <- base_url
@@ -735,83 +753,74 @@ call_llm.together_embedding <- function(config, messages, verbose = FALSE, json 
 
 #' @export
 #' @keywords internal
-call_llm.gemini_embedding <- function(config, messages, verbose = FALSE, json = FALSE) {
-  # Endpoint for single content embedding
-  endpoint <- paste0("https://generativelanguage.googleapis.com/v1beta/models/", config$model, ":embedContent")
+call_llm.gemini_embedding <- function(config, messages,verbose = FALSE, json = FALSE) {
 
-  # Handle both character vectors and message lists to get texts
+  ## 1. Collect texts ---------------------------------------------------------
   texts <- if (is.character(messages)) {
     messages
   } else {
-    # Assuming messages is a list of lists like list(list(role="user", content="..."))
-    # or just a list of character strings if not strictly following message format.
-    # This part might need adjustment if 'messages' can be complex lists.
-    # For get_batched_embeddings, 'messages' will be a character vector (batch_texts).
-    sapply(messages, function(msg) {
-      if (is.list(msg) && !is.null(msg$content)) {
-        msg$content
-      } else if (is.character(msg)) {
-        msg
-      } else {
-        as.character(msg) # Fallback
-      }
-    })
+    vapply(messages, function(msg) {
+      if (is.list(msg) && !is.null(msg$content)) msg$content else as.character(msg)
+    }, FUN.VALUE = character(1))
   }
 
-  results <- vector("list", length(texts)) # Pre-allocate list
-
-  for (i in seq_along(texts)) {
-    current_text <- texts[i]
-    body <- list(
-      content = list(
-        parts = list(list(text = current_text))
-      )
+  ## 2. Fast path: batch ------------------------------------------------------
+  if (length(texts) > 1) {
+    batch_endpoint <- sprintf(
+      "https://generativelanguage.googleapis.com/v1beta/models/%s:batchEmbedContents",
+      config$model
     )
 
-    req <- httr2::request(endpoint) |>
-      httr2::req_url_query(key = config$api_key) |>
-      httr2::req_headers("Content-Type" = "application/json") |>
-      httr2::req_body_json(body)
+    batch_body <- list(
+      requests = lapply(texts, function(txt) {
+        list(
+          # -- REQUIRED per docs
+          model   = paste0("models/", config$model),
+          content = list(
+            parts = list(list(text = txt))
+          )
+        )
+      })
+    )
 
-    if (verbose) {
-      cat("Making single embedding request to:", endpoint, "for text", i, "\n")
-      # cat("Text snippet:", substr(current_text, 1, 50), "...\n") # Optional: for debugging
-    }
+    resp <- httr2::request(batch_endpoint) |>
+      httr2::req_headers(
+        "Content-Type"   = "application/json",
+        "x-goog-api-key" = config$api_key
+      ) |>
+      httr2::req_body_json(batch_body) |>
+      httr2::req_perform()
 
-    api_response_content <- NULL # Initialize
-    tryCatch({
-      resp <- httr2::req_perform(req)
-      api_response_content <- httr2::resp_body_json(resp)
-    }, error = function(e) {
-      if (verbose) {
-        message("LLMR Error during Gemini embedding for text ", i, ": ", conditionMessage(e))
-      }
-      # api_response_content remains NULL if error
-    })
+    out <- httr2::resp_body_json(resp)
 
-    if (!is.null(api_response_content) && !is.null(api_response_content$embedding$values)) {
-      results[[i]] <- list(embedding = api_response_content$embedding$values)
-    } else {
-      # Store a placeholder that parse_embeddings can handle (e.g., leading to NAs)
-      # The dimension of NA_real_ doesn't matter here, as parse_embeddings and get_batched_embeddings
-      # will determine dimensionality from successful calls or handle it.
-      results[[i]] <- list(embedding = NA_real_)
-      if (verbose && !is.null(api_response_content)) {
-        message("Unexpected response structure or missing embedding values for text ", i)
-      } else if (verbose && is.null(api_response_content)) {
-        message("No response content (likely due to API error) for text ", i)
-      }
-    }
+    #if (verbose) cat("Batch embedding call returned", length(out$embeddings), "vectors\n")
+
+    # map to LLMR's expected structure
+    return(list(data = lapply(out$embeddings, \(e) list(embedding = e$values))))
   }
 
-  # The 'json' parameter in the function signature is a bit tricky here.
-  # we ignore it here
-  final_output <- list(data = results)
-  # If json=TRUE was intended to get the raw responses, this structure doesn't fully provide that
-  # but this was really made for the generative calls!
-  return(final_output)
-}
+  ## 3. Fallback: single text -------------------------------------------------
+  single_endpoint <- sprintf(
+    "https://generativelanguage.googleapis.com/v1beta/models/%s:embedContent",
+    config$model
+  )
 
+  body <- list(
+    content = list(parts = list(list(text = texts[[1]])))
+  )
+
+  req <- httr2::request(single_endpoint) |>
+    httr2::req_url_query(key = config$api_key) |>
+    httr2::req_headers("Content-Type" = "application/json") |>
+    httr2::req_body_json(body)
+
+  #if (verbose) cat("Single embedding request!"\n")
+
+  resp <- httr2::req_perform(req)
+  content <- httr2::resp_body_json(resp)
+
+  return(list(data = list(list(embedding = content$embedding$values))))
+}
 
 
 # ----- Embedding Utility Functions -----

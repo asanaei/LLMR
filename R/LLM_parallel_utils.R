@@ -131,7 +131,7 @@
 #' 2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
 #' 3. Call `reset_llm_parallel()` at the end to restore sequential processing.
 #'
-#' @seealso [setup_llm_parallel()], [reset_llm_parallel()]
+#' @seealso \code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}}
 #' @export
 #'
 #' @examples
@@ -209,7 +209,7 @@ call_llm_sweep <- function(base_config,
 #' 2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
 #' 3. Call `reset_llm_parallel()` at the end to restore sequential processing.
 #'
-#' @seealso [setup_llm_parallel()], [reset_llm_parallel()]
+#' @seealso \code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}}
 #'
 #' @export
 #'
@@ -286,7 +286,7 @@ call_llm_broadcast <- function(config,
 #' 2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
 #' 3. Call `reset_llm_parallel()` at the end to restore sequential processing.
 #'
-#' @seealso [setup_llm_parallel()], [reset_llm_parallel()]
+#' @seealso \code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}}
 #' @export
 #'
 #' @examples
@@ -370,11 +370,9 @@ call_llm_compare <- function(configs_list,
 #' 2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
 #' 3. Call `reset_llm_parallel()` at the end to restore sequential processing.
 #'
-#' @seealso [setup_llm_parallel()], [reset_llm_parallel()]
+#' @seealso \code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}}
 #' @export
 #'
-#' @examples
-
 #' @examples
 #' \dontrun{
 #' # Simple example: Compare two models on one prompt
@@ -398,7 +396,7 @@ call_llm_par <- function(experiments,
                          simplify = TRUE,
                          tries = 10,
                          wait_seconds = 2,
-                         backoff_factor = 2,
+                         backoff_factor = 3,
                          verbose = FALSE,
                          memoize = FALSE,
                          max_workers = NULL,
