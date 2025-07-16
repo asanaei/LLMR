@@ -1,6 +1,6 @@
 # LLMR_tidy.R ---------------------------------------------------------------
 
-#' Vectorised LLM transformer
+#' Applies an LLM prompt to every element of a vector
 #'
 #' @importFrom tidyr expand_grid
 #' @importFrom rlang `:=`

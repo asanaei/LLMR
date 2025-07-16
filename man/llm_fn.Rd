@@ -2,16 +2,16 @@
 % Please edit documentation in R/LLMR_tidy.R
 \name{llm_fn}
 \alias{llm_fn}
-\title{Vectorised LLM transformer}
+\title{Applies an LLM prompt to every element of a vector}
 \usage{
 llm_fn(x, prompt, .config, .system_prompt = NULL, ...)
 }
 \arguments{
-\item{x}{A character vector **or** a data.frame/tibble.}
+\item{x}{A character vector \strong{or} a data.frame/tibble.}
 
 \item{prompt}{A glue template string.
-*If* \code{x} is a data frame, use \code{{col}} placeholders;
-*if* \code{x} is a vector, refer to the element as \code{{x}}.}
+\emph{If} \code{x} is a data frame, use \code{{col}} placeholders;
+\emph{if} \code{x} is a vector, refer to the element as \code{{x}}.}
 
 \item{.config}{An \link{llm_config} object.}
 
@@ -22,21 +22,21 @@ llm_fn(x, prompt, .config, .system_prompt = NULL, ...)
 }
 \value{
 A character vector the same length as \code{x}.
-  Failed calls yield \code{NA}.
+Failed calls yield \code{NA}.
 }
 \description{
-Vectorised LLM transformer
+Applies an LLM prompt to every element of a vector
 }
 \details{
-Runs each prompt through `call_llm_broadcast()`, which forwards the
-requests to `call_llm_par()`.
+Runs each prompt through \code{call_llm_broadcast()}, which forwards the
+requests to \code{call_llm_par()}.
 Internally each prompt is passed as a
-**plain character vector** (or a
-named character vector when `.system_prompt` is supplied).
-That core engine executes them *in parallel* according
-to the current *future* plan.
-For instant multi-core use, call `setup_llm_parallel(workers = 4)` (or whatever
-number you prefer) once per session; revert with `reset_llm_parallel()`.
+\strong{plain character vector} (or a
+named character vector when \code{.system_prompt} is supplied).
+That core engine executes them \emph{in parallel} according
+to the current \emph{future} plan.
+For instant multi-core use, call \code{setup_llm_parallel(workers = 4)} (or whatever
+number you prefer) once per session; revert with \code{reset_llm_parallel()}.
 }
 \examples{
 ## --- Vector input ------------------------------------------------------
@@ -78,5 +78,5 @@ reviews |>
 \code{\link{setup_llm_parallel}},
 \code{\link{reset_llm_parallel}},
 \code{\link{call_llm_par}}, and
-\code{\link{llm_mutate}} which is a tidy-friendly wrapper around `llm_fn()`.
+\code{\link{llm_mutate}} which is a tidy-friendly wrapper around \code{llm_fn()}.
 }

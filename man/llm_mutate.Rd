@@ -21,8 +21,8 @@ llm_mutate(
 \item{output}{Unquoted name of the new column you want to add.}
 
 \item{prompt}{A glue template string.
-*If* \code{x} is a data frame, use \code{{col}} placeholders;
-*if* \code{x} is a vector, refer to the element as \code{{x}}.}
+\emph{If} \code{x} is a data frame, use \code{{col}} placeholders;
+\emph{if} \code{x} is a vector, refer to the element as \code{{x}}.}
 
 \item{.config}{An \link{llm_config} object.}
 
@@ -38,9 +38,9 @@ A convenience wrapper around \link{llm_fn} that inserts the result as a new
 column via \link[dplyr]{mutate}.
 }
 \details{
-Internally calls `llm_fn()`, so the API requests inherit the same
+Internally calls \code{llm_fn()}, so the API requests inherit the same
 parallel behaviour.  Activate parallelism with
-`setup_llm_parallel()` and shut it off with `reset_llm_parallel()`.
+\code{setup_llm_parallel()} and shut it off with \code{reset_llm_parallel()}.
 }
 \examples{
 ## See examples under \link{llm_fn}.

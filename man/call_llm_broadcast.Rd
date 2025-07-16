@@ -2,7 +2,7 @@
 % Please edit documentation in R/LLM_parallel_utils.R
 \name{call_llm_broadcast}
 \alias{call_llm_broadcast}
-\title{Mode 2: Message Broadcast - Fixed Config, Multiple Messages}
+\title{Parallel API calls: Fixed Config, Multiple Messages}
 \usage{
 call_llm_broadcast(config, messages, ...)
 }
@@ -12,24 +12,26 @@ call_llm_broadcast(config, messages, ...)
 \item{messages}{A character vector (each element is a prompt) OR
 a list where each element is a pre-formatted message list.}
 
-\item{...}{Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).}
+\item{...}{Additional arguments passed to \code{call_llm_par} (e.g., tries, verbose, progress).}
 }
 \value{
 A tibble with columns: message_index (metadata), provider, model,
-  all model parameters, response_text, raw_response_json, success, error_message.
+all model parameters, response_text, raw_response_json, success, error_message.
 }
 \description{
 Broadcasts different messages using the same configuration in parallel.
 Perfect for batch processing different prompts with consistent settings.
-This function requires setting up the parallel environment using `setup_llm_parallel`.
+This function requires setting up the parallel environment using \code{setup_llm_parallel}.
 }
 \section{Parallel Workflow}{
 
-All parallel functions require the `future` backend to be configured.
+All parallel functions require the \code{future} backend to be configured.
 The recommended workflow is:
-1. Call `setup_llm_parallel()` once at the start of your script.
-2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
-3. Call `reset_llm_parallel()` at the end to restore sequential processing.
+\enumerate{
+\item Call \code{setup_llm_parallel()} once at the start of your script.
+\item Run one or more parallel experiments (e.g., \code{call_llm_broadcast()}).
+\item Call \code{reset_llm_parallel()} at the end to restore sequential processing.
+}
 }
 
 \examples{
