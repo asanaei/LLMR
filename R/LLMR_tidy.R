@@ -152,9 +152,3 @@ llm_mutate <- function(.data,
       .after  = {{ .after }}
     )
 }
-
-utils::globalVariables(
-  c("config", "messages", "config_label",
-    "message_label", "repetition",
-    ".param_name_sweep", ".param_value_sweep")
-)

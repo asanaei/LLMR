@@ -180,62 +180,50 @@ perform_request <- function(req, verbose, json) {
 #'
 #' @keywords internal
 #' @noRd
+
+
 extract_text <- function(content) {
-    # Handle embeddings FIRST with more flexible logic
-    if (is.list(content) && (!is.null(content$data) || !is.null(content$embedding))) {
-      return(content)
-    }
+  # Handle embeddings FIRST with more flexible logic
+  if (is.list(content) && (!is.null(content$data) || !is.null(content$embedding))) {
+    return(content)
+  }
 
-    if (!is.null(content$choices)) {
-      # For APIs like OpenAI, Groq, Together AI
-      if (length(content$choices) == 0 || is.null(content$choices[[1]]$message$content)) {
-        return(NA_character_)
-      }
-      return(content$choices[[1]]$message$content)
+  if (!is.null(content$choices)) {
+    # For APIs like OpenAI, Groq, Together AI
+    if (length(content$choices) == 0 || is.null(content$choices[[1]]$message$content)) {
+      return(NA_character_)
     }
+    return(content$choices[[1]]$message$content)
+  }
 
-    if (!is.null(content$content)) {
-      # For Anthropic
-      if (length(content$content) == 0 || is.null(content$content[[1]]$text)) {
-        return(NA_character_)
-      }
-      return(content$content[[1]]$text)
+  if (!is.null(content$content)) {
+    # For Anthropic
+    if (length(content$content) == 0 || is.null(content$content[[1]]$text)) {
+      return(NA_character_)
     }
-
+    return(content$content[[1]]$text)
+  }
 
   if (!is.null(content$candidates)) {        # Gemini
+    if (length(content$candidates) == 0 ||
+        is.null(content$candidates[[1]]$content) ||
+        is.null(content$candidates[[1]]$content$parts) ||
+        length(content$candidates[[1]]$content$parts) == 0) {
+      return(NA_character_)
+    }
     cand <- content$candidates[[1]]
     parts <- cand$content$parts
-
-    # identify answer vs. thoughts
-    is_thought <- vapply(parts,
-                         function(p) isTRUE(p$thought),
-                         logical(1))
-
+    is_thought <- vapply(parts, function(p) isTRUE(p$thought), logical(1))
     answer_idx <- which(!is_thought)
-    if (length(answer_idx) == 0) answer_idx <- 1   # fallback
-
+    if (length(answer_idx) == 0) answer_idx <- 1
     answer_text  <- parts[[answer_idx[1]]]$text
-    thoughts_txt <- paste(vapply(parts[is_thought], `[[`, "", "text"),
-                          collapse = "\n\n")
-
+    if (is.null(answer_text)) return(NA_character_)
+    thoughts_txt <- paste(vapply(parts[is_thought], `[[`, "", "text"), collapse = "\n\n")
     attr(answer_text, "thoughts") <- thoughts_txt
     return(answer_text)
   }
 
-    # if (!is.null(content$candidates)) {
-    #   # For Gemini API
-    #   if (length(content$candidates) == 0 ||
-    #       is.null(content$candidates[[1]]$content$parts) ||
-    #       length(content$candidates[[1]]$content$parts) == 0 ||
-    #       is.null(content$candidates[[1]]$content$parts[[1]]$text)) {
-    #     return(NA_character_)
-    #   }
-    #   return(content$candidates[[1]]$content$parts[[1]]$text)
-    # }
-
-    # Fallback - return content as-is instead of throwing error
-    return(content)
+  return(NA_character_)
 }
 
 #' Format Anthropic Messages
