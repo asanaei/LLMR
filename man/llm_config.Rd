@@ -47,3 +47,14 @@ Create LLM Configuration
   call_llm(cfg, "Hello!")  # one-shot, bare string
 }
 }
+\seealso{
+The main ways to use a config object:
+\itemize{
+\item \code{\link{call_llm}} for a basic, single API call.
+\item \code{\link{call_llm_robust}} for a more reliable single call with retries.
+\item \code{\link{chat_session}} for creating an interactive, stateful conversation.
+\item \code{\link{llm_fn}} for applying a prompt to a vector or data frame.
+\item \code{\link{call_llm_par}} for running large-scale, parallel experiments.
+\item \code{\link{get_batched_embeddings}} for generating text embeddings.
+}
+}

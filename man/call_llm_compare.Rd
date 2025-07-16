@@ -2,7 +2,7 @@
 % Please edit documentation in R/LLM_parallel_utils.R
 \name{call_llm_compare}
 \alias{call_llm_compare}
-\title{Mode 3: Model Comparison - Multiple Configs, Fixed Message}
+\title{Parallel API calls: Multiple Configs, Fixed Message}
 \usage{
 call_llm_compare(configs_list, messages, ...)
 }
@@ -11,24 +11,26 @@ call_llm_compare(configs_list, messages, ...)
 
 \item{messages}{A character vector or a list of message objects (same for all configs).}
 
-\item{...}{Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).}
+\item{...}{Additional arguments passed to \code{call_llm_par} (e.g., tries, verbose, progress).}
 }
 \value{
 A tibble with columns: config_index (metadata), provider, model,
-  all varying model parameters, response_text, raw_response_json, success, error_message.
+all varying model parameters, response_text, raw_response_json, success, error_message.
 }
 \description{
 Compares different configurations (models, providers, settings) using the same message.
 Perfect for benchmarking across different models or providers.
-This function requires setting up the parallel environment using `setup_llm_parallel`.
+This function requires setting up the parallel environment using \code{setup_llm_parallel}.
 }
 \section{Parallel Workflow}{
 
-All parallel functions require the `future` backend to be configured.
+All parallel functions require the \code{future} backend to be configured.
 The recommended workflow is:
-1. Call `setup_llm_parallel()` once at the start of your script.
-2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
-3. Call `reset_llm_parallel()` at the end to restore sequential processing.
+\enumerate{
+\item Call \code{setup_llm_parallel()} once at the start of your script.
+\item Run one or more parallel experiments (e.g., \code{call_llm_broadcast()}).
+\item Call \code{reset_llm_parallel()} at the end to restore sequential processing.
+}
 }
 
 \examples{

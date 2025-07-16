@@ -22,10 +22,12 @@ The (memoised) response object from \code{\link{call_llm}}.
 A memoised version of \code{\link{call_llm}} to avoid repeated identical requests.
 }
 \details{
-- Requires the \code{memoise} package. Add \code{memoise} to your
-  package's DESCRIPTION.
-- Clearing the cache can be done via \code{memoise::forget(cache_llm_call)}
-  or by restarting your R session.
+\itemize{
+\item Requires the \code{memoise} package. Add \code{memoise} to your
+package's DESCRIPTION.
+\item Clearing the cache can be done via \code{memoise::forget(cache_llm_call)}
+or by restarting your R session.
+}
 }
 \examples{
 \dontrun{

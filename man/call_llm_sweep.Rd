@@ -2,7 +2,7 @@
 % Please edit documentation in R/LLM_parallel_utils.R
 \name{call_llm_sweep}
 \alias{call_llm_sweep}
-\title{Mode 1: Parameter Sweep - Vary One Parameter, Fixed Message}
+\title{Parallel API calls: Parameter Sweep - Vary One Parameter, Fixed Message}
 \usage{
 call_llm_sweep(base_config, param_name, param_values, messages, ...)
 }
@@ -15,24 +15,26 @@ call_llm_sweep(base_config, param_name, param_values, messages, ...)
 
 \item{messages}{A character vector or a list of message objects (same for all calls).}
 
-\item{...}{Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).}
+\item{...}{Additional arguments passed to \code{call_llm_par} (e.g., tries, verbose, progress).}
 }
 \value{
 A tibble with columns: swept_param_name, the varied parameter column, provider, model,
-  all other model parameters, response_text, raw_response_json, success, error_message.
+all other model parameters, response_text, raw_response_json, success, error_message.
 }
 \description{
 Sweeps through different values of a single parameter while keeping the message constant.
 Perfect for hyperparameter tuning, temperature experiments, etc.
-This function requires setting up the parallel environment using `setup_llm_parallel`.
+This function requires setting up the parallel environment using \code{setup_llm_parallel}.
 }
 \section{Parallel Workflow}{
 
-All parallel functions require the `future` backend to be configured.
+All parallel functions require the \code{future} backend to be configured.
 The recommended workflow is:
-1. Call `setup_llm_parallel()` once at the start of your script.
-2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
-3. Call `reset_llm_parallel()` at the end to restore sequential processing.
+\enumerate{
+\item Call \code{setup_llm_parallel()} once at the start of your script.
+\item Run one or more parallel experiments (e.g., \code{call_llm_broadcast()}).
+\item Call \code{reset_llm_parallel()} at the end to restore sequential processing.
+}
 }
 
 \examples{

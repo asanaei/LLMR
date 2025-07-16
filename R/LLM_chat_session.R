@@ -25,12 +25,20 @@
   list(sent = 0, rec = 0)
 }
 
-#' Stateful chat session
+#' @md
+# ---------------------------------------------------------------------------#
+# MASTER DOCUMENTATION BLOCK                                                 #
+# ---------------------------------------------------------------------------#
+#' Chat Session Object and Methods
 #'
-#' Create a lightweight, in-memory conversation object that retains message
-#' history between calls to the LLM.  Internally it wraps
-#' \code{call_llm_robust()} so you still benefit from retry logic,
-#' caching, and error logging.
+#' Create and interact with a stateful chat session object that retains
+#' message history. This documentation page covers the constructor function
+#' `chat_session()` as well as all S3 methods for the `llm_chat_session` class.
+#'
+#' @details
+#' The `chat_session` object provides a simple way to hold a conversation with
+#' a generative model. It wraps \code{\link{call_llm_robust}} to benefit from
+#' retry logic, caching, and error logging.
 #'
 #' @section How it works:
 #'   1.  A private environment stores the running list of
@@ -38,16 +46,6 @@
 #'   2.  At each \code{$send()} the history is sent *in full* to the model.
 #'   3.  Provider-agnostic token counts are extracted from the JSON response
 #'       (fields are detected by name, so new providers continue to work).
-#'
-#' @param config  An [\code{llm_config}] **for a generative model**
-#'                (i.e. \code{embedding = FALSE}).
-#' @param system  Optional system prompt inserted once at the beginning.
-#' @param ...     Default arguments forwarded to every
-#'                [\code{call_llm_robust()}] call (e.g.
-#'                \code{verbose = TRUE}, \code{json = TRUE}).
-#'
-#' @return An object of class **\code{llm_chat_session}** with the methods
-#'   listed below.
 #'
 #' @section Public methods:
 #' \describe{
@@ -63,17 +61,44 @@
 #'     message).}
 #' }
 #'
+#' @param config  An \code{\link{llm_config}} **for a generative model**
+#'                (i.e. \code{embedding = FALSE}).
+#' @param system  Optional system prompt inserted once at the beginning.
+#' @param ...     Arguments passed to other methods. For `chat_session`, these
+#'                are default arguments forwarded to every
+#'                \code{\link{call_llm_robust}} call (e.g.
+#'                \code{verbose = TRUE}, \code{json = TRUE}).
+#' @param x,object An `llm_chat_session` object.
+#' @param n Number of turns to display.
+#' @param width Character width for truncating long messages.
+#'
+#' @return For `chat_session()`, an object of class **`llm_chat_session`**.
+#'   For other methods, the return value is described by their respective titles.
+#' @seealso
+#' \code{\link{llm_config}} to create the configuration object.
+#' \code{\link{call_llm_robust}} for single, stateless API calls.
+#' \code{\link{llm_fn}} for applying a prompt to many items in a vector or data frame.
+#'
+#' @name llm_chat_session
+#'
 #' @examples
 #' \dontrun{
 #' cfg  <- llm_config("openai", "gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"))
 #' chat <- chat_session(cfg, system = "Be concise.")
 #' chat$send("Who invented the moon?")
 #' chat$send("Explain why in one short sentence.")
-#' chat           # snapshot (first 10 turns)
-#' tail(chat, 2)  # last 2 turns
-#' }
-#' @export
 #'
+#' # Using S3 methods
+#' chat           # print() shows a summary and first 10 turns
+#' summary(chat)  # Get session statistics
+#' tail(chat, 2)  # See the last 2 turns of the conversation
+#' df <- as.data.frame(chat) # Convert the full history to a data frame
+#' }
+NULL
+
+#' @title Stateful chat session constructor
+#' @rdname llm_chat_session
+#' @export
 chat_session <- function(config, system = NULL, ...) {
 
   stopifnot(inherits(config, "llm_config"))
@@ -149,16 +174,15 @@ chat_session <- function(config, system = NULL, ...) {
 # S3 helpers so base verbs behave naturally                                  #
 # ---------------------------------------------------------------------------#
 
-#' @param x An `llm_chat_session` object.
-#' @param ... Additional arguments (unused).
-#' @describeIn chat_session Coerce a session to a two-column data frame.
+#' @title Coerce a chat session to a data frame
+#' @rdname llm_chat_session
 #' @export
 as.data.frame.llm_chat_session <- function(x, ...) {
   x$history_df()
 }
 
-#' @param object An `llm_chat_session` object.
-#' @describeIn chat_session Summary statistics for a chat session.
+#' @title Summary statistics for a chat session
+#' @rdname llm_chat_session
 #' @export
 summary.llm_chat_session <- function(object, ...) {
   hist <- object$history_df()
@@ -199,9 +223,8 @@ print.summary.llm_chat_session <- function(x, ...) {
   }
 }
 
-#' @param n Number of turns to display.
-#' @param width Character width for truncating long messages.
-#' @describeIn chat_session First *n* rows of the conversation.
+#' @title Display the first part of a chat session
+#' @rdname llm_chat_session
 #' @export
 head.llm_chat_session <- function(x, n = 6L, width = getOption("width") - 15, ...) {
   slice <- utils::head(x$history_df(), n, ...)
@@ -209,9 +232,8 @@ head.llm_chat_session <- function(x, n = 6L, width = getOption("width") - 15, ..
   invisible(slice)
 }
 
-#' @param n Number of turns to display.
-#' @param width Character width for truncating long messages.
-#' @describeIn chat_session Last *n* rows of the conversation.
+#' @title Display the last part of a chat session
+#' @rdname llm_chat_session
 #' @export
 tail.llm_chat_session <- function(x, n = 6L, width = getOption("width") - 15, ...) {
   slice <- utils::tail(x$history_df(), n, ...)
@@ -219,6 +241,8 @@ tail.llm_chat_session <- function(x, n = 6L, width = getOption("width") - 15, ..
   invisible(slice)
 }
 
+#' @title Print a chat session object
+#' @rdname llm_chat_session
 #' @export
 print.llm_chat_session <- function(x, width = getOption("width") - 15, ...) {
   hist <- x$history_df()
@@ -230,5 +254,3 @@ print.llm_chat_session <- function(x, width = getOption("width") - 15, ...) {
   if (nrow(hist) > 10) cat("...\n")
   invisible(x)
 }
-
-

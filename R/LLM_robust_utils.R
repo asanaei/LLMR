@@ -72,6 +72,11 @@ retry_with_backoff <- function(func,
 #' @param memoize Logical. If TRUE, calls are cached to avoid repeated identical requests. Default is FALSE.
 #'
 #' @return The successful result from \code{\link{call_llm}}, or an error if all retries fail.
+#' @seealso
+#' \code{\link{call_llm}} for the underlying, non-robust API call.
+#' \code{\link{cache_llm_call}} for a memoised version that avoids repeated requests.
+#' \code{\link{llm_config}} to create the configuration object.
+#' \code{\link{chat_session}} for stateful, interactive conversations.
 #' @export
 #'
 #' @examples
@@ -118,7 +123,7 @@ call_llm_robust <- function(config, messages,
     }
     return(FALSE) # Do not retry other errors
   }
-  
+
   # Original error handling logic for non-retryable errors or after all retries fail
   tryCatch(
     retry_with_backoff(

@@ -18,14 +18,15 @@ used as row names in the output matrix.}
 }
 \value{
 A numeric matrix where each row is an embedding vector for the corresponding text.
-  If embedding fails for certain texts, those rows will be filled with NA values.
-  The matrix will always have the same number of rows as the input texts.
-  Returns NULL if no embeddings were successfully generated.
+If embedding fails for certain texts, those rows will be filled with NA values.
+The matrix will always have the same number of rows as the input texts.
+Returns NULL if no embeddings were successfully generated.
 }
 \description{
 A wrapper function that processes a list of texts in batches to generate embeddings,
 avoiding rate limits. This function calls \code{\link{call_llm_robust}} for each
-batch and stitches the results together.
+batch and stitches the results together and parses them (using \code{parse_embeddings}) to
+return a numeric matrix.
 }
 \examples{
 \dontrun{
@@ -46,4 +47,8 @@ batch and stitches the results together.
     batch_size = 2
   )
 }
+}
+\seealso{
+\code{\link{llm_config}} to create the embedding configuration.
+\code{\link{parse_embeddings}} to convert the raw response to a numeric matrix.
 }

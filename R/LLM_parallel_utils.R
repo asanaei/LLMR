@@ -28,6 +28,11 @@
 # Dependencies: future, future.apply, tibble, dplyr, progressr (optional), tidyr (for build_factorial_experiments)
 # -------------------------------------------------------------------
 
+# message builder (simple user + optional system) --------------------
+.compose_msg <- function(user, sys = NULL) {
+  if (is.null(sys)) user else c(system = sys, user = user)
+}
+
 # Internal helper to unnest config details into columns
 .unnest_config_to_cols <- function(results_df, config_col = "config") {
   if (!config_col %in% names(results_df) || !is.list(results_df[[config_col]])) {
@@ -110,7 +115,7 @@
   return(results_df)
 }
 
-#' Mode 1: Parameter Sweep - Vary One Parameter, Fixed Message
+#' Parallel API calls: Parameter Sweep - Vary One Parameter, Fixed Message
 #'
 #' Sweeps through different values of a single parameter while keeping the message constant.
 #' Perfect for hyperparameter tuning, temperature experiments, etc.
@@ -189,7 +194,7 @@ call_llm_sweep <- function(base_config,
   return(results_final)
 }
 
-#' Mode 2: Message Broadcast - Fixed Config, Multiple Messages
+#' Parallel API calls: Fixed Config, Multiple Messages
 #'
 #' Broadcasts different messages using the same configuration in parallel.
 #' Perfect for batch processing different prompts with consistent settings.
@@ -267,7 +272,7 @@ call_llm_broadcast <- function(config,
   return(results_final)
 }
 
-#' Mode 3: Model Comparison - Multiple Configs, Fixed Message
+#' Parallel API calls: Multiple Configs, Fixed Message
 #'
 #' Compares different configurations (models, providers, settings) using the same message.
 #' Perfect for benchmarking across different models or providers.
@@ -370,7 +375,10 @@ call_llm_compare <- function(configs_list,
 #' 2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
 #' 3. Call `reset_llm_parallel()` at the end to restore sequential processing.
 #'
-#' @seealso \code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}}
+#' @seealso
+#' For setting up the environment: \code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}}.
+#' For simpler, pre-configured parallel tasks: \code{\link{call_llm_broadcast}}, \code{\link{call_llm_sweep}}, \code{\link{call_llm_compare}}.
+#' For creating experiment designs: \code{\link{build_factorial_experiments}}.
 #' @export
 #'
 #' @examples
@@ -578,10 +586,13 @@ call_llm_par <- function(experiments,
 #' all combinations of configs, messages, and repetitions with automatic metadata.
 #'
 #' @param configs List of llm_config objects to test.
-#' @param messages List of message lists to test (each element is a message list for one condition).
 #' @param repetitions Integer. Number of repetitions per combination. Default is 1.
 #' @param config_labels Character vector of labels for configs. If NULL, uses "provider_model".
-#' @param message_labels Character vector of labels for message sets. If NULL, uses "messages_1", etc.
+#' @param user_prompts Character vector (or list) of user‑turn prompts.
+#' @param user_prompt_labels Optional labels for the user prompts.
+#' @param system_prompts  Optional character vector of system messages
+#'                        (recycled against user_prompts).
+#' @param system_prompt_labels Optional labels for the system prompts.
 #'
 #' @return A tibble with columns: config (list-column), messages (list-column),
 #'   config_label, message_label, and repetition. Ready for use with call_llm_par().
@@ -605,10 +616,20 @@ call_llm_par <- function(experiments,
 #'   results <- call_llm_par(experiments, progress = TRUE)
 #' }
 build_factorial_experiments <- function(configs,
-                                        messages,
+                                        user_prompts,
+                                        system_prompts = NULL,
                                         repetitions = 1,
-                                        config_labels = NULL,
-                                        message_labels = NULL) {
+                                        config_labels  = NULL,
+                                        user_prompt_labels = NULL,
+                                        system_prompt_labels = NULL
+                                        ) {
+
+  # if (!missing(messages)) {
+  #   lifecycle::deprecate_stop("0.5.0", "build_factorial_experiments(messages = )",
+  #                             "build_factorial_experiments(user_prompts = )")
+  # }
+
+  if (inherits(configs, "llm_config")) configs <- list(configs)
 
   if (!requireNamespace("tibble", quietly = TRUE)) {
     stop("The 'tibble' package is required. Please install it with: install.packages('tibble')")
@@ -621,8 +642,8 @@ build_factorial_experiments <- function(configs,
   }
 
   # Validate inputs
-  if (length(configs) == 0 || length(messages) == 0) {
-    stop("Both configs and messages must have at least one element")
+  if (length(configs) == 0 || length(user_prompts) == 0) {
+    stop("Both configs and user_prompts must have at least one element")
   }
 
   # Create config labels if not provided
@@ -634,41 +655,55 @@ build_factorial_experiments <- function(configs,
     stop("config_labels must have the same length as configs")
   }
 
-  # Create message labels if not provided
-  if (is.null(message_labels)) {
-    message_labels <- paste0("messages_", seq_along(messages))
-  } else if (length(message_labels) != length(messages)) {
-    stop("message_labels must have the same length as messages")
+  # Create user‑prompt labels if not provided
+  if (is.null(user_prompt_labels)) {
+    user_prompt_labels <- paste0("user_", seq_along(user_prompts))
+  } else if (length(user_prompt_labels) != length(user_prompts)) {
+    stop("user_prompt_labels must have the same length as user_prompts")
   }
-
-  # Create lookup tables
+  ## ------------------------------------------------------------------------
   configs_df <- tibble::tibble(
-    config_idx = seq_along(configs),
-    config = configs,
-    config_label = config_labels
+    config_idx   = seq_along(configs),
+    config       = configs,
+    config_label = config_labels %||%
+      paste(vapply(configs, `[[`, "", "model"), seq_along(configs))
   )
 
-  messages_df <- tibble::tibble(
-    message_idx = seq_along(messages),
-    messages = messages,
-    message_label = message_labels
+  user_df <- tibble::tibble(
+    user_idx   = seq_along(user_prompts),
+    user_prompt = user_prompts,
+    user_prompt_label = user_prompt_labels %||%
+      paste0("user_", seq_along(user_prompts))
   )
 
-  # Create factorial design
+  sys_df <- if (!is.null(system_prompts)) tibble::tibble(
+    sys_idx   = seq_along(system_prompts),
+    system_prompt = system_prompts,
+    system_prompt_label = system_prompt_labels %||%
+      paste0("system_", seq_along(system_prompts))
+  ) else tibble::tibble(
+    sys_idx = 1L,
+    system_prompt = NA_character_,
+    system_prompt_label = NA_character_
+  )
+
   experiments <- tidyr::expand_grid(
-    config_idx = configs_df$config_idx,
-    message_idx = messages_df$message_idx,
+    configs_df, user_df, sys_df,
     repetition = seq_len(repetitions)
   ) |>
-    dplyr::left_join(configs_df, by = "config_idx") |>
-    dplyr::left_join(messages_df, by = "message_idx") |>
-    dplyr::select(config, messages, config_label, message_label, repetition)
-
-  message(sprintf("Built %d experiments: %d configs x %d message sets x %d repetitions",
-                  nrow(experiments), length(configs), length(messages), repetitions))
+    dplyr::mutate(
+      messages = purrr::map2(user_prompt, system_prompt, .compose_msg)
+    ) |>
+    dplyr::select(config, messages,
+                  config_label,
+                  user_prompt_label,
+                  system_prompt_label,
+                  repetition)
 
   return(experiments)
 }
+
+
 
 #' Setup Parallel Environment for LLM Processing
 #'

@@ -15,42 +15,95 @@
 
 # ----- Internal Helper Functions -----
 
-#' Normalise message inputs
+#' Normalise message inputs  (LLMR.R)
 #'
-#' - character vector           ---> each element becomes a `"user"` message
-#' - **named** character vector ---> the names are taken as `role`s
-#' - already-well-formed list    ---> returned untouched
-#' Called once in `call_llm()` (only when **not** in embedding mode).
+#' Called once in `call_llm()` (not in embedding mode).
+#' Rules, in order:
+#'   1. Already‑well‑formed list → returned untouched.
+#'   2. Plain character vector   → each element becomes a `"user"` turn.
+#'   3. Named char vector **without** "file" → names are roles (legacy path).
+#'   4. Named char vector **with**  "file"  → multimodal shortcut:
+#'        • any `system` entries become separate system turns
+#'        • consecutive {user | file} entries combine into one user turn
+#'        • every `file` path is tilde‑expanded
+#'
 #' @keywords internal
 #' @noRd
 .normalize_messages <- function(messages) {
-  # 1. leave proper message objects unchanged
+
+  ## ── 1 · leave proper message objects unchanged ───────────────────────
   if (is.list(messages) &&
-      length(messages) > 0 &&
-      is.list(messages[[1]]) &&
+      length(messages)        > 0L &&
+      is.list(messages[[1]])  &&
       !is.null(messages[[1]]$role) &&
       !is.null(messages[[1]]$content)) {
     return(messages)
   }
 
-  # 2. named character ---> role = names(messages)
-  if (is.character(messages) && !is.null(names(messages))) {
-    return(unname(
-      purrr::imap(messages, \(txt, role)
-                  list(role = role, content = txt)
-      )
-    ))
-  }
-
-
-
-  # 3. bare character ---> assume user
+  ## ── 2 · character vectors --------------------------------------------
   if (is.character(messages)) {
-    return(lapply(messages, \(txt) list(role = "user", content = txt)))
+    msg_names <- names(messages)
+
+    ### 2a · *unnamed* → each element a user turn
+    if (is.null(msg_names)) {
+      return(lapply(messages,
+                    function(txt) list(role = "user", content = txt)))
+    }
+
+    ### 2b · *named* but no "file" → legacy path
+    if (!"file" %in% msg_names) {
+      return(unname(purrr::imap(messages,
+                                \(txt, role) list(role = role, content = txt))))
+    }
+
+    ### 2c · multimodal shortcut ----------------------------------------
+    # ensure names are never NA (happens after `c()` with empty strings)
+    msg_names[is.na(msg_names) | msg_names == ""] <- "user"
+
+    final_messages <- list()
+    i <- 1L
+    while (i <= length(messages)) {
+      role <- msg_names[i]
+
+      if (role %in% c("user", "file")) {              # start a user block
+        user_parts <- list()
+        j <- i
+        has_text  <- FALSE
+        while (j <= length(messages) &&
+               msg_names[j] %in% c("user", "file")) {
+
+          if (msg_names[j] == "user") {
+            user_parts <- append(user_parts,
+                                 list(list(type = "text",
+                                           text = messages[j])))
+            has_text <- TRUE
+          } else {  # msg_names[j] == "file"
+            user_parts <- append(user_parts,
+                                 list(list(type = "file",
+                                           path = path.expand(messages[j]))))
+          }
+          j <- j + 1L
+        }
+        if (!has_text)
+          stop("A 'file' part must be preceded by at least one 'user' text.")
+
+        final_messages <- append(final_messages,
+                                 list(list(role = "user",
+                                           content = purrr::compact(user_parts))))
+        i <- j                                           # advance
+      } else {                                           # system / assistant
+        final_messages <- append(final_messages,
+                                 list(list(role = role,
+                                           content = messages[i])))
+        i <- i + 1L
+      }
+    }
+    return(unname(final_messages))
   }
 
   stop("`messages` must be a character vector or a list of message objects.")
 }
+
 
 #' Process a file for multimodal API calls
 #'
@@ -227,6 +280,16 @@ get_endpoint <- function(config, default_endpoint) {
 #' @param embedding Logical indicating embedding mode: NULL (default, uses prior defaults), TRUE (force embeddings), FALSE (force generative)
 #' @param ... Additional provider-specific parameters
 #' @return Configuration object for use with call_llm()
+#' @seealso
+#' The main ways to use a config object:
+#' \itemize{
+#'   \item \code{\link{call_llm}} for a basic, single API call.
+#'   \item \code{\link{call_llm_robust}} for a more reliable single call with retries.
+#'   \item \code{\link{chat_session}} for creating an interactive, stateful conversation.
+#'   \item \code{\link{llm_fn}} for applying a prompt to a vector or data frame.
+#'   \item \code{\link{call_llm_par}} for running large-scale, parallel experiments.
+#'   \item \code{\link{get_batched_embeddings}} for generating text embeddings.
+#' }
 #' @export
 #' @examples
 #' \dontrun{
@@ -275,47 +338,101 @@ llm_config <- function(provider, model, api_key, troubleshooting = FALSE, base_u
   return(config)
 }
 
+
+
 #' Call LLM API
 #'
-#' Sends a message to the specified LLM API and retrieves the response.
+#' Send text or multimodal messages to a supported Large-Language-Model (LLM)
+#' service and retrieve either a **chat/completion** response or a set of
+#' **embeddings**.
 #'
-#' @param config An `llm_config` object created by `llm_config()`.
-#' @param messages Either
-#'   \itemize{
-#'     \item a bare character vector (each element becomes a `"user"` message);
-#'     \item a **named** character vector whose names are taken as `role`s,
-#'           e.g.\ \code{c(system = "Be concise.", user = "Hi")};
-#'     \item the classical list-of-lists with explicit \code{role}/\code{content}.
-#'   }
-#'   For multimodal requests the \code{content} field of a message can itself be
-#'   a list of parts, e.g.\ \code{list(type = "file", path = "image.png")}.
-#' @param verbose Logical. If `TRUE`, prints the full API response.
-#' @param json Logical. If `TRUE`, the returned text will have the raw JSON response
-#'   and the parsed list as attributes.
+#' ## Generative vs. embedding mode
+#' * **Generative calls** (the default) go to the provider's chat/completions
+#'   endpoint. Any extra model-specific parameters supplied through `...` in
+#'   [`llm_config()`] (for example `temperature`, `top_p`, `max_tokens`) are
+#'   forwarded verbatim to the request body. For reasoning, some provider have
+#'   shared model names and ask for a config argument that indicates
+#'   reasoning should be enabled, others have dedicated model names for
+#'   reasoning-enabled models, and may or may not allow for another argument that
+#'   indicates the effort level.
+#' * **Embedding calls** are triggered when `config$embedding` is `TRUE` or
+#'   the model name contains the string "embedding". These calls are routed
+#'   to the provider's embedding endpoint and return raw embedding data. At
+#'   present, extra parameters are *not* passed through to embedding
+#'   endpoints.
 #'
-#' @return The generated text response or embedding results. If `json=TRUE`,
-#'   attributes `raw_json` and `full_response` are attached.
-#' @export
+#' ## Messages argument
+#' `messages` can be
+#' * a plain character vector (each element becomes a **user** message),
+#' * a **named** character vector whose names are interpreted as roles, or
+#' * a list of explicit message objects (`list(role = ..., content = ...)`).
+#'
+#' For multimodal requests you may either use the classic list-of-parts **or**
+#' (simpler) pass a named character vector where any element whose name is
+#' `"file"` is treated as a local file path and uploaded with the request (see
+#' Example 3 below).
+#'
+#' @param config   An [`llm_config`] object created by `llm_config()`.
+#' @param messages Character vector, named vector, or list of message objects as
+#'   described above.
+#' @param verbose  Logical; if `TRUE`, prints the full API response.
+#' @param json     Logical; if `TRUE`, returns the raw JSON with attributes.
+#'
+#' @return
+#' * **Generative mode:** a character string (assistant reply). When
+#'   `json = TRUE`, the string has attributes `raw_json` (JSON text) and
+#'   `full_response` (parsed list). call_llm supports reasning models as well, but whether the output of these models
+#'    include the text of the reasning or not depends on the provider.
+#' * **Embedding mode:** a list with element `data`, compatible with
+#'   [`parse_embeddings()`].
+#'
+#' @seealso
+#' \code{\link{llm_config}} to create the configuration object.
+#' \code{\link{call_llm_robust}} for a version with automatic retries for rate limits.
+#' \code{\link{call_llm_par}} helper that loops over texts and stitches
+#'   embedding results into a matrix.
+#'
 #' @examples
 #' \dontrun{
-#'   cfg <- llm_config("openai", "gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"))
+#' ## 1. Generative call ------------------------------------------------------
+#' cfg <- llm_config("openai", "gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"))
+#' call_llm(cfg, "Hello!")
 #'
-#'   # 1. Bare string
-#'   call_llm(cfg, "What is prompt engineering?")
+#' ## 2. Embedding call -------------------------------------------------------
+#' embed_cfg <- llm_config(
+#'   provider  = "gemini",
+#'   model     = "gemini-embedding-001",
+#'   api_key   = Sys.getenv("GEMINI_KEY"),
+#'   embedding = TRUE
+#' )
+#' emb <- call_llm(embed_cfg, "This is a test sentence.")
+#' parse_embeddings(emb)
 #'
-#'   # 2. Named character vector (quick system + user)
-#'   call_llm(cfg, c(system = "Be brief.", user = "Summarise the Kuznets curve."))
+#' ## 3. Multimodal call (named-vector shortcut) -----------------------------
+#' cfg <- llm_config(
+#'   provider = "openai",
+#'   model    = "gpt-4.1-mini",
+#'   api_key  = Sys.getenv("OPENAI_API_KEY")
+#' )
 #'
-#'   # 3. Classic list form (still works)
-#'   call_llm(cfg, list(list(role = "user", content = "Hello!")))
+#' msg <- c(
+#'   system = "you answer in rhymes",
+#'   user   = "interpret this. Is there a joke here?",
+#'   file   = "path/to/local_image.png")
 #'
-#'   # 4. Multimodal (vision-capable model required)
-#'   multi_cfg <- llm_config("openai", "gpt-4o", Sys.getenv("OPENAI_API_KEY"))
-#'   msg <- list(list(role = "user", content = list(
-#'            list(type = "text", text = "Describe this picture"),
-#'            list(type = "file", path = "path/to/image.png"))))
-#'   call_llm(multi_cfg, msg)
+#'
+#' call_llm(cfg, msg)
+#'
+#' ## 4. Reasoning example
+#' cfg_reason <- llm_config("openai",
+#'                          "o4-mini",
+#'                          Sys.getenv("OPENAI_API_KEY"),
+#'                          reasoning_effort = 'low')
+#' call_llm(cfg_reason,
+#'             c(system='Only give an integer number. Nothing else',
+#'             user='Count "s" letters in Mississippi'))
 #' }
+#' @export
 call_llm <- function(config, messages, verbose = FALSE, json = FALSE) {
   if (config$troubleshooting == TRUE){
     print("\n\n Inside call_llm for troubleshooting\n")
@@ -707,6 +824,38 @@ call_llm.deepseek <- function(config, messages, verbose = FALSE, json = FALSE) {
   perform_request(req, verbose, json)
 }
 
+#' @export
+call_llm.xai <- function(config, messages, verbose = FALSE, json = FALSE) {
+  if (isTRUE(config$embedding)) {
+    stop("Embedding models are not currently supported for xai!")
+  }
+  messages <- .normalize_messages(messages)
+  endpoint <- get_endpoint(
+    config,
+    default_endpoint = "https://api.x.ai/v1/chat/completions"
+  )
+
+  body <- .drop_null(list(
+    model       = config$model,
+    messages    = messages,
+    temperature = config$model_params$temperature,
+    max_tokens  = config$model_params$max_tokens,
+    top_p       = config$model_params$top_p,
+    stream      = FALSE
+  ))
+
+  req <- httr2::request(endpoint) |>
+    httr2::req_headers(
+      "Content-Type"  = "application/json",
+      "Authorization" = paste("Bearer", config$api_key)
+    ) |>
+    httr2::req_body_json(body)
+
+  perform_request(req, verbose, json)
+}
+
+
+
 # ----- Embedding-specific Handlers -----
 
 #' @export
@@ -753,74 +902,45 @@ call_llm.together_embedding <- function(config, messages, verbose = FALSE, json 
 
 #' @export
 #' @keywords internal
-call_llm.gemini_embedding <- function(config, messages,verbose = FALSE, json = FALSE) {
+call_llm.gemini_embedding <- function(config, messages,
+                                      verbose = FALSE, json = FALSE) {
 
-  ## 1. Collect texts ---------------------------------------------------------
-  texts <- if (is.character(messages)) {
-    messages
-  } else {
-    vapply(messages, function(msg) {
-      if (is.list(msg) && !is.null(msg$content)) msg$content else as.character(msg)
-    }, FUN.VALUE = character(1))
-  }
+  # 1. pull the raw strings ---------------------------------------------------
+  texts <- if (is.character(messages)) messages else
+    vapply(messages, \(m)
+           if (is.list(m) && !is.null(m$content))
+             m$content else as.character(m),
+           character(1))
 
-  ## 2. Fast path: batch ------------------------------------------------------
-  if (length(texts) > 1) {
-    batch_endpoint <- sprintf(
-      "https://generativelanguage.googleapis.com/v1beta/models/%s:batchEmbedContents",
-      config$model
+  # 2. endpoint ---------------------------------------------------------------
+  endpoint <- sprintf(
+    "https://generativelanguage.googleapis.com/v1beta/models/%s:embedContent",
+    config$model)
+
+  # 3. loop -------------------------------------------------------------------
+  out <- lapply(texts, function(txt) {
+
+    body <- list(
+      model   = paste0("models/", config$model),      # mandatory
+      content = list(parts = list(list(text = txt)))  # exactly one text
     )
 
-    batch_body <- list(
-      requests = lapply(texts, function(txt) {
-        list(
-          # -- REQUIRED per docs
-          model   = paste0("models/", config$model),
-          content = list(
-            parts = list(list(text = txt))
-          )
-        )
-      })
-    )
-
-    resp <- httr2::request(batch_endpoint) |>
+    resp <- httr2::request(endpoint) |>
       httr2::req_headers(
         "Content-Type"   = "application/json",
         "x-goog-api-key" = config$api_key
       ) |>
-      httr2::req_body_json(batch_body) |>
+      httr2::req_body_json(body) |>
       httr2::req_perform()
 
-    out <- httr2::resp_body_json(resp)
+    dat <- httr2::resp_body_json(resp)
+    list(embedding = dat$embedding$values)
+  })
 
-    #if (verbose) cat("Batch embedding call returned", length(out$embeddings), "vectors\n")
-
-    # map to LLMR's expected structure
-    return(list(data = lapply(out$embeddings, \(e) list(embedding = e$values))))
-  }
-
-  ## 3. Fallback: single text -------------------------------------------------
-  single_endpoint <- sprintf(
-    "https://generativelanguage.googleapis.com/v1beta/models/%s:embedContent",
-    config$model
-  )
-
-  body <- list(
-    content = list(parts = list(list(text = texts[[1]])))
-  )
-
-  req <- httr2::request(single_endpoint) |>
-    httr2::req_url_query(key = config$api_key) |>
-    httr2::req_headers("Content-Type" = "application/json") |>
-    httr2::req_body_json(body)
-
-  #if (verbose) cat("Single embedding request!"\n")
-
-  resp <- httr2::req_perform(req)
-  content <- httr2::resp_body_json(resp)
-
-  return(list(data = list(list(embedding = content$embedding$values))))
+  # LLMR‑style return ---------------------------------------------------------
+  list(data = out)
 }
+
 
 
 # ----- Embedding Utility Functions -----
@@ -913,7 +1033,8 @@ parse_embeddings <- function(embedding_response) {
 #'
 #' A wrapper function that processes a list of texts in batches to generate embeddings,
 #' avoiding rate limits. This function calls \code{\link{call_llm_robust}} for each
-#' batch and stitches the results together.
+#' batch and stitches the results together and parses them (using `parse_embeddings`) to
+#' return a numeric matrix.
 #'
 #' @param texts Character vector of texts to embed. If named, the names will be
 #'   used as row names in the output matrix.
@@ -926,6 +1047,9 @@ parse_embeddings <- function(embedding_response) {
 #'   The matrix will always have the same number of rows as the input texts.
 #'   Returns NULL if no embeddings were successfully generated.
 #'
+#' @seealso
+#' \code{\link{llm_config}} to create the embedding configuration.
+#' \code{\link{parse_embeddings}} to convert the raw response to a numeric matrix.
 #' @export
 #'
 #' @examples

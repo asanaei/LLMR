@@ -42,21 +42,23 @@ This parameter is kept for backward compatibility but has no effect.}
 }
 \value{
 A tibble containing all original columns from experiments (metadata, config, messages),
-  plus new columns: response_text, raw_response_json (the raw JSON string from the API),
-  success, error_message, duration (in seconds).
+plus new columns: response_text, raw_response_json (the raw JSON string from the API),
+success, error_message, duration (in seconds).
 }
 \description{
 Processes experiments from a tibble where each row contains a config and message pair.
 This is the core parallel processing function. Metadata columns are preserved.
-This function requires setting up the parallel environment using `setup_llm_parallel`.
+This function requires setting up the parallel environment using \code{setup_llm_parallel}.
 }
 \section{Parallel Workflow}{
 
-All parallel functions require the `future` backend to be configured.
+All parallel functions require the \code{future} backend to be configured.
 The recommended workflow is:
-1. Call `setup_llm_parallel()` once at the start of your script.
-2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
-3. Call `reset_llm_parallel()` at the end to restore sequential processing.
+\enumerate{
+\item Call \code{setup_llm_parallel()} once at the start of your script.
+\item Run one or more parallel experiments (e.g., \code{call_llm_broadcast()}).
+\item Call \code{reset_llm_parallel()} at the end to restore sequential processing.
+}
 }
 
 \examples{
@@ -80,5 +82,7 @@ print(results[, c("model_id", "response_text")])
 }
 }
 \seealso{
-\code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}}
+For setting up the environment: \code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}}.
+For simpler, pre-configured parallel tasks: \code{\link{call_llm_broadcast}}, \code{\link{call_llm_sweep}}, \code{\link{call_llm_compare}}.
+For creating experiment designs: \code{\link{build_factorial_experiments}}.
 }
