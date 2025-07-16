@@ -130,7 +130,11 @@ chat_session <- function(config, system = NULL, ...) {
 
     resp <- call_robust(list(...))
     raw  <- attr(resp, "full_response")
-    txt  <- extract_text(raw)
+    txt  <- resp #extract_text(raw)
+
+    if (is.null(txt)) {
+      txt <- "Error: Failed to get a response."
+    }
 
     tc <- .token_counts(raw)
     e$sent     <- e$sent     + tc$sent
