@@ -1,8 +1,14 @@
 library(testthat)
 library(LLMR)
 
-test_that("call_llm works with OpenAI API", {
+skip_if_no_key <- function() {
+  key <- Sys.getenv("OPENAI_API_KEY")
+  testthat::skip_if(!nzchar(key), "Requires OPENAI_API_KEY")
+}
 
+
+test_that("call_llm works with OpenAI API", {
+  skip_if_no_key()
   skip_on_cran()  # Skip this test on CRAN
   config <- llm_config(
     provider = "openai",
