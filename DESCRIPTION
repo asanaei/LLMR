@@ -10,7 +10,7 @@ Encoding: UTF-8
 Imports: httr2, purrr, dplyr, tidyr, rlang, memoise, future, future.apply,
         tibble, base64enc, mime,  glue (>= 1.6.0) 
 Suggests: testthat (>= 3.0.0), roxygen2 (>= 7.1.2), httptest2,
-       progressr, knitr, rmarkdown, ggplot2, R.rsp (>= 1.19.0)
+       progressr, knitr, rmarkdown, ggplot2, R.rsp
 RoxygenNote: 7.3.2
 Roxygen: list(markdown = TRUE)
 Config/testthat/edition: 3
