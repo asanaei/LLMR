@@ -852,6 +852,11 @@ call_llm.openai_embedding <- function(config, messages, verbose = FALSE, json = 
   endpoint <- get_endpoint(config, default_endpoint = "https://api.openai.com/v1/embeddings")
   texts <- if (is.character(messages)) messages else sapply(messages, `[[`, "content")
   body <- list(model = config$model, input = texts)
+
+  ## allowing extra parameters to be sent to the api
+  extras <- config$model_params[setdiff(names(config$model_params), names(body))]
+  body   <- .drop_null(c(body, extras))
+
   req <- httr2::request(endpoint) |>
     httr2::req_headers("Content-Type" = "application/json", "Authorization" = paste("Bearer", config$api_key)) |>
     httr2::req_body_json(body)
@@ -870,6 +875,10 @@ call_llm.voyage_embedding <- function(config, messages, verbose = FALSE, json = 
   endpoint <- get_endpoint(config, default_endpoint = "https://api.voyageai.com/v1/embeddings")
   texts <- if (is.character(messages)) messages else sapply(messages, `[[`, "content")
   body <- list(input = texts, model = config$model)
+
+  ## allowing extra parameters to be sent to the api
+  extras <- config$model_params[setdiff(names(config$model_params), names(body))]
+  body   <- .drop_null(c(body, extras))
   req <- httr2::request(endpoint) |>
     httr2::req_headers("Content-Type" = "application/json", "Authorization" = paste("Bearer", config$api_key)) |>
     httr2::req_body_json(body)
@@ -882,6 +891,11 @@ call_llm.together_embedding <- function(config, messages, verbose = FALSE, json 
   endpoint <- get_endpoint(config, default_endpoint = "https://api.together.xyz/v1/embeddings")
   texts <- if (is.character(messages)) messages else sapply(messages, `[[`, "content")
   body <- list(model = config$model, input = texts)
+
+  ## allowing extra parameters to be sent to the api
+  extras <- config$model_params[setdiff(names(config$model_params), names(body))]
+  body   <- .drop_null(c(body, extras))
+
   req <- httr2::request(endpoint) |>
     httr2::req_headers("Content-Type" = "application/json", "Authorization" = paste("Bearer", config$api_key)) |>
     httr2::req_body_json(body)
@@ -912,6 +926,10 @@ call_llm.gemini_embedding <- function(config, messages,
       model   = paste0("models/", config$model),      # mandatory
       content = list(parts = list(list(text = txt)))  # exactly one text
     )
+
+    ## allowing extra parameters to be sent to the api
+    extras <- config$model_params[setdiff(names(config$model_params), names(body))]
+    body   <- .drop_null(c(body, extras))
 
     resp <- httr2::request(endpoint) |>
       httr2::req_headers(
