@@ -21,8 +21,12 @@ llm_fn(x, prompt, .config, .system_prompt = NULL, ...)
 \code{progress}, \code{verbose}).}
 }
 \value{
-A character vector the same length as \code{x}.
-Failed calls yield \code{NA}.
+\itemize{
+\item In \strong{generative mode}: a character vector the same length as \code{x}
+(failed calls yield \code{NA}).
+\item In \strong{embedding mode}: a numeric matrix whose rows correspond to elements
+of \code{x} and whose columns are embedding dimensions.
+}
 }
 \description{
 Applies an LLM prompt to every element of a vector
@@ -37,9 +41,14 @@ That core engine executes them \emph{in parallel} according
 to the current \emph{future} plan.
 For instant multi-core use, call \code{setup_llm_parallel(workers = 4)} (or whatever
 number you prefer) once per session; revert with \code{reset_llm_parallel()}.
+
+\strong{Embedding shortcut:}
+If \code{.config$embedding} is \code{TRUE} (or the model
+name contains \code{"embedding"}), \code{llm_fn()} skips chat calls and returns the
+numeric matrix produced by \code{get_batched_embeddings()}. This only exists for consistency.
 }
 \examples{
-## --- Vector input ------------------------------------------------------
+## --- Generative example ---------------------------------------------------
 \dontrun{
 cfg <- llm_config(
   provider = "openai",

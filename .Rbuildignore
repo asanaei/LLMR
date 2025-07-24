@@ -5,3 +5,7 @@
 ^\\.DS_Store$
 paper.md
 ^\.github$
+^paper\.md$
+^paper\.bib$
+^figures$
+^^CITATION\\.cff$$

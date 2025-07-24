@@ -26,6 +26,7 @@
 }
 
 #' @md
+#'
 # ---------------------------------------------------------------------------#
 # MASTER DOCUMENTATION BLOCK                                                 #
 # ---------------------------------------------------------------------------#
@@ -51,7 +52,7 @@
 #' \describe{
 #'   \item{\code{$send(text, ..., role = "user")}}{
 #'     Append a message (default role \code{"user"}), query the model,
-#'     print the assistant’s reply, and invisibly return it.}
+#'     print the assistant's reply, and invisibly return it.}
 #'   \item{\code{$history()}}{Raw list of messages.}
 #'   \item{\code{$history_df()}}{Two-column data frame (\code{role},
 #'     \code{content}).}

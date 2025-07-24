@@ -30,8 +30,17 @@
 
 # message builder (simple user + optional system) --------------------
 .compose_msg <- function(user, sys = NULL) {
-  if (is.null(sys)) user else c(system = sys, user = user)
+  # NA may be received here instead of NULL;
+  # remove system message if it is missing
+  if (is.null(sys) || (length(sys) == 1L && is.na(sys))) {
+    # no system prompt supplied
+    user
+  } else {
+    c(system = sys, user = user)
+  }
 }
+
+
 
 # Internal helper to unnest config details into columns
 .unnest_config_to_cols <- function(results_df, config_col = "config") {

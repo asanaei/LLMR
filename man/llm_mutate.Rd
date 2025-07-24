@@ -33,6 +33,13 @@ llm_mutate(
 \item{...}{Passed unchanged to \link{call_llm_broadcast} (e.g.\ \code{tries},
 \code{progress}, \code{verbose}).}
 }
+\value{
+\itemize{
+\item In \strong{generative mode}: the input data frame plus the new character column.
+\item In \strong{embedding mode}: the input data frame plus the new numeric columns
+described above.
+}
+}
 \description{
 A convenience wrapper around \link{llm_fn} that inserts the result as a new
 column via \link[dplyr]{mutate}.
@@ -41,9 +48,73 @@ column via \link[dplyr]{mutate}.
 Internally calls \code{llm_fn()}, so the API requests inherit the same
 parallel behaviour.  Activate parallelism with
 \code{setup_llm_parallel()} and shut it off with \code{reset_llm_parallel()}.
+
+\strong{Embedding shortcut}
+When \code{.config} is an embedding configuration the
+returned matrix is expanded into one numeric column per dimension, named
+\code{paste0(<output>, 1:n)}.
+Example: with \code{output = d} and a 1024-d model you get
+\code{d1} ... \code{d1024}.
 }
 \examples{
-## See examples under \link{llm_fn}.
+## --- Generative example ---------------------------------------------------
+\dontrun{
+df <- tibble::tibble(
+  sentence = c("Cats are lovely.", "Dogs are loyal.")
+)
+
+gen_cfg <- llm_config(
+  provider = "openai",
+  model    = "gpt-4.1-mini",
+  api_key  = Sys.getenv("OPENAI_API_KEY")
+)
+
+out_gen <- df |>
+  llm_mutate(
+    answer,
+    prompt  = paste(
+    "Return the taxonomic family of the animal in the sentence,",
+    "or NA if none: {sentence}"
+   ),
+    .config = gen_cfg
+  )
+
+head(out_gen)
+# A tibble: 2 x 2
+#  sentence         answer
+#  <chr>            <chr>
+#1 Cats are lovely. Felidae
+#2 Dogs are loyal.  Canidae
+}
+
+## --- Embedding example ---------------------------------------------------
+\dontrun{
+text_df <- tibble::tibble(
+  sentence = c("Cats are lovely.", "Dogs are loyal.")
+)
+
+emb_cfg <- llm_config(
+  provider  = "voyage",
+  model     = "voyage-3.5-lite",
+  api_key   = Sys.getenv("VOYAGE_KEY"),
+  embedding = TRUE
+)
+
+text_out <- text_df |>
+  llm_mutate(
+    emb,
+    output  = d,
+    prompt  = "{sentence}",
+    .config = emb_cfg
+  )
+
+head(text_out)
+# A tibble: 2 x 1,025
+#  sentence         d1      d2      d3  ... d1024
+#  <chr>            <dbl>   <dbl>   <dbl>    <dbl>
+#1 Cats are lovely. 0.0233  0.0588 0.00102 ...  0.0027
+#2 Dogs are loyal.  0.0397 -0.0161 -0.0466 ... -0.0158
+}
 }
 \seealso{
 \code{\link{setup_llm_parallel}},
