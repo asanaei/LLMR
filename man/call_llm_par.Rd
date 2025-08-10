@@ -41,9 +41,17 @@ and 'messages' (character vector OR message list).}
 This parameter is kept for backward compatibility but has no effect.}
 }
 \value{
-A tibble containing all original columns from experiments (metadata, config, messages),
-plus new columns: response_text, raw_response_json (the raw JSON string from the API),
-success, error_message, duration (in seconds).
+A tibble containing all original columns plus:
+\itemize{
+\item \code{response_text} – assistant text (or \code{NA} on failure)
+\item \code{raw_response_json} – raw JSON string
+\item \code{success}, \code{error_message}
+\item \code{finish_reason} – e.g. "stop", "length", "filter", "tool", or "error:\if{html}{\out{<category>}}"
+\item \code{sent_tokens}, \code{rec_tokens}, \code{total_tokens}, \code{reasoning_tokens}
+\item \code{response_id}
+\item \code{duration} – seconds
+\item \code{response} – the full \code{llmr_response} object (or \code{NA} on failure)
+}
 }
 \description{
 Processes experiments from a tibble where each row contains a config and message pair.

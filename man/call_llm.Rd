@@ -2,113 +2,133 @@
 % Please edit documentation in R/LLMR.R
 \name{call_llm}
 \alias{call_llm}
-\title{Call LLM API}
+\title{Call an LLM (chat/completions or embeddings) with optional multimodal input}
 \usage{
 call_llm(config, messages, verbose = FALSE, json = FALSE)
 }
 \arguments{
-\item{config}{An \code{\link{llm_config}} object created by \code{llm_config()}.}
+\item{config}{An \code{\link{llm_config}} object.}
 
-\item{messages}{Character vector, named vector, or list of message objects as
-described above.}
+\item{messages}{One of:
+\itemize{
+\item Plain character vector — each element becomes a \code{"user"} message.
+\item Named character vector — names are roles (\code{"system"}, \code{"user"},
+\code{"assistant"}). \strong{Multimodal shortcut:} include one or more
+elements named \code{"file"} whose values are local paths; consecutive
+\code{{user | file}} entries are combined into one user turn and files
+are inlined (base64) for capable providers.
+\item List of message objects: \code{list(role=..., content=...)}. For
+multimodal content, set \code{content} to a list of parts like
+\code{list(list(type="text", text="..."), list(type="file", path="..."))}.
+}}
 
-\item{verbose}{Logical; if \code{TRUE}, prints the full API response.}
+\item{verbose}{Logical. If \code{TRUE}, prints the full parsed API response.}
 
-\item{json}{Logical; if \code{TRUE}, returns the raw JSON with attributes.}
+\item{json}{Logical. See \strong{Value}.}
 }
 \value{
+\strong{Generative mode (default):}
 \itemize{
-\item \strong{Generative mode:} a character string (assistant reply). When
-\code{json = TRUE}, the string has attributes \code{raw_json} (JSON text) and
-\code{full_response} (parsed list). call_llm supports reasning models as well, but whether the output of these models
-include the text of the reasning or not depends on the provider.
-\item \strong{Embedding mode:} a list with element \code{data}, compatible with
-\code{\link[=parse_embeddings]{parse_embeddings()}}.
+\item If \code{json = FALSE}: a character string (the assistant reply).
+\item If \code{json = TRUE}: an \emph{\code{llmr_response}} S3 object containing:
+\code{text}, \code{provider}, \code{model}, \code{finish_reason}, \code{usage} (sent/rec/total/Reasoning),
+\code{response_id}, \code{duration_s}, \code{raw} (parsed list), \code{raw_json} (string).
+For back-compat, the same two fields are also mirrored as attributes
+\code{attr(x, "full_response")} and \code{attr(x, "raw_json")}.
+Methods: \code{as.character(x)} (text), \code{print(x)} (text + status line),
+and helpers \code{finish_reason(x)}, \code{tokens(x)}.
+}
+\strong{Embedding mode:}
+\itemize{
+\item A list with element \code{data} compatible with \code{\link{parse_embeddings}}.
+(Use \code{json=TRUE} to keep the list untouched; \code{parse_embeddings()} turns
+it into a numeric matrix.)
 }
 }
 \description{
-Send text or multimodal messages to a supported Large-Language-Model (LLM)
-service and retrieve either a \strong{chat/completion} response or a set of
-\strong{embeddings}.
+\code{call_llm()} dispatches to the correct provider implementation based on
+\code{config$provider}. It supports both generative chat/completions and
+embeddings, plus a simple multimodal shortcut for local files.
 }
-\details{
-\subsection{Generative vs. embedding mode}{
+\section{Provider notes}{
+
 \itemize{
-\item \strong{Generative calls} (the default) go to the provider's chat/completions
-endpoint. Any extra model-specific parameters supplied through \code{...} in
-\code{\link[=llm_config]{llm_config()}} (for example \code{temperature}, \code{top_p}, \code{max_tokens}) are
-forwarded verbatim to the request body. For reasoning, some provider have
-shared model names and ask for a config argument that indicates
-reasoning should be enabled, others have dedicated model names for
-reasoning-enabled models, and may or may not allow for another argument that
-indicates the effort level.
-\item \strong{Embedding calls} are triggered when \code{config$embedding} is \code{TRUE} or
-the model name contains the string "embedding". These calls are routed
-to the provider's embedding endpoint and return raw embedding data. At
-present, extra parameters are \emph{not} passed through to embedding
-endpoints.
-}
+\item \strong{OpenAI-compatible:} On a server 400 that identifies the bad
+parameter as \code{max_tokens}, LLMR will, unless \code{no_change=TRUE},
+retry once replacing \code{max_tokens} with \code{max_completion_tokens}
+(and inform via a \code{cli_alert_info}). The former experimental
+“uncapped retry on empty content” is \emph{disabled} by default to
+avoid unexpected costs.
+\item \strong{Anthropic:} \code{max_tokens} is required; if omitted LLMR uses
+\code{2048} and warns. Multimodal images are inlined as base64.
+\item \strong{Gemini (REST):} \code{systemInstruction} is supported; user
+parts use \code{text}/\code{inlineData(mimeType,data)}; responses are set to
+\code{responseMimeType = "text/plain"}.
+\item \strong{Error handling:} HTTP errors raise structured conditions with
+classes like \code{llmr_api_param_error}, \code{llmr_api_rate_limit_error},
+\code{llmr_api_server_error}; see the condition fields for status, code,
+request id, and (where supplied) the offending parameter.
 }
 
-\subsection{Messages argument}{
 
-\code{messages} can be
 \itemize{
-\item a plain character vector (each element becomes a \strong{user} message),
-\item a \strong{named} character vector whose names are interpreted as roles, or
-\item a list of explicit message objects (\code{list(role = ..., content = ...)}).
+\item \strong{OpenAI-compatible:} If the server identifies \code{max_tokens}
+as invalid, LLMR may retry with \code{max_completion_tokens} unless
+\code{config$no_change} is \code{TRUE}.
+\item \strong{Anthropic:} \code{max_tokens} is required; if omitted LLMR uses
+\code{2048} and warns. Images are inlined as base64.
+\item \strong{Gemini (REST):} \code{systemInstruction} is supported and user
+parts use \code{text} / \code{inlineData(mimeType,data)}. Responses are plain text.
+\item \strong{Errors:} HTTP errors raise structured conditions with fields
+such as status code, offending parameter (if provided), and request id.
+}
 }
 
-For multimodal requests you may either use the classic list-of-parts \strong{or}
-(simpler) pass a named character vector where any element whose name is
-\code{"file"} is treated as a local file path and uploaded with the request (see
-Example 3 below).
+\section{Message normalization}{
+
+See the \emph{“multimodal shortcut”} described under \code{messages}. Internally,
+LLMR expands these into the provider’s native request shape and tilde-expands
+local file paths.
 }
-}
+
 \examples{
 \dontrun{
-## 1. Generative call ------------------------------------------------------
+## 1) Basic generative call
 cfg <- llm_config("openai", "gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"))
-call_llm(cfg, "Hello!")
+call_llm(cfg, "Say hello in Greek.")
 
-## 2. Embedding call -------------------------------------------------------
-embed_cfg <- llm_config(
-  provider  = "gemini",
-  model     = "gemini-embedding-001",
-  api_key   = Sys.getenv("GEMINI_KEY"),
-  embedding = TRUE
-)
-emb <- call_llm(embed_cfg, "This is a test sentence.")
-parse_embeddings(emb)
+## 2) Generative with rich return
+r <- call_llm(cfg, "Say hello in Greek.", json = TRUE)
+r                       # prints text + status line
+as.character(r)         # just the text
+finish_reason(r); tokens(r)
 
-## 3. Multimodal call (named-vector shortcut) -----------------------------
-cfg <- llm_config(
-  provider = "openai",
-  model    = "gpt-4.1-mini",
-  api_key  = Sys.getenv("OPENAI_API_KEY")
-)
-
+## 3) Multimodal (named-vector shortcut)
 msg <- c(
-  system = "you answer in rhymes",
-  user   = "interpret this. Is there a joke here?",
-  file   = "path/to/local_image.png")
-
-
+  system = "Answer briefly.",
+  user   = "Describe this image in one sentence.",
+  file   = "~/Pictures/example.png"
+)
 call_llm(cfg, msg)
 
-## 4. Reasoning example
-cfg_reason <- llm_config("openai",
-                         "o4-mini",
-                         Sys.getenv("OPENAI_API_KEY"),
-                         reasoning_effort = 'low')
-call_llm(cfg_reason,
-            c(system='Only give an integer number. Nothing else',
-            user='Count "s" letters in Mississippi'))
+## 4) Embeddings
+e_cfg <- llm_config("voyage", "voyage-large-2", Sys.getenv("VOYAGE_API_KEY"),
+                    embedding = TRUE)
+emb_raw <- call_llm(e_cfg, c("first", "second"), json = TRUE)
+emb_mat <- parse_embeddings(emb_raw)
+
+## 5) With a chat session
+ch <- chat_session(cfg)
+ch$send("Say hello in Greek.")   # prints the same status line as `print.llmr_response`
+ch$history()
 }
+
 }
 \seealso{
-\code{\link{llm_config}} to create the configuration object.
-\code{\link{call_llm_robust}} for a version with automatic retries for rate limits.
-\code{\link{call_llm_par}} helper that loops over texts and stitches
-embedding results into a matrix.
+\code{\link{llm_config}},
+\code{\link{call_llm_robust}},
+\code{\link{llm_chat_session}},
+\code{\link{parse_embeddings}},
+\code{\link{finish_reason}},
+\code{\link{tokens}}
 }

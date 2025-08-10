@@ -8,7 +8,7 @@
 \alias{head.llm_chat_session}
 \alias{tail.llm_chat_session}
 \alias{print.llm_chat_session}
-\title{Stateful chat session constructor}
+\title{Chat Session Object and Methods}
 \usage{
 chat_session(config, system = NULL, ...)
 
@@ -23,15 +23,12 @@ chat_session(config, system = NULL, ...)
 \method{print}{llm_chat_session}(x, width = getOption("width") - 15, ...)
 }
 \arguments{
-\item{config}{An \code{\link{llm_config}} \strong{for a generative model}
-(i.e. \code{embedding = FALSE}).}
+\item{config}{An \link{llm_config} \strong{for a generative model} (\code{embedding = FALSE}).}
 
 \item{system}{Optional system prompt inserted once at the beginning.}
 
-\item{...}{Arguments passed to other methods. For \code{chat_session}, these
-are default arguments forwarded to every
-\code{\link{call_llm_robust}} call (e.g.
-\code{verbose = TRUE}, \code{json = TRUE}).}
+\item{...}{For \code{chat_session()}, default arguments forwarded to every
+\code{\link[=call_llm_robust]{call_llm_robust()}} call (e.g. \code{verbose = TRUE}, \code{json = TRUE}).}
 
 \item{x, object}{An \code{llm_chat_session} object.}
 
@@ -41,34 +38,25 @@ are default arguments forwarded to every
 }
 \value{
 For \code{chat_session()}, an object of class \strong{\code{llm_chat_session}}.
-For other methods, the return value is described by their respective titles.
+Other methods return what their titles state.
 }
 \description{
-Stateful chat session constructor
-
-Coerce a chat session to a data frame
-
-Summary statistics for a chat session
-
-Display the first part of a chat session
-
-Display the last part of a chat session
-
-Print a chat session object
+Create and interact with a stateful chat session object that retains
+message history. This documentation page covers the constructor function
+\code{chat_session()} as well as all S3 methods for the \code{llm_chat_session} class.
 }
 \details{
 The \code{chat_session} object provides a simple way to hold a conversation with
-a generative model. It wraps \code{\link{call_llm_robust}} to benefit from
-retry logic, caching, and error logging.
+a generative model. It wraps \code{\link[=call_llm_robust]{call_llm_robust()}} to benefit from retry logic,
+caching, and error logging.
 }
 \section{How it works}{
 
 \enumerate{
 \item A private environment stores the running list of
 \code{list(role, content)} messages.
-\item At each \code{$send()} the history is sent \emph{in full} to the model.
-\item Provider-agnostic token counts are extracted from the JSON response
-(fields are detected by name, so new providers continue to work).
+\item At each \verb{$send()} the history is sent \emph{in full} to the model.
+\item Provider-agnostic token counts are extracted from the JSON response.
 }
 }
 
@@ -79,31 +67,24 @@ retry logic, caching, and error logging.
 Append a message (default role \code{"user"}), query the model,
 print the assistant's reply, and invisibly return it.}
 \item{\code{$history()}}{Raw list of messages.}
-\item{\code{$history_df()}}{Two-column data frame (\code{role},
-\code{content}).}
-\item{\code{$tokens_sent()}/\code{$tokens_received()}}{Running token
-totals.}
-\item{\code{$reset()}}{Clear history (retains the optional system
-message).}
+\item{\code{$history_df()}}{Two-column data frame (\code{role}, \code{content}).}
+\item{\code{$tokens_sent()}/\code{$tokens_received()}}{Running token totals.}
+\item{\code{$reset()}}{Clear history (retains the optional system message).}
 }
 }
 
 \examples{
-\dontrun{
-cfg  <- llm_config("openai", "gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"))
-chat <- chat_session(cfg, system = "Be concise.")
-chat$send("Who invented the moon?")
-chat$send("Explain why in one short sentence.")
-
-# Using S3 methods
-chat           # print() shows a summary and first 10 turns
-summary(chat)  # Get session statistics
-tail(chat, 2)  # See the last 2 turns of the conversation
-df <- as.data.frame(chat) # Convert the full history to a data frame
+if (interactive()) {
+  cfg  <- llm_config("openai", "gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"))
+  chat <- chat_session(cfg, system = "Be concise.")
+  chat$send("Who invented the moon?")
+  chat$send("Explain why in one short sentence.")
+  chat           # print() shows a summary and first 10 turns
+  summary(chat)  # stats
+  tail(chat, 2)
+  as.data.frame(chat)
 }
 }
 \seealso{
-\code{\link{llm_config}} to create the configuration object.
-\code{\link{call_llm_robust}} for single, stateless API calls.
-\code{\link{llm_fn}} for applying a prompt to many items in a vector or data frame.
+\code{\link[=llm_config]{llm_config()}}, \code{\link[=call_llm]{call_llm()}}, \code{\link[=call_llm_robust]{call_llm_robust()}}, \code{\link[=llm_fn]{llm_fn()}}, \code{\link[=llm_mutate]{llm_mutate()}}
 }
