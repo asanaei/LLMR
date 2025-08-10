@@ -25,8 +25,6 @@
   list(sent = 0, rec = 0)
 }
 
-#' @md
-#'
 # ---------------------------------------------------------------------------#
 # MASTER DOCUMENTATION BLOCK                                                 #
 # ---------------------------------------------------------------------------#
@@ -36,67 +34,58 @@
 #' message history. This documentation page covers the constructor function
 #' `chat_session()` as well as all S3 methods for the `llm_chat_session` class.
 #'
+#' @md
+#'
 #' @details
 #' The `chat_session` object provides a simple way to hold a conversation with
-#' a generative model. It wraps \code{\link{call_llm_robust}} to benefit from
-#' retry logic, caching, and error logging.
+#' a generative model. It wraps [call_llm_robust()] to benefit from retry logic,
+#' caching, and error logging.
 #'
 #' @section How it works:
 #'   1.  A private environment stores the running list of
-#'       \code{list(role, content)} messages.
-#'   2.  At each \code{$send()} the history is sent *in full* to the model.
-#'   3.  Provider-agnostic token counts are extracted from the JSON response
-#'       (fields are detected by name, so new providers continue to work).
+#'       `list(role, content)` messages.
+#'   2.  At each `$send()` the history is sent *in full* to the model.
+#'   3.  Provider-agnostic token counts are extracted from the JSON response.
 #'
 #' @section Public methods:
 #' \describe{
 #'   \item{\code{$send(text, ..., role = "user")}}{
-#'     Append a message (default role \code{"user"}), query the model,
+#'     Append a message (default role `"user"`), query the model,
 #'     print the assistant's reply, and invisibly return it.}
 #'   \item{\code{$history()}}{Raw list of messages.}
-#'   \item{\code{$history_df()}}{Two-column data frame (\code{role},
-#'     \code{content}).}
-#'   \item{\code{$tokens_sent()}/\code{$tokens_received()}}{Running token
-#'     totals.}
-#'   \item{\code{$reset()}}{Clear history (retains the optional system
-#'     message).}
+#'   \item{\code{$history_df()}}{Two-column data frame (`role`, `content`).}
+#'   \item{\code{$tokens_sent()}/\code{$tokens_received()}}{Running token totals.}
+#'   \item{\code{$reset()}}{Clear history (retains the optional system message).}
 #' }
 #'
-#' @param config  An \code{\link{llm_config}} **for a generative model**
-#'                (i.e. \code{embedding = FALSE}).
+#' @param config  An [llm_config] **for a generative model** (`embedding = FALSE`).
 #' @param system  Optional system prompt inserted once at the beginning.
-#' @param ...     Arguments passed to other methods. For `chat_session`, these
-#'                are default arguments forwarded to every
-#'                \code{\link{call_llm_robust}} call (e.g.
-#'                \code{verbose = TRUE}, \code{json = TRUE}).
+#' @param ...     For `chat_session()`, default arguments forwarded to every
+#'                [call_llm_robust()] call (e.g. `verbose = TRUE`, `json = TRUE`).
 #' @param x,object An `llm_chat_session` object.
 #' @param n Number of turns to display.
 #' @param width Character width for truncating long messages.
 #'
 #' @return For `chat_session()`, an object of class **`llm_chat_session`**.
-#'   For other methods, the return value is described by their respective titles.
+#'         Other methods return what their titles state.
+#'
 #' @seealso
-#' \code{\link{llm_config}} to create the configuration object.
-#' \code{\link{call_llm_robust}} for single, stateless API calls.
-#' \code{\link{llm_fn}} for applying a prompt to many items in a vector or data frame.
+#' [llm_config()], [call_llm()], [call_llm_robust()], [llm_fn()], [llm_mutate()]
 #'
 #' @name llm_chat_session
 #'
 #' @examples
-#' \dontrun{
-#' cfg  <- llm_config("openai", "gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"))
-#' chat <- chat_session(cfg, system = "Be concise.")
-#' chat$send("Who invented the moon?")
-#' chat$send("Explain why in one short sentence.")
-#'
-#' # Using S3 methods
-#' chat           # print() shows a summary and first 10 turns
-#' summary(chat)  # Get session statistics
-#' tail(chat, 2)  # See the last 2 turns of the conversation
-#' df <- as.data.frame(chat) # Convert the full history to a data frame
+#' if (interactive()) {
+#'   cfg  <- llm_config("openai", "gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"))
+#'   chat <- chat_session(cfg, system = "Be concise.")
+#'   chat$send("Who invented the moon?")
+#'   chat$send("Explain why in one short sentence.")
+#'   chat           # print() shows a summary and first 10 turns
+#'   summary(chat)  # stats
+#'   tail(chat, 2)
+#'   as.data.frame(chat)
 #' }
 NULL
-
 #' @title Stateful chat session constructor
 #' @rdname llm_chat_session
 #' @export
@@ -130,21 +119,42 @@ chat_session <- function(config, system = NULL, ...) {
     e$messages <- append(e$messages, list(.msg(role, text)))
 
     resp <- call_robust(list(...))
-    raw  <- attr(resp, "full_response")
-    txt  <- resp #extract_text(raw)
 
-    if (is.null(txt)) {
-      txt <- "Error: Failed to get a response."
+    if (inherits(resp, "llmr_response")) {
+      txt  <- as.character(resp)
+      raw  <- attr(resp, "full_response") %||% resp$raw %||% NULL
+      fr   <- finish_reason(resp)
+      u    <- tokens(resp)
+      tc   <- list(sent = u$sent %||% 0L, rec = u$rec %||% 0L)
+    } else {
+      raw  <- attr(resp, "full_response")
+      txt  <- resp
+      fr   <- NULL
+      tc   <- .token_counts(raw)
     }
 
-    tc <- .token_counts(raw)
-    e$sent     <- e$sent     + tc$sent
-    e$received <- e$received + tc$rec
-    e$raw      <- append(e$raw, list(raw))
+    if (is.null(txt)) txt <- "Error: Failed to get a response."
+
+    e$sent     <- e$sent     + as.integer(tc$sent %||% 0L)
+    e$received <- e$received + as.integer(tc$rec  %||% 0L)
+    e$raw      <- append(e$raw, list(if (inherits(resp, "llmr_response")) resp else raw))
 
     e$messages <- append(e$messages, list(.msg("assistant", txt)))
 
-    cat(txt, "\n")
+    if (inherits(resp, "llmr_response")) {
+      print(resp)  # text + status line [model | finish | tokens | t]
+    } else {
+      cat(txt, "\n")
+    }
+    if (!is.null(fr) && !identical(fr, "stop")) {
+      msg <- switch(fr,
+                    "length" = "finish_reason=length; increase max_tokens or shorten context.",
+                    "filter" = "finish_reason=filter; adjust prompt/safety settings.",
+                    "tool"   = "finish_reason=tool; provide tool handler or disable tools.",
+                    sprintf("finish_reason=%s.", fr)
+      )
+      message(msg)
+    }
     invisible(txt)
   }
 

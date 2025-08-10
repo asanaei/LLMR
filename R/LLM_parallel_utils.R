@@ -28,6 +28,7 @@
 # Dependencies: future, future.apply, tibble, dplyr, progressr (optional), tidyr (for build_factorial_experiments)
 # -------------------------------------------------------------------
 
+
 # message builder (simple user + optional system) --------------------
 .compose_msg <- function(user, sys = NULL) {
   # NA may be received here instead of NULL;
@@ -372,10 +373,17 @@ call_llm_compare <- function(configs_list,
 #' @param json_output Deprecated. Raw JSON string is always included as raw_response_json.
 #'                  This parameter is kept for backward compatibility but has no effect.
 #'
-#' @return A tibble containing all original columns from experiments (metadata, config, messages),
-#'   plus new columns: response_text, raw_response_json (the raw JSON string from the API),
-#'   success, error_message, duration (in seconds).
-#'
+#' @return A tibble containing all original columns plus:
+#' \itemize{
+#'   \item \code{response_text} – assistant text (or \code{NA} on failure)
+#'   \item \code{raw_response_json} – raw JSON string
+#'   \item \code{success}, \code{error_message}
+#'   \item \code{finish_reason} – e.g. "stop", "length", "filter", "tool", or "error:<category>"
+#'   \item \code{sent_tokens}, \code{rec_tokens}, \code{total_tokens}, \code{reasoning_tokens}
+#'   \item \code{response_id}
+#'   \item \code{duration} – seconds
+#'   \item \code{response} – the full \code{llmr_response} object (or \code{NA} on failure)
+#' }
 
 #' @section Parallel Workflow:
 #' All parallel functions require the `future` backend to be configured.
@@ -421,15 +429,14 @@ call_llm_par <- function(experiments,
                          json_output = NULL) {
 
   if (!is.null(json_output) && verbose) {
-    message("Note: The 'json_output' parameter in call_llm_par is deprecated. Raw JSON string is always included as 'raw_response_json'.")
+    message("Note: The 'json_output' parameter is deprecated. Raw JSON is always included as 'raw_response_json'.")
   }
 
-  # Package checks
   if (!requireNamespace("future", quietly = TRUE)) {
-    stop("The 'future' package is required for parallel processing. Please install it with: install.packages('future')")
+    stop("The 'future' package is required. Please install it with: install.packages('future')")
   }
   if (!requireNamespace("future.apply", quietly = TRUE)) {
-    stop("The 'future.apply' package is required for parallel processing. Please install it with: install.packages('future.apply')")
+    stop("The 'future.apply' package is required. Please install it with: install.packages('future.apply')")
   }
   if (progress && !requireNamespace("progressr", quietly = TRUE)) {
     warning("The 'progressr' package is not available. Progress tracking will be disabled.")
@@ -442,7 +449,6 @@ call_llm_par <- function(experiments,
     stop("The 'dplyr' package is required. Please install it with: install.packages('dplyr')")
   }
 
-  # Input validation
   if (!is.data.frame(experiments)) {
     stop("experiments must be a tibble/data.frame")
   }
@@ -452,31 +458,35 @@ call_llm_par <- function(experiments,
   if (nrow(experiments) == 0) {
     warning("No experiments provided. Returning empty input tibble with result columns.")
     return(dplyr::bind_cols(experiments, tibble::tibble(
-      response_text = character(0),
+      response_text     = character(0),
       raw_response_json = character(0),
-      success = logical(0),
-      error_message = character(0)
+      success           = logical(0),
+      error_message     = character(0),
+      finish_reason     = character(0),
+      sent_tokens       = integer(0),
+      rec_tokens        = integer(0),
+      total_tokens      = integer(0),
+      reasoning_tokens  = integer(0),
+      response_id       = character(0),
+      duration          = numeric(0),
+      response          = list(),
+      status_code = integer(0),
+      error_code  = character(0),
+      bad_param   = character(0)
     )))
   }
 
-  # Validate configs
   for (i in seq_len(nrow(experiments))) {
     if (!inherits(experiments$config[[i]], "llm_config")) {
       stop(sprintf("Row %d 'config' is not an llm_config object.", i))
     }
   }
 
-  # Setup workers
   if (is.null(max_workers)) {
     max_workers <- min(future::availableCores(omit = 1L), nrow(experiments))
     max_workers <- max(1, max_workers)
   }
-
   current_plan <- future::plan()
-  if (verbose) {
-    message(sprintf("Setting up parallel execution with %d workers using plan: %s",
-                    max_workers, class(current_plan)[1]))
-  }
   on.exit(future::plan(current_plan), add = TRUE)
   if (!inherits(current_plan, "FutureStrategy") || inherits(current_plan, "sequential")) {
     future::plan(future::multisession, workers = max_workers)
@@ -488,63 +498,97 @@ call_llm_par <- function(experiments,
                     nrow(experiments), n_metadata_cols))
   }
 
-  # Worker function
+  # Helper: pull category from condition class, e.g. "llmr_api_rate_limit_error"
+  .category_from_condition <- function(e) {
+    cls <- class(e)
+    hit <- grep("^llmr_api_(.+)_error$", cls, value = TRUE)
+    if (length(hit)) sub("^llmr_api_(.+)_error$", "\\1", hit[[1]]) else "unknown"
+  }
+
   par_worker <- function(i_val) {
-    start_time <- Sys.time()                 # begin timer
-    current_config <- experiments$config[[i_val]]
+    start_time <- Sys.time()
+    current_config   <- experiments$config[[i_val]]
     current_messages <- experiments$messages[[i_val]]
+
     raw_json_str <- NA_character_
 
     tryCatch({
-      # Always call with json=TRUE to get attributes for raw_json
       result_content <- call_llm_robust(
-        config = current_config,
-        messages = current_messages,
-        tries = tries,
-        wait_seconds = wait_seconds,
-        backoff_factor = backoff_factor,
-        verbose = FALSE,
-        json = TRUE, # Force TRUE to get raw_json attribute
-        memoize = memoize
+        config        = current_config,
+        messages      = current_messages,
+        tries         = tries,
+        wait_seconds  = wait_seconds,
+        backoff_factor= backoff_factor,
+        verbose       = FALSE,
+        json          = TRUE,
+        memoize       = memoize
       )
 
-      # Extract raw JSON from attributes
       raw_json_str <- attr(result_content, "raw_json") %||% NA_character_
 
+      is_obj <- inherits(result_content, "llmr_response")
+      fr  <- if (is_obj) finish_reason(result_content) else NA_character_
+      u   <- if (is_obj) tokens(result_content)        else list(sent=NA, rec=NA, total=NA, reasoning=NA)
+      rid <- if (is_obj) result_content$response_id    else NA_character_
+      dur <- if (is_obj) result_content$duration_s     else as.numeric(difftime(Sys.time(), start_time, units = "secs"))
+
       list(
-        row_index = i_val,
-        response_text = as.character(result_content), # Strip attributes
+        row_index         = i_val,
+        response_text     = as.character(result_content),
         raw_response_json = raw_json_str,
-        success = TRUE,
-        error_message = NA_character_,
-        duration = as.numeric(difftime(Sys.time(), start_time, units = "secs"))
+        success           = TRUE,
+        error_message     = NA_character_,
+        finish_reason     = fr,
+        sent_tokens       = u$sent,
+        rec_tokens        = u$rec,
+        total_tokens      = u$total,
+        reasoning_tokens  = u$reasoning,
+        response_id       = rid,
+        duration          = dur,
+        status_code       = NA_integer_,
+        error_code        = NA_character_,
+        bad_param         = NA_character_,
+        response          = list(if (is_obj) result_content else NULL)
       )
+
     }, error = function(e) {
+      # Extract structured fields if available
+      catg <- .category_from_condition(e)
+      sc   <- tryCatch(e$status_code, error = function(...) NA_integer_)
+      rid  <- tryCatch(e$request_id,  error = function(...) NA_character_)
+      prm  <- tryCatch(e$param,       error = function(...) NA_character_)
+      cod  <- tryCatch(e$code,        error = function(...) NA_character_)
+
       list(
-        row_index = i_val,
-        response_text = NA_character_,
+        row_index         = i_val,
+        response_text     = NA_character_,
         raw_response_json = raw_json_str,
-        success = FALSE,
-        error_message = conditionMessage(e),
-        duration = as.numeric(difftime(Sys.time(), start_time, units = "secs"))
+        success           = FALSE,
+        error_message     = conditionMessage(e),
+        finish_reason     = paste0("error:", catg),
+        sent_tokens       = NA_integer_,
+        rec_tokens        = NA_integer_,
+        total_tokens      = NA_integer_,
+        reasoning_tokens  = NA_integer_,
+        response_id       = rid %||% NA_character_,
+        duration          = as.numeric(difftime(Sys.time(), start_time, units = "secs")),
+        status_code       = sc %||% NA_integer_,
+        error_code        = cod %||% NA_character_,
+        bad_param         = prm %||% NA_character_,
+        response          = list(NULL)
       )
     })
   }
 
-  # Execute in parallel
   if (progress) {
     progressr::with_progress({
       p <- progressr::progressor(steps = nrow(experiments))
       api_call_results_list <- future.apply::future_lapply(
         seq_len(nrow(experiments)),
-        function(k) {
-          res <- par_worker(k)
-          p()
-          res
-        },
+        function(k) { res <- par_worker(k); p(); res },
         future.seed = TRUE,
         future.packages = "LLMR",
-        future.globals = TRUE
+        future.globals  = TRUE
       )
     })
   } else {
@@ -553,28 +597,47 @@ call_llm_par <- function(experiments,
       par_worker,
       future.seed = TRUE,
       future.packages = "LLMR",
-      future.globals = TRUE
+      future.globals  = TRUE
     )
   }
 
-  # Convert results to dataframe
   api_results_df <- dplyr::bind_rows(api_call_results_list)
 
-  # Prepare output with all original columns plus results
   output_df <- experiments
-  output_df$response_text <- NA_character_
+  # Initialize columns
+  output_df$response_text     <- NA_character_
   output_df$raw_response_json <- NA_character_
-  output_df$success <- NA
-  output_df$error_message <- NA_character_
-  output_df$duration   <- NA_real_
+  output_df$success           <- NA
+  output_df$error_message     <- NA_character_
+  output_df$finish_reason     <- NA_character_
+  output_df$sent_tokens       <- NA_integer_
+  output_df$rec_tokens        <- NA_integer_
+  output_df$total_tokens      <- NA_integer_
+  output_df$reasoning_tokens  <- NA_integer_
+  output_df$response_id       <- NA_character_
+  output_df$duration          <- NA_real_
+  output_df$status_code <- NA_integer_
+  output_df$error_code  <- NA_character_
+  output_df$bad_param   <- NA_character_
+  output_df$response          <- vector("list", nrow(output_df))
 
-
-  # Fill in results by row index
-  output_df$response_text[api_results_df$row_index] <- as.character(api_results_df$response_text)
-  output_df$raw_response_json[api_results_df$row_index] <- as.character(api_results_df$raw_response_json)
-  output_df$success[api_results_df$row_index] <- as.logical(api_results_df$success)
-  output_df$error_message[api_results_df$row_index] <- as.character(api_results_df$error_message)
-  output_df$duration  [api_results_df$row_index] <- as.numeric(api_results_df$duration)
+  # Fill by row index
+  idx <- api_results_df$row_index
+  output_df$response_text    [idx] <- api_results_df$response_text
+  output_df$raw_response_json[idx] <- api_results_df$raw_response_json
+  output_df$success          [idx] <- api_results_df$success
+  output_df$error_message    [idx] <- api_results_df$error_message
+  output_df$finish_reason    [idx] <- api_results_df$finish_reason
+  output_df$sent_tokens      [idx] <- api_results_df$sent_tokens
+  output_df$rec_tokens       [idx] <- api_results_df$rec_tokens
+  output_df$total_tokens     [idx] <- api_results_df$total_tokens
+  output_df$reasoning_tokens [idx] <- api_results_df$reasoning_tokens
+  output_df$response_id      [idx] <- api_results_df$response_id
+  output_df$duration         [idx] <- api_results_df$duration
+  output_df$status_code[idx] <- api_results_df$status_code
+  output_df$error_code [idx] <- api_results_df$error_code
+  output_df$bad_param  [idx] <- api_results_df$bad_param
+  output_df$response         [idx] <- api_results_df$response
 
   if (verbose) {
     successful_calls <- sum(output_df$success, na.rm = TRUE)
@@ -586,7 +649,7 @@ call_llm_par <- function(experiments,
     output_df <- .unnest_config_to_cols(output_df, config_col = "config")
   }
 
-  return(output_df)
+  output_df
 }
 
 #' Build Factorial Experiment Design

@@ -1,6 +1,6 @@
 Package: LLMR
 Title: Interface for Large Language Model APIs in R
-Version: 0.5.1
+Version: 0.5.2
 Depends: R (>= 4.1.0)
 Authors@R: 
     person("Ali", "Sanaei", , "sanaei@uchicago.edu", role = c("aut", "cre"))
@@ -8,7 +8,7 @@ Description: Provides a unified interface to interact with multiple Large Langua
 License: MIT + file LICENSE
 Encoding: UTF-8
 Imports: httr2, purrr, dplyr, tidyr, rlang, memoise, future, future.apply,
-        tibble, base64enc, mime,  glue (>= 1.6.0) 
+        tibble, base64enc, mime,  glue (>= 1.6.0),  cli (>= 3.6.0)
 Suggests: testthat (>= 3.0.0), roxygen2 (>= 7.1.2), httptest2,
        progressr, knitr, rmarkdown, ggplot2, R.rsp
 RoxygenNote: 7.3.2

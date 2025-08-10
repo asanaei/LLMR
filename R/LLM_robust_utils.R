@@ -16,6 +16,68 @@
 #   4. log_llm_error() - A convenience function for logging errors
 #      with timestamps.
 #
+
+
+#--------- Helper
+#' Construct and throw structured LLMR errors
+#'
+#' Creates a typed error with a category-specific subclass, plus a common
+#' `llmr_api_error` base class. Extra fields (e.g., `param`) are attached
+#' as condition attributes for handlers to inspect.
+#'
+#' Classes produced:
+#'   - llmr_api_param_error
+#'   - llmr_api_auth_error
+#'   - llmr_api_rate_limit_error
+#'   - llmr_api_server_error
+#'   - llmr_api_unknown_error
+#'
+#' @keywords internal
+#' @noRd
+.llmr_error <- function(message, category = c("param","auth","rate_limit","server","unknown"),
+                        status_code = NA_integer_,
+                        provider = NA_character_,
+                        model = NA_character_,
+                        param = NA_character_,
+                        code = NA_character_,
+                        request_id = NA_character_) {
+
+  category <- match.arg(category)
+  cls <- c(
+    paste0("llmr_api_", category, "_error"),
+    "llmr_api_error", "error", "condition"
+  )
+
+  # Use cli if available; fall back to rlang otherwise
+  if (requireNamespace("cli", quietly = TRUE)) {
+    cli::cli_abort(
+      message = message,
+      class   = cls,
+      # attach fields for tryCatch handlers
+      status_code = status_code,
+      provider    = provider,
+      model       = model,
+      param       = param,
+      code        = code,
+      request_id  = request_id
+    )
+  } else {
+    rlang::abort(
+      message = message,
+      class   = cls,
+      status_code = status_code,
+      provider    = provider,
+      model       = model,
+      param       = param,
+      code        = code,
+      request_id  = request_id
+    )
+  }
+}
+
+
+
+
 # -------------------------------------------------------------------
 # 1. Exponential Backoff (Internal)
 # -------------------------------------------------------------------

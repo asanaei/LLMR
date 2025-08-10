@@ -2,7 +2,7 @@
 % Please edit documentation in R/LLMR.R
 \name{llm_config}
 \alias{llm_config}
-\title{Create LLM Configuration}
+\title{Create an LLM configuration (provider-agnostic)}
 \usage{
 llm_config(
   provider,
@@ -11,50 +11,82 @@ llm_config(
   troubleshooting = FALSE,
   base_url = NULL,
   embedding = NULL,
+  no_change = FALSE,
   ...
 )
 }
 \arguments{
-\item{provider}{Provider name (openai, anthropic, groq, together, voyage, gemini, deepseek)}
+\item{provider}{Character scalar. One of:
+\code{"openai"}, \code{"anthropic"}, \code{"gemini"}, \code{"groq"}, \code{"together"},
+\code{"voyage"} (embeddings only), \code{"deepseek"}, \code{"xai"}.}
 
-\item{model}{Model name to use}
+\item{model}{Character scalar. Model name understood by the chosen provider.
+(e.g., \code{"gpt-4o-mini"}, \code{"o4-mini"}, \code{"claude-3.7"}, \code{"gemini-2.0-flash"}, etc.)}
 
-\item{api_key}{API key for authentication}
+\item{api_key}{Character scalar. Provider API key.}
 
-\item{troubleshooting}{Prints out all api calls. USE WITH EXTREME CAUTION as it prints your API key.}
+\item{troubleshooting}{Logical. If \code{TRUE}, prints the full request payloads
+(including your API key!) for debugging. \strong{Use with extreme caution.}}
 
-\item{base_url}{Optional base URL override}
+\item{base_url}{Optional character. Back-compat alias; if supplied it is
+stored as \code{api_url} in \code{model_params} and overrides the default endpoint.}
 
-\item{embedding}{Logical indicating embedding mode: NULL (default, uses prior defaults), TRUE (force embeddings), FALSE (force generative)}
+\item{embedding}{\code{NULL} (default), \code{TRUE}, or \code{FALSE}. If \code{TRUE}, the call
+is routed to the provider's embeddings API; if \code{FALSE}, to the chat API.
+If \code{NULL}, LLMR infers embeddings when \code{model} contains \code{"embedding"}.}
 
-\item{...}{Additional provider-specific parameters}
+\item{no_change}{Logical. If \code{TRUE}, LLMR \strong{never} auto-renames/adjusts
+provider parameters. If \code{FALSE} (default), well-known compatibility shims
+may apply (e.g., renaming OpenAI's \code{max_tokens} → \code{max_completion_tokens}
+after a server hint; see \code{call_llm()} notes).}
+
+\item{...}{Additional provider-specific parameters (e.g., \code{temperature},
+\code{top_p}, \code{max_tokens}, \code{top_k}, \code{repetition_penalty}, \code{reasoning_effort},
+\code{api_url}, etc.). Values are forwarded verbatim unless documented shims apply.}
 }
 \value{
-Configuration object for use with call_llm()
+An object of class \code{c("llm_config", provider)}. Fields:
+\code{provider}, \code{model}, \code{api_key}, \code{troubleshooting}, \code{embedding},
+\code{no_change}, and \code{model_params} (a named list of extras).
 }
 \description{
-Create LLM Configuration
+\code{llm_config()} builds a provider-agnostic configuration object that
+\code{call_llm()} (and friends) understand. You can pass provider-specific
+parameters via \code{...}; LLMR forwards them as-is, with a few safe conveniences.
 }
+\section{Temperature range clamping}{
+
+Anthropic temperatures must be in \verb{[0, 1]}; others in \verb{[0, 2]}. Out-of-range
+values are clamped with a warning.
+}
+
+\section{Endpoint overrides}{
+
+You can pass \code{api_url} (or \verb{base_url=} alias) in \code{...} to point to gateways
+or compatible proxies.
+}
+
 \examples{
 \dontrun{
-  cfg <- llm_config(
-    provider   = "openai",
-    model      = "gpt-4o-mini",
-    api_key    = Sys.getenv("OPENAI_API_KEY"),
-    temperature = 0.7,
-    max_tokens  = 500)
+# Basic OpenAI config
+cfg <- llm_config("openai", "gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"),
+                  temperature = 0.7, max_tokens = 300)
 
-  call_llm(cfg, "Hello!")  # one-shot, bare string
+# Embeddings (inferred from the model name)
+e_cfg <- llm_config("gemini", "text-embedding-004", Sys.getenv("GEMINI_KEY"))
+
+# Force embeddings even if the model name doesn't contain "embedding"
+e_cfg2 <- llm_config("voyage", "voyage-large-2", Sys.getenv("VOYAGE_API_KEY"),
+                     embedding = TRUE)
+
+# Point at a compatible proxy
+proxy_cfg <- llm_config("openai", "gpt-4o-mini", "sk-...", api_url = "https://myproxy/v1")
 }
 }
 \seealso{
-The main ways to use a config object:
-\itemize{
-\item \code{\link{call_llm}} for a basic, single API call.
-\item \code{\link{call_llm_robust}} for a more reliable single call with retries.
-\item \code{\link{chat_session}} for creating an interactive, stateful conversation.
-\item \code{\link{llm_fn}} for applying a prompt to a vector or data frame.
-\item \code{\link{call_llm_par}} for running large-scale, parallel experiments.
-\item \code{\link{get_batched_embeddings}} for generating text embeddings.
-}
+\code{\link{call_llm}},
+\code{\link{call_llm_robust}},
+\code{\link{llm_chat_session}},
+\code{\link{call_llm_par}},
+\code{\link{get_batched_embeddings}}
 }
