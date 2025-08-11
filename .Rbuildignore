@@ -10,3 +10,4 @@ paper.md
 ^figures$
 ^^CITATION\\.cff$$
 ^CITATION\.cff$
+^assets$
