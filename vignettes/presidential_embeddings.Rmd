@@ -18,7 +18,8 @@ knitr::opts_chunk$set(
 ```
 
 This vignette demonstrates how to use LLMR for embedding analysis of presidential inaugural speeches.
-**Note: This vignette requires a valid Gemini API key and will not run during package installation, and you may need to change the model name.**
+
+**Note:** This vignette requires a valid Gemini API key and will not run during package installation, and you may need to change the model name.**
 
 ```{r setup}
 library(LLMR)
@@ -48,6 +49,7 @@ embed_cfg <- llm_config(
   provider = "gemini",
   model = "embedding-001", #"text-embedding-004",
   api_key = Sys.getenv("GEMINI_KEY"),
+  task_type = "CLASSIFICATION",
   embedding = TRUE
 )
 ```
@@ -68,7 +70,9 @@ embeddings <- get_batched_embeddings(
 # Compute correlation matrix
 cors <- cor(t(embeddings))
 print(round(cors, 2))
+```
 
+```{r clustering}
 # Normalize embeddings for cosine similarity
 embd_normalized <- t(apply(embeddings, 1, 
                           function(x) x / sqrt(sum(x^2))))

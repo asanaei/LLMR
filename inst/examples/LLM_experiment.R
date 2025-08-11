@@ -101,7 +101,7 @@ summary_for_plot <- summary_stats |>
     )
   )
 
-ggplot(summary_for_plot, aes(x = model_name, y = mean_rating, fill = user_prompt_label)) +
+gplt = ggplot(summary_for_plot, aes(x = model_name, y = mean_rating, fill = user_prompt_label)) +
   geom_col(position = position_dodge(0.8), width = 0.7, alpha = 0.8) +
   geom_errorbar(
     aes(ymin = mean_rating - sd_rating/sqrt(n_observations)* qt(0.975,df=N_REPS-1),
@@ -117,7 +117,6 @@ ggplot(summary_for_plot, aes(x = model_name, y = mean_rating, fill = user_prompt
     y = "Mean Rating (1-10 scale)",
     caption = paste("Error bars show 95% Conf. Int.\nTotal valid responses:", nrow(results_processed))
   ) +
-  theme_minimal(base_size = 12) +
   theme(
     plot.title = element_text(size = 14, face = "bold"),
     plot.subtitle = element_text(size = 11, color = "gray40"),
@@ -126,5 +125,5 @@ ggplot(summary_for_plot, aes(x = model_name, y = mean_rating, fill = user_prompt
   ) +
   scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 2))
 
-
+ggsave(gplt,file = 'bias_comparison.png')#, with = 10, height = 4)
 
