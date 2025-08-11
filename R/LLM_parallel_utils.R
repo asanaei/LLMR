@@ -794,7 +794,7 @@ build_factorial_experiments <- function(configs,
 #' @examples
 #' \dontrun{
 #'   # Automatic setup
-#'   old_plan <- setup_llm_parallel()
+#'   setup_llm_parallel()
 #'
 #'   # Manual setup with specific workers
 #'   setup_llm_parallel(workers = 4, verbose = TRUE)
@@ -803,7 +803,7 @@ build_factorial_experiments <- function(configs,
 #'   setup_llm_parallel(strategy = "sequential")
 #'
 #'   # Restore old plan if needed
-#'   future::plan(old_plan)
+#'   reset_llm_parallel()
 #' }
 setup_llm_parallel <- function(strategy = NULL, workers = NULL, verbose = FALSE) {
 

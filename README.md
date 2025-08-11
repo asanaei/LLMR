@@ -1,5 +1,7 @@
 # LLMR
 
+<img src="https://github.com/asanaei/LLMR/raw/main/assets/LLMR_512x512.png" width="120" alt="LLMR logo">
+
 [![CRAN status](https://www.r-pkg.org/badges/version/LLMR)](https://CRAN.R-project.org/package=LLMR)
 [![CRAN downloads](https://cranlogs.r-pkg.org/badges/grand-total/LLMR)](https://cran.r-project.org/package=LLMR)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -37,7 +39,7 @@ llm_config(
 
 
 
-### One‑shot text generation (`llm_call()`)
+### One‑shot text generation (`call_llm()`)
 
 ```r
 library(LLMR)
@@ -56,6 +58,17 @@ slogan <- call_llm(
 )
 
 cat(slogan)
+```
+
+### Inspect the response
+
+```r
+  r <- call_llm(cfg, "Say hello in Greek.", json = TRUE)
+  r
+  as.character(r)
+  finish_reason(r)
+  tokens(r)
+  is_truncated(r)
 ```
 
 ### Short embeddings
@@ -79,7 +92,7 @@ cor(t(emb))
 # also see get_batched_embeddings
 ```
 
-### Conversation when you need memory (`chat()`)
+### Conversation when you need memory (`chat_session()`)
 
 ```r
 chat <- chat_session(
@@ -93,7 +106,7 @@ print(chat)
 
 ---
 
-## Functional Mapping (`llm_fun()`)
+## Functional Mapping (`llm_fn()`)
 
 ```r
 movies <- c("Inception", "Spirited Away", "Parasite")
@@ -114,23 +127,27 @@ tibble(movies, taglines)
 library(dplyr)
 
 songs <- tibble(
-  title  = c("Blue in Green", "Giant Steps"),
-  artist = c("Miles Davis", "John Coltrane") )
+  title  = c("Blue in Green", "Giant Steps to Jupiter"),
+  artist = c("Miles Davis", "Pinocchio Geppetto") )
 
-songs |>
+sdf = songs |>
   llm_mutate(
     .config = cfg,
     output=two_word,
     .system_prompt = 'answer in exactly two words',
    prompt = "Guess the jazz sub‑genre for '{title}' (two words)."
   ) |>
-  mutate(title_and_artist = paste(title,artist)) |> 
   llm_mutate(
     .config = cfg,
     output=three_word,
     .system_prompt = 'answer in exactly three words',
-   prompt = "Guess the jazz sub‑genre for '{title_and_artist}' (three words)."
+   prompt = "Guess the jazz sub‑genre for title='{title}' by '{artist}'. (three words)."
   )
+
+sdf[,c('title','artist','two_word','three_word')]
+
+# see names(sdf) for other information returned from each call
+# like sdf$two_word_finish 
   
 ```
 
@@ -146,13 +163,14 @@ dev.off()
 
 vision_cfg <- llm_config(
   provider = "openai",
-  model    = "gpt-4.1",
+  model    = "gpt-5-chat-latest",
   api_key  = Sys.getenv("OPENAI_API_KEY")
 )
 
 call_llm(
   vision_cfg,
-  c( user = "Describe this picture in five words.",
+  c( system = "you are a scientist",
+     user = "Describe this picture in five words.",
      file = tmp)  # tmp is the path for the example plot created above
 )
 ```
@@ -161,8 +179,11 @@ call_llm(
 
 
 * **Provider‑specific settings** (e.g., `model`, `endpoint`) are forwarded automatically.
-* Raw response & token usage: `attributes(result)$raw_json` and `attributes(result)$usage`.
-
+* Raw results: 
+  - call with `json = TRUE` to get an `llmr_response`; 
+  - use `finish_reason(x)`, `tokens(x)`, `is_truncated(x)`;
+  - or `attr(x, "raw_json")` to see raw JSON output.
+  
 ---
 
 ## Removed Legacy Objects

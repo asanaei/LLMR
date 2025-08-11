@@ -196,8 +196,10 @@ llm_mutate <- function(.data,
                        ...) {
 
   stopifnot(inherits(.config, "llm_config"))
-
   roles_allowed <- c("system", "user", "assistant", "file")
+
+  if (missing(output)) stop("llm_mutate() requires an unquoted output column name, e.g. llm_mutate(score, ...)")
+  if (!is.data.frame(.data)) stop("`.data` must be a data.frame or tibble; got: ", paste(class(.data), collapse = "/"))
 
   # -- helpers (local) -------------------------------------------------------
   eval_messages_one_row <- function(row_df, tpl_vec) {
@@ -215,7 +217,10 @@ llm_mutate <- function(.data,
   }
 
   build_generative_messages <- function(df, prompt, .messages, .system_prompt) {
+
     n <- nrow(df)
+    if (is.null(n) || is.na(n)) stop("Internal: `.data` has no rows; ensure you pass a data.frame/tibble.")
+
     msgs <- vector("list", n)
 
     if (!is.null(.messages)) {
