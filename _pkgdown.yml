@@ -1,0 +1,71 @@
+url: https://asanaei.github.io/LLMR/
+template:
+  bootstrap: 5
+title: LLMR
+development:
+  mode: auto
+home:
+  links:
+  - text: Source on GitHub
+    href: https://github.com/asanaei/LLMR
+navbar:
+  structure:
+    left:
+    - home
+    - reference
+    - articles
+    - news
+    right: github
+  components:
+    github:
+      icon: fab fa-github
+      href: https://github.com/asanaei/LLMR
+articles:
+- title: Vignettes
+  contents:
+  - about-schema
+  - chat-basics
+  - tidy-and-structured
+  - experiments
+  - presidential_embeddings
+reference:
+- title: Core
+  contents:
+  - llm_config
+  - call_llm
+  - call_llm_robust
+  - llmr_response
+  - finish_reason
+  - tokens
+  - is_truncated
+  - chat_session
+- title: Structured output
+  contents:
+  - enable_structured_output
+  - disable_structured_output
+  - llm_parse_structured
+  - llm_parse_structured_col
+  - llm_validate_structured_col
+  - llm_fn_structured
+  - llm_mutate_structured
+  - call_llm_par_structured
+- title: Tidy helpers and parallel
+  contents:
+  - llm_fn
+  - llm_mutate
+  - build_factorial_experiments
+  - call_llm_par
+  - call_llm_broadcast
+  - call_llm_sweep
+  - call_llm_compare
+  - setup_llm_parallel
+  - reset_llm_parallel
+- title: Embeddings
+  contents:
+  - parse_embeddings
+  - get_batched_embeddings
+- title: Utilities
+  contents:
+  - bind_tools
+  - llm_api_key_env
+

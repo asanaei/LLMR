@@ -11,3 +11,6 @@ paper.md
 ^^CITATION\\.cff$$
 ^CITATION\.cff$
 ^assets$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$

@@ -6,9 +6,15 @@ utils::globalVariables(
     ".param_name_sweep", ".param_value_sweep",
     "user_prompt", "system_prompt",
     "user_prompt_label", "system_prompt_label",
-    ":=")
+    ":=",
+    "structured_ok", "structured_data",
+    "structured_valid", "structured_error")
 )
 #' @importFrom utils head tail modifyList
-#' @noRd
+#' @importFrom vctrs vec_ptype_common vec_cast vec_c
 #' @importFrom rlang `:=`
+#' @importFrom stats setNames
+#' @noRd
 NULL
+
+

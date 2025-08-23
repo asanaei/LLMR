@@ -31,7 +31,13 @@ returns a tibble of diagnostic columns; \code{"text"} returns a character
 vector; \code{"object"} returns a list of \code{llmr_response} (or \code{NA} on failure).}
 }
 \value{
-See \code{.return}. In embedding mode, always returns a numeric matrix.
+For generative mode:
+\itemize{
+\item \code{.return = "text"}: character vector
+\item \code{.return = "columns"}: tibble with diagnostics
+\item \code{.return = "object"}: list of \code{llmr_response} (or \code{NA} on failure)
+For embedding mode, always a numeric matrix.
+}
 }
 \description{
 Apply an LLM prompt over vectors/data frames
@@ -39,9 +45,11 @@ Apply an LLM prompt over vectors/data frames
 \examples{
 if (interactive()) {
   words <- c("excellent","awful")
-  cfg <- llm_config("openai","gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"), temperature = 0)
-  llm_fn(words, "Classify '{x}' as
-  Positive/Negative.", cfg, .system_prompt="One word.", .return="columns")
+  cfg <- llm_config("openai","gpt-4o-mini", temperature = 0)
+  llm_fn(words, "Classify '{x}' as Positive/Negative.",
+         cfg,
+         .system_prompt="One word.",
+         .return="columns")
 }
 }
 \seealso{

@@ -4,7 +4,7 @@
 \alias{call_llm}
 \title{Call an LLM (chat/completions or embeddings) with optional multimodal input}
 \usage{
-call_llm(config, messages, verbose = FALSE, json = FALSE)
+call_llm(config, messages, verbose = FALSE)
 }
 \arguments{
 \item{config}{An \code{\link{llm_config}} object.}
@@ -23,26 +23,11 @@ multimodal content, set \code{content} to a list of parts like
 }}
 
 \item{verbose}{Logical. If \code{TRUE}, prints the full parsed API response.}
-
-\item{json}{Logical. See \strong{Value}.}
 }
 \value{
-\strong{Generative mode (default):}
 \itemize{
-\item If \code{json = FALSE}: a character string (the assistant reply).
-\item If \code{json = TRUE}: an \emph{\code{llmr_response}} S3 object containing:
-\code{text}, \code{provider}, \code{model}, \code{finish_reason}, \code{usage} (sent/rec/total/Reasoning),
-\code{response_id}, \code{duration_s}, \code{raw} (parsed list), \code{raw_json} (string).
-For back-compat, the same two fields are also mirrored as attributes
-\code{attr(x, "full_response")} and \code{attr(x, "raw_json")}.
-Methods: \code{as.character(x)} (text), \code{print(x)} (text + status line),
-and helpers \code{finish_reason(x)}, \code{tokens(x)}.
-}
-\strong{Embedding mode:}
-\itemize{
-\item A list with element \code{data} compatible with \code{\link{parse_embeddings}}.
-(Use \code{json=TRUE} to keep the list untouched; \code{parse_embeddings()} turns
-it into a numeric matrix.)
+\item Generative mode: an \code{llmr_response} object. Use \code{as.character(x)} to get just the text; \code{print(x)} shows text plus a status line; use helpers \code{finish_reason(x)} and \code{tokens(x)}.
+\item Embedding mode: provider-native list with an element \code{data}; convert with \code{\link[=parse_embeddings]{parse_embeddings()}}.
 }
 }
 \description{
@@ -69,19 +54,6 @@ classes like \code{llmr_api_param_error}, \code{llmr_api_rate_limit_error},
 \code{llmr_api_server_error}; see the condition fields for status, code,
 request id, and (where supplied) the offending parameter.
 }
-
-
-\itemize{
-\item \strong{OpenAI-compatible:} If the server identifies \code{max_tokens}
-as invalid, LLMR may retry with \code{max_completion_tokens} unless
-\code{config$no_change} is \code{TRUE}.
-\item \strong{Anthropic:} \code{max_tokens} is required; if omitted LLMR uses
-\code{2048} and warns. Images are inlined as base64.
-\item \strong{Gemini (REST):} \code{systemInstruction} is supported and user
-parts use \code{text} / \code{inlineData(mimeType,data)}. Responses are plain text.
-\item \strong{Errors:} HTTP errors raise structured conditions with fields
-such as status code, offending parameter (if provided), and request id.
-}
 }
 
 \section{Message normalization}{
@@ -94,13 +66,13 @@ local file paths.
 \examples{
 \dontrun{
 ## 1) Basic generative call
-cfg <- llm_config("openai", "gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"))
+cfg <- llm_config("openai", "gpt-4o-mini")
 call_llm(cfg, "Say hello in Greek.")
 
 ## 2) Generative with rich return
-r <- call_llm(cfg, "Say hello in Greek.", json = TRUE)
-r                       # prints text + status line
-as.character(r)         # just the text
+r <- call_llm(cfg, "Say hello in Greek.")
+r
+as.character(r)
 finish_reason(r); tokens(r)
 
 ## 3) Multimodal (named-vector shortcut)
@@ -112,9 +84,9 @@ msg <- c(
 call_llm(cfg, msg)
 
 ## 4) Embeddings
-e_cfg <- llm_config("voyage", "voyage-large-2", Sys.getenv("VOYAGE_API_KEY"),
+e_cfg <- llm_config("voyage", "voyage-large-2",
                     embedding = TRUE)
-emb_raw <- call_llm(e_cfg, c("first", "second"), json = TRUE)
+emb_raw <- call_llm(e_cfg, c("first", "second"))
 emb_mat <- parse_embeddings(emb_raw)
 
 ## 5) With a chat session

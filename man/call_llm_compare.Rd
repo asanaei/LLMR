@@ -36,10 +36,8 @@ The recommended workflow is:
 \examples{
 \dontrun{
   # Compare different models
-  config1 <- llm_config(provider = "openai", model = "gpt-4o-mini",
-                        api_key = Sys.getenv("OPENAI_API_KEY"))
-  config2 <- llm_config(provider = "openai", model = "gpt-4.1-nano",
-                        api_key = Sys.getenv("OPENAI_API_KEY"))
+  config1 <- llm_config(provider = "openai", model = "gpt-4o-mini")
+  config2 <- llm_config(provider = "openai", model = "gpt-4.1-nano")
 
   configs_list <- list(config1, config2)
   messages <- "Explain quantum computing"

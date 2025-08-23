@@ -11,7 +11,6 @@ call_llm_robust(
   wait_seconds = 10,
   backoff_factor = 5,
   verbose = FALSE,
-  json = FALSE,
   memoize = FALSE
 )
 }
@@ -28,8 +27,6 @@ call_llm_robust(
 
 \item{verbose}{Logical. If TRUE, prints the full API response.}
 
-\item{json}{Logical. If TRUE, returns the raw JSON as an attribute.}
-
 \item{memoize}{Logical. If TRUE, calls are cached to avoid repeated identical requests. Default is FALSE.}
 }
 \value{
@@ -43,15 +40,15 @@ not need fresh results each time.
 }
 \examples{
 \dontrun{
-  # Basic usage:
-  robust_resp <- call_llm_robust(
-    config = my_llm_config,
-    messages = list(list(role = "user", content = "Hello, LLM!")),
-    tries = 5,
-    wait_seconds = 10,
-    memoize = FALSE
-  )
-  cat("Response:", robust_resp, "\n")
+robust_resp <- call_llm_robust(
+config = llm_config("openai","gpt-4o-mini"),
+messages = list(list(role = "user", content = "Hello, LLM!")),
+tries = 5,
+wait_seconds = 10,
+memoize = FALSE
+)
+print(robust_resp)
+as.character(robust_resp)
 }
 }
 \seealso{

@@ -1,20 +1,16 @@
 library(testthat)
 library(LLMR)
 
-skip_if_no_key <- function() {
-  key <- Sys.getenv("OPENAI_API_KEY")
-  testthat::skip_if(!nzchar(key), "Requires OPENAI_API_KEY")
-}
+## use shared helper in helper-keys.R
 
 
 test_that("call_llm works with OpenAI API", {
-  skip_if_no_key()
+  skip_if_no_env("OPENAI_API_KEY")
   skip_on_cran()  # Skip this test on CRAN
   config <- llm_config(
     provider = "openai",
     model = "gpt-4.1-nano",
-    # if OPENAI_KEY exists, make it the api_key, otherwise use "fake_api
-    api_key = Sys.getenv("OPENAI_API_KEY", unset = "default_fake_key"),
+    api_key = llm_api_key_env("OPENAI_API_KEY"),
     temperature = 1,
     max_tokens = 1024,
     top_p = 1,

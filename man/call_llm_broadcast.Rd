@@ -37,8 +37,7 @@ The recommended workflow is:
 \examples{
 \dontrun{
   # Broadcast different questions
-  config <- llm_config(provider = "openai", model = "gpt-4.1-nano",
-                       api_key = Sys.getenv("OPENAI_API_KEY"))
+  config <- llm_config(provider = "openai", model = "gpt-4.1-nano")
 
   messages <- list(
     list(list(role = "user", content = "What is 2+2?")),

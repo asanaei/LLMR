@@ -64,6 +64,7 @@ execution follows the active \strong{future} plan; see \code{\link[=setup_llm_pa
 \item \strong{Embedding mode:} the per-row text is embedded via \code{\link[=get_batched_embeddings]{get_batched_embeddings()}}.
 Result expands to numeric columns named \verb{paste0(<output>, 1:N)}. If all rows
 fail to embed, a single \verb{<output>1} column of \code{NA} is returned.
+\item Diagnostic columns use suffixes: \verb{_finish}, \verb{_sent}, \verb{_rec}, \verb{_tot}, \verb{_reason}, \verb{_ok}, \verb{_err}, \verb{_id}, \verb{_status}, \verb{_ecode}, \verb{_param}, \verb{_t}.
 }
 }
 \examples{
@@ -77,7 +78,7 @@ df <- tibble::tibble(
 )
 
 cfg <- llm_config("openai", "gpt-4o-mini",
-                  Sys.getenv("OPENAI_API_KEY"), temperature = 0)
+                  temperature = 0)
 
 # Generative: single-turn with multi-column injection
 df |>
@@ -108,12 +109,12 @@ pics |>
   llm_mutate(
     vision_desc,
     .messages = c(user = "{prompt}", file = "{img}"),
-    .config = llm_config("openai","gpt-4.1-mini", Sys.getenv("OPENAI_API_KEY"))
+    .config = llm_config("openai","gpt-4.1-mini")
   )
 
 # Embeddings: output name becomes the prefix of embedding columns
 emb_cfg <- llm_config("voyage", "voyage-3.5-lite",
-                      Sys.getenv("VOYAGE_KEY"), embedding = TRUE)
+                      embedding = TRUE)
 df |>
   llm_mutate(
     vec,
