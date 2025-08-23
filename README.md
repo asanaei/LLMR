@@ -6,192 +6,149 @@
 [![CRAN downloads](https://cranlogs.r-pkg.org/badges/grand-total/LLMR)](https://cran.r-project.org/package=LLMR)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![R-CMD-check](https://github.com/asanaei/LLMR/workflows/R-CMD-check/badge.svg)](https://github.com/asanaei/LLMR/actions)
-[![Lifecycle: stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
+[![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![GitHub issues](https://img.shields.io/github/issues/asanaei/LLMR)](https://github.com/asanaei/LLMR/issues)
 
-LLMR offers a unified interface for interacting with multiple Large Language Model APIs in R.
+LLMR offers a unified interface for Large Language Models in R. It supports multiple providers, robust retries, structured output, and embeddings.
 
 ## Installation
 
 ```r
-install.packages("LLMR")        # CRAN (preferred)
-# Development version:
+install.packages("LLMR") # CRAN
+# Development:
 # remotes::install_github("asanaei/LLMR")
-````
-
----
-
-## Quick Start
-
-### Configuration
-
-Configuration is designed so the same code can easily be done with multiple providers, models, parameters. 
-
-```r
-llm_config(
-  provider     = "openai",
-  model        = "gpt-4o-mini",
-  api_key      = "YOUR API KEY", # never write it directly
-  temperature  = 0,
-  max_tokens   = 256,
-)
 ```
 
+## Quick start
 
-
-### One‑shot text generation (`call_llm()`)
+### Configure a model
 
 ```r
 library(LLMR)
 
 cfg <- llm_config(
-  provider = "openai",
-  model    = "gpt-4o",
-  api_key  = Sys.getenv("OPENAI_API_KEY"),
-  temperature = 0.7)
-
-slogan <- call_llm( 
-  config   = cfg,
-  messages = c(
-    system = "You are a branding expert.",
-    user   = "Six‑word catch‑phrase for eco‑friendly balloons." )
+provider = "openai",
+model = "gpt-4o-mini",
+temperature = 0.2,
+max_tokens = 256
 )
-
-cat(slogan)
 ```
 
-### Inspect the response
+Store keys in environment variables such as OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY.
+
+### One-shot generation
 
 ```r
-  r <- call_llm(cfg, "Say hello in Greek.", json = TRUE)
-  r
-  as.character(r)
-  finish_reason(r)
-  tokens(r)
-  is_truncated(r)
+r <- call_llm(
+config = cfg,
+messages = c(
+system = "You are a branding expert.",
+user = "Six-word catch-phrase for eco-friendly balloons.")
+)
+
+print(r) # text + status line
+as.character(r) # just the text
+finish_reason(r)
+tokens(r)
+is_truncated(r)
 ```
 
-### Short embeddings
+### Structured output (JSON with schema)
+
+```r
+schema <- list(
+type = "object",
+properties = list(
+label = list(type = "string"),
+score = list(type = "number")
+),
+required = list("label","score"),
+additionalProperties = FALSE
+)
+
+cfg_s <- enable_structured_output(cfg, schema = schema)
+
+resp <- call_llm(cfg_s, c(system="Reply JSON only.", user="Label and score for 'MNIST'."))
+parsed <- llm_parse_structured(resp)
+str(parsed)
+```
+
+Or use higher-level helpers:
+
+```r
+words <- c("excellent","awful","fine")
+
+out <- llm_fn_structured(
+x = words,
+prompt = "Classify '{x}' and output {label, score in [0,1]} as JSON.",
+.config = cfg,
+.schema = schema,
+.fields = c("label","score")
+)
+out
+```
+
+### Embeddings
 
 ```r
 sentences <- c(
-  one="Quiet rivers mirror bright skies.",
-  two="Thunder shakes the mountain path.",
-  three="Water is the juice of life!")
+one="Quiet rivers mirror bright skies.",
+two="Thunder shakes the mountain path."
+)
 
 emb_cfg <- llm_config(
-  provider = "voyage",
-  model    = "voyage-large-2",
-  api_key  = Sys.getenv("VOYAGE_KEY") )
+provider = "voyage",
+model = "voyage-large-2",
+embedding = TRUE
+)
 
 emb <- call_llm(emb_cfg, sentences) |> parse_embeddings()
-
 dim(emb)
-cor(t(emb))
-
-# also see get_batched_embeddings
 ```
 
-### Conversation when you need memory (`chat_session()`)
+Batch embeddings:
 
 ```r
-chat <- chat_session(
-  config = cfg,
-  system = "You teach statistics tersely.")
-  
-chat$send( "Explain p‑values in 12 words.")
-chat$send( "Now give a three‑word analogy.")
+emb <- get_batched_embeddings(
+texts = sentences,
+embed_config = emb_cfg,
+batch_size = 8
+)
+```
+
+### Conversation with history
+
+```r
+chat <- chat_session(cfg, system = "You teach statistics tersely.")
+chat$send("Explain p-values in 12 words.")
+chat$send("Now give a three-word analogy.")
 print(chat)
 ```
 
----
-
-## Functional Mapping (`llm_fn()`)
+### Parallel runs
 
 ```r
-movies <- c("Inception", "Spirited Away", "Parasite")
+setup_llm_parallel(workers = 4)
 
-taglines <- llm_fn(
-  x      = movies,
-  prompt = "One‑line playful tagline for the film {x}",
-  .config = cfg)
-
-tibble(movies, taglines)
-```
-
----
-
-## Data‑Frame Helper (`llm_mutate()`)
-
-```r
-library(dplyr)
-
-songs <- tibble(
-  title  = c("Blue in Green", "Giant Steps to Jupiter"),
-  artist = c("Miles Davis", "Pinocchio Geppetto") )
-
-sdf = songs |>
-  llm_mutate(
-    .config = cfg,
-    output=two_word,
-    .system_prompt = 'answer in exactly two words',
-   prompt = "Guess the jazz sub‑genre for '{title}' (two words)."
-  ) |>
-  llm_mutate(
-    .config = cfg,
-    output=three_word,
-    .system_prompt = 'answer in exactly three words',
-   prompt = "Guess the jazz sub‑genre for title='{title}' by '{artist}'. (three words)."
-  )
-
-sdf[,c('title','artist','two_word','three_word')]
-
-# see names(sdf) for other information returned from each call
-# like sdf$two_word_finish 
-  
-```
-
----
-
-## Multimodal in One Short Request
-
-```r
-png(tmp <- tempfile(fileext = ".png"))
-plot(rnorm(10000)|>sort(), pch = '.',col='blue',ann=FALSE)
-grid()
-dev.off()
-
-vision_cfg <- llm_config(
-  provider = "openai",
-  model    = "gpt-5-chat-latest",
-  api_key  = Sys.getenv("OPENAI_API_KEY")
+experiments <- build_factorial_experiments(
+configs = list(cfg),
+user_prompts = c("Summarize in one sentence: The Apollo program."),
+system_prompts= "Be concise."
 )
 
-call_llm(
-  vision_cfg,
-  c( system = "you are a scientist",
-     user = "Describe this picture in five words.",
-     file = tmp)  # tmp is the path for the example plot created above
-)
+res <- call_llm_par(experiments, progress = TRUE)
+reset_llm_parallel()
 ```
 
----
+## Notes
 
-
-* **Provider‑specific settings** (e.g., `model`, `endpoint`) are forwarded automatically.
-* Raw results: 
-  - call with `json = TRUE` to get an `llmr_response`; 
-  - use `finish_reason(x)`, `tokens(x)`, `is_truncated(x)`;
-  - or `attr(x, "raw_json")` to see raw JSON output.
-  
----
-
-## Removed Legacy Objects
-
-`Agent` class and  `LLMConversation` were removed to give `LLMR` better focus. 
+- Generative calls return llmr_response. Coerce with as.character() when you want plain text.
+- Structured output:
+- enable_structured_output() selects the correct provider toggle.
+- Use llm_parse_structured() and optional llm_validate_structured_col() for robust local parsing and validation.
+- Embeddings: call_llm() returns a provider-native list; parse_embeddings() converts it to a numeric matrix.
+- Robust retries: call_llm_robust() handles rate limits with exponential backoff.
 
 ## Contributions
 
-Pull requests and issues welcome---please include a minimal reproducible example.
-
-
+Issues and pull requests are welcome. Include a minimal reproducible exampleyy.

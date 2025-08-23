@@ -9,11 +9,11 @@ vignette: >
 ---
 
 
-```{r, include = FALSE}
+```{r}
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  eval = FALSE
+  eval = identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true")
 )
 ```
 
@@ -46,9 +46,8 @@ text_input <- c(
 
 ```{r config}
 embed_cfg <- llm_config(
-  provider = "gemini",
-  model = "embedding-001", #"text-embedding-004",
-  api_key = Sys.getenv("GEMINI_KEY"),
+  provider  = "gemini",
+  model     = "embedding-001", # or "text-embedding-004",
   task_type = "CLASSIFICATION",
   embedding = TRUE
 )
@@ -100,4 +99,4 @@ When run with a valid API key, this analysis would:
 3. Create a dendrogram clustering presidents by linguistic similarity
 4. Reveal historical and stylistic patterns in presidential rhetoric
 
-**To run this vignette yourself:** Set your Gemini API key with `Sys.setenv(GEMINI_KEY = "your_key_here")` before running the code chunks.
+**To run this vignette yourself:** Set your Gemini API key with `Sys.setenv(GEMINI_API_KEY = "your_key_here")` before running the code chunks.

@@ -27,8 +27,7 @@ chat_session(config, system = NULL, ...)
 
 \item{system}{Optional system prompt inserted once at the beginning.}
 
-\item{...}{For \code{chat_session()}, default arguments forwarded to every
-\code{\link[=call_llm_robust]{call_llm_robust()}} call (e.g. \code{verbose = TRUE}, \code{json = TRUE}).}
+\item{...}{Default arguments forwarded to every \code{\link[=call_llm_robust]{call_llm_robust()}} call (e.g. \code{verbose = TRUE}).}
 
 \item{x, object}{An \code{llm_chat_session} object.}
 
@@ -66,6 +65,10 @@ caching, and error logging.
 \item{\code{$send(text, ..., role = "user")}}{
 Append a message (default role \code{"user"}), query the model,
 print the assistant's reply, and invisibly return it.}
+\item{\code{$send_structured(text, schema, ..., role = "user", .fields = NULL, .validate_local = TRUE)}}{
+Send a message with structured-output enabled using \code{schema}, append the assistant's reply,
+parse JSON (and optionally validate locally when \code{.validate_local = TRUE}),
+returning the parsed result invisibly.}
 \item{\code{$history()}}{Raw list of messages.}
 \item{\code{$history_df()}}{Two-column data frame (\code{role}, \code{content}).}
 \item{\code{$tokens_sent()}/\code{$tokens_received()}}{Running token totals.}
@@ -75,7 +78,7 @@ print the assistant's reply, and invisibly return it.}
 
 \examples{
 if (interactive()) {
-  cfg  <- llm_config("openai", "gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"))
+  cfg  <- llm_config("openai", "gpt-4o-mini")
   chat <- chat_session(cfg, system = "Be concise.")
   chat$send("Who invented the moon?")
   chat$send("Explain why in one short sentence.")

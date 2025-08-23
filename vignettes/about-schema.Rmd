@@ -1,0 +1,241 @@
+---
+title: "JSON output vs. schema-validated output in LLMR"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{JSON output vs. schema-validated output in LLMR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>",
+  eval = identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true") )
+```  
+
+
+## TL;DR
+
+- **JSON mode**: ask the model for “a JSON object.” Lower friction. Weak guarantees.  
+- **Schema output**: give a JSON Schema and request strict validation. Higher reliability *when the provider enforces it*.  
+- **Reality**: enforcement and request shapes differ across providers. Use **defensive parsing** and **local validation**.
+
+---
+
+## What the major providers actually support
+
+- **OpenAI-compatible (OpenAI, Groq, Together, x.ai, DeepSeek)**  
+  Chat Completions accept a `response_format` (e.g., `{"type":"json_object"}` or a JSON-Schema payload). Enforcement varies by provider but the interface is OpenAI-shaped.  
+  See [OpenAI API overview](https://platform.openai.com/docs/guides/structured-outputs), [Groq API (OpenAI-compatible)](https://console.groq.com/docs/structured-outputs), [Together: OpenAI compatibility](https://docs.together.ai/docs/json-mode), [x.ai: OpenAI API schema](https://docs.x.ai/docs/guides/structured-outputs), [DeepSeek: OpenAI-compatible endpoint](https://api-docs.deepseek.com/guides/json_mode)
+
+- **Anthropic (Claude)**  
+  No global “JSON mode.” Instead, you **define a tool** with an **`input_schema`** (JSON Schema) and **force** it via `tool_choice`, so the model must return a JSON object that validates the schema.  
+  See [Anthropic Messages API: tools & `input_schema`](https://docs.anthropic.com/en/api/messages#tools)
+
+- **Google Gemini (REST)**  
+  Set `responseMimeType = "application/json"` in `generationConfig` to request JSON. Some models also accept **`responseSchema`** for constrained JSON (model-dependent).  
+  See [Gemini documentation](https://ai.google.dev/gemini-api/docs/)
+---
+
+## Why prefer schema output?
+
+- **Deterministic downstream code**: predictable keys/types enable typed transforms.  
+- **Safer integrations**: strict mode avoids extra keys, missing fields, or textual preambles.  
+- **Faster failure**: invalid generations fail early, where retry/backoff is easy to manage.
+
+## Why JSON-only still matters
+
+- **Broadest support** across models/providers/proxies.  
+- **Low ceremony** for exploration, labeling, and quick prototypes.
+
+---
+
+## Quirks you will hit in practice
+
+- Models often wrap JSON in **code fences** or add pre/post text.  
+- Arrays/objects appear where you expected scalars; **ints vs doubles** vary by provider/sample.  
+- **Safety/length caps** can truncate output; detect and handle “finish_reason = length/filter.”  
+
+### LLMR helpers to blunt those edges
+
+- `llm_parse_structured()` strips fences and extracts the **largest balanced** `{...}` or `[...]` before parsing.  
+- `llm_parse_structured_col()` hoists fields (supports dot/bracket paths and JSON Pointer) and keeps non-scalars as list-columns.  
+- `llm_validate_structured_col()` validates locally via **jsonvalidate (AJV)**.  
+- `enable_structured_output()` flips the right provider switch (OpenAI-compat `response_format`, Anthropic **tool + `input_schema`**, Gemini `responseMimeType`/`responseSchema`).
+
+---
+
+## Minimal patterns (guarded code)
+
+All chunks use a tiny helper so your document **knits even without API keys**.
+
+```{r}
+safe <- function(expr) tryCatch(expr, error = function(e) {message("ERROR: ", e$message); NULL})
+```
+
+### 1) JSON mode, no schema (works across OpenAI-compatible providers)
+
+```{r}
+safe({
+  library(LLMR)
+  cfg <- llm_config(
+    provider = "openai",                # try "groq" or "together" too
+    model    = "gpt-4o-mini",
+    temperature = 0
+  )
+
+  # Flip JSON mode on (OpenAI-compat shape)
+  cfg_json <- enable_structured_output(cfg, schema = NULL)
+
+  res    <- call_llm(cfg_json, 'Give me a JSON object {"ok": true, "n": 3}.')
+  parsed <- llm_parse_structured(res)
+
+  cat("Raw text:\n", as.character(res), "\n\n")
+  str(parsed)
+})
+```
+
+**What could still fail?** Proxies labeled “OpenAI-compatible” sometimes accept `response_format` but don’t strictly enforce it; LLMR’s parser recovers from fences or pre/post text.
+
+---
+
+### 2) **Schema mode that actually works** (Groq + Qwen, *open-weights / non-commercial friendly*)
+
+Groq serves Qwen 2.5 Instruct models with OpenAI-compatible APIs. Their **Structured Outputs** feature enforces JSON Schema and (notably) expects **all properties to be listed under `required`**.
+
+```{r}
+safe({
+  library(LLMR); library(dplyr)
+
+  # Schema: make every property required to satisfy Groq's stricter check
+  schema <- list(
+    type = "object",
+    additionalProperties = FALSE,
+    properties = list(
+      title = list(type = "string"),
+      year  = list(type = "integer"),
+      tags  = list(type = "array", items = list(type = "string"))
+    ),
+    required = list("title","year","tags")
+  )
+
+  cfg <- llm_config(
+    provider = "groq",
+    model    = "qwen-2.5-72b-instruct",   # a Qwen Instruct model on Groq
+    temperature = 0
+  )
+  cfg_strict <- enable_structured_output(cfg, schema = schema, strict = TRUE)
+
+  df  <- tibble(x = c("BERT paper", "Vision Transformers"))
+  out <- llm_fn_structured(
+    df,
+    prompt   = "Return JSON about '{x}' with fields title, year, tags.",
+    .config  = cfg_strict,
+    .schema  = schema,          # send schema to provider
+    .fields  = c("title","year","tags"),
+    .validate_local = TRUE
+  )
+
+  out %>% select(structured_ok, structured_valid, title, year, tags) %>% print(n = Inf)
+})
+```
+
+If your key is set, you should see `structured_ok = TRUE`, `structured_valid = TRUE`, plus parsed columns.
+*(Tip: if you see a 400 complaining about `required`, add **all** properties to `required`, as above.)*
+
+---
+
+### 3) Anthropic: force a schema via a tool (may require `max_tokens`)
+
+```{r}
+safe({
+  library(LLMR)
+  schema <- list(
+    type="object",
+    properties=list(answer=list(type="string"), confidence=list(type="number")),
+    required=list("answer","confidence"),
+    additionalProperties=FALSE
+  )
+
+  cfg <- llm_config("anthropic","claude-3-7", temperature = 0)
+  cfg <- enable_structured_output(cfg, schema = schema, name = "llmr_schema")
+
+  res <- call_llm(cfg, c(
+    system = "Return only the tool result that matches the schema.",
+    user   = "Answer: capital of Japan; include confidence in [0,1]."
+  ))
+
+  parsed <- llm_parse_structured(res)
+  str(parsed)
+})
+```
+
+> Anthropic *requires* `max_tokens`; LLMR warns and defaults if you omit it.
+
+---
+
+### 4) Gemini: JSON response (plus optional response schema on supported models)
+
+```{r}
+safe({
+  library(LLMR)
+
+  cfg <- llm_config(
+    "gemini", "gemini-2.0-flash",
+    response_mime_type = "application/json"  # ask for JSON back
+    # Optionally: gemini_enable_response_schema = TRUE, response_schema = <your JSON Schema>
+  )
+
+  res <- call_llm(cfg, c(
+    system = "Reply as JSON only.",
+    user   = "Produce fields name and score about 'MNIST'."
+  ))
+  str(llm_parse_structured(res))
+})
+```
+
+---
+
+## Defensive patterns (no API calls)
+
+````{r}
+safe({
+  library(LLMR); library(tibble)
+
+  messy <- c(
+    '```json\n{"x": 1, "y": [1,2,3]}\n```',
+    'Sure! Here is JSON: {"x":"1","y":"oops"} trailing words',
+    '{"x":1, "y":[2,3,4]}'
+  )
+
+  tibble(response_text = messy) |>
+    llm_parse_structured_col(
+      fields = c(x = "x", y = "/y/0")   # dot/bracket or JSON Pointer
+    ) |>
+    print(n = Inf)
+})
+````
+
+**Why this helps**
+Works when outputs arrive fenced, with pre/post text, or when arrays sneak in. Non-scalars become list-columns (set `allow_list = FALSE` to force scalars only).
+
+---
+
+## Choosing the mode
+
+* **Reporting / ETL / metrics:** Schema mode; fail fast and retry.
+* **Exploration / ad-hoc:** JSON mode + recovery parser.
+* **Cross-provider code:** Always wrap provider toggles with `enable_structured_output()` and run `llm_parse_structured()` + local validation.
+
+---
+
+## References
+
+* OpenAI: Structure Output: [https://platform.openai.com/docs/guides/structured-outputs](https://platform.openai.com/docs/guides/structured-outputs)
+* Groq: Structured Outputs: [https://console.groq.com/docs/structured-outputs](https://console.groq.com/docs/structured-outputs)
+* Together: Structured Output: [https://docs.together.ai/docs/json-mode](https://docs.together.ai/docs/json-mode)
+* x.ai: Structured Output: [https://docs.x.ai/docs/guides/structured-outputs](https://docs.x.ai/docs/guides/structured-outputs)
+* DeepSeek: JSON Mode: [https://api-docs.deepseek.com/guides/json_mode](https://api-docs.deepseek.com/guides/json_mode)
+* Anthropic: Messages API, tools & `input_schema`: [https://docs.anthropic.com/en/api/messages#body-tool-choice](https://docs.anthropic.com/en/api/messages#body-tool-choice)
+* Google Gemini: Structured Output: [https://ai.google.dev/gemini-api/docs/structured-output](https://ai.google.dev/gemini-api/docs/structured-output)
+

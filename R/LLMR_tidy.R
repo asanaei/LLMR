@@ -18,16 +18,22 @@
 #'   returns a tibble of diagnostic columns; `"text"` returns a character
 #'   vector; `"object"` returns a list of `llmr_response` (or `NA` on failure).
 #'
-#' @return See `.return`. In embedding mode, always returns a numeric matrix.
+#' @return For generative mode:
+#' - `.return = "text"`: character vector
+#' - `.return = "columns"`: tibble with diagnostics
+#' - `.return = "object"`: list of `llmr_response` (or `NA` on failure)
+#' For embedding mode, always a numeric matrix.
 #'
 #' @seealso [llm_mutate()], [setup_llm_parallel()], [call_llm_broadcast()]
 #'
 #' @examples
 #' if (interactive()) {
 #'   words <- c("excellent","awful")
-#'   cfg <- llm_config("openai","gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"), temperature = 0)
-#'   llm_fn(words, "Classify '{x}' as
-#'   Positive/Negative.", cfg, .system_prompt="One word.", .return="columns")
+#'   cfg <- llm_config("openai","gpt-4o-mini", temperature = 0)
+#'   llm_fn(words, "Classify '{x}' as Positive/Negative.",
+#'          cfg,
+#'          .system_prompt="One word.",
+#'          .return="columns")
 #' }
 llm_fn <- function(x,
                    prompt,
@@ -123,6 +129,7 @@ llm_fn <- function(x,
 #' - **Embedding mode:** the per-row text is embedded via [get_batched_embeddings()].
 #'   Result expands to numeric columns named `paste0(<output>, 1:N)`. If all rows
 #'   fail to embed, a single `<output>1` column of `NA` is returned.
+#' - Diagnostic columns use suffixes: `_finish`, `_sent`, `_rec`, `_tot`, `_reason`, `_ok`, `_err`, `_id`, `_status`, `_ecode`, `_param`, `_t`.
 #'
 #' @return `.data` with the new column(s) appended.
 #'
@@ -137,7 +144,7 @@ llm_fn <- function(x,
 #' )
 #'
 #' cfg <- llm_config("openai", "gpt-4o-mini",
-#'                   Sys.getenv("OPENAI_API_KEY"), temperature = 0)
+#'                   temperature = 0)
 #'
 #' # Generative: single-turn with multi-column injection
 #' df |>
@@ -168,12 +175,12 @@ llm_fn <- function(x,
 #'   llm_mutate(
 #'     vision_desc,
 #'     .messages = c(user = "{prompt}", file = "{img}"),
-#'     .config = llm_config("openai","gpt-4.1-mini", Sys.getenv("OPENAI_API_KEY"))
+#'     .config = llm_config("openai","gpt-4.1-mini")
 #'   )
 #'
 #' # Embeddings: output name becomes the prefix of embedding columns
 #' emb_cfg <- llm_config("voyage", "voyage-3.5-lite",
-#'                       Sys.getenv("VOYAGE_KEY"), embedding = TRUE)
+#'                       embedding = TRUE)
 #' df |>
 #'   llm_mutate(
 #'     vec,

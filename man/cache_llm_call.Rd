@@ -4,7 +4,7 @@
 \alias{cache_llm_call}
 \title{Cache LLM API Calls}
 \usage{
-cache_llm_call(config, messages, verbose = FALSE, json = FALSE)
+cache_llm_call(config, messages, verbose = FALSE)
 }
 \arguments{
 \item{config}{An \code{llm_config} object from \code{\link{llm_config}}.}
@@ -12,8 +12,6 @@ cache_llm_call(config, messages, verbose = FALSE, json = FALSE)
 \item{messages}{A list of message objects or character vector for embeddings.}
 
 \item{verbose}{Logical. If TRUE, prints the full API response (passed to \code{\link{call_llm}}).}
-
-\item{json}{Logical. If TRUE, returns raw JSON (passed to \code{\link{call_llm}}).}
 }
 \value{
 The (memoised) response object from \code{\link{call_llm}}.
@@ -37,3 +35,4 @@ or by restarting your R session.
   response2 <- cache_llm_call(my_config, list(list(role="user", content="Hello!")))
 }
 }
+\keyword{internal}

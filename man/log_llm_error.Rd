@@ -34,3 +34,4 @@ Logs an error with a timestamp for troubleshooting.
   )
 }
 }
+\keyword{internal}
