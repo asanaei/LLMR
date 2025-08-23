@@ -6,7 +6,7 @@
 [![CRAN downloads](https://cranlogs.r-pkg.org/badges/grand-total/LLMR)](https://cran.r-project.org/package=LLMR)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![R-CMD-check](https://github.com/asanaei/LLMR/workflows/R-CMD-check/badge.svg)](https://github.com/asanaei/LLMR/actions)
-[![Lifecycle: stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
+[![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![GitHub issues](https://img.shields.io/github/issues/asanaei/LLMR)](https://github.com/asanaei/LLMR/issues)
 
 LLMR offers a unified interface for interacting with multiple Large Language Model APIs in R.
@@ -47,7 +47,6 @@ library(LLMR)
 cfg <- llm_config(
   provider = "openai",
   model    = "gpt-4o",
-  api_key  = Sys.getenv("OPENAI_API_KEY"),
   temperature = 0.7)
 
 slogan <- call_llm( 
@@ -81,8 +80,7 @@ sentences <- c(
 
 emb_cfg <- llm_config(
   provider = "voyage",
-  model    = "voyage-large-2",
-  api_key  = Sys.getenv("VOYAGE_KEY") )
+  model    = "voyage-large-2")
 
 emb <- call_llm(emb_cfg, sentences) |> parse_embeddings()
 
@@ -164,7 +162,7 @@ dev.off()
 vision_cfg <- llm_config(
   provider = "openai",
   model    = "gpt-5-chat-latest",
-  api_key  = Sys.getenv("OPENAI_API_KEY")
+  
 )
 
 call_llm(

@@ -11,7 +11,6 @@ call_llm_robust(
   wait_seconds = 10,
   backoff_factor = 5,
   verbose = FALSE,
-  json = FALSE,
   memoize = FALSE
 )
 }
@@ -27,8 +26,6 @@ call_llm_robust(
 \item{backoff_factor}{Numeric. Multiplier for wait time after each failure. Default is 5.}
 
 \item{verbose}{Logical. If TRUE, prints the full API response.}
-
-\item{json}{Logical. If TRUE, returns the raw JSON as an attribute.}
 
 \item{memoize}{Logical. If TRUE, calls are cached to avoid repeated identical requests. Default is FALSE.}
 }

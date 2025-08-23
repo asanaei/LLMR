@@ -25,9 +25,11 @@
 #' @examples
 #' if (interactive()) {
 #'   words <- c("excellent","awful")
-#'   cfg <- llm_config("openai","gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"), temperature = 0)
-#'   llm_fn(words, "Classify '{x}' as
-#'   Positive/Negative.", cfg, .system_prompt="One word.", .return="columns")
+#'   cfg <- llm_config("openai","gpt-4o-mini", temperature = 0)
+#'   llm_fn(words, "Classify '{x}' as Positive/Negative.",
+#'          cfg,
+#'          .system_prompt="One word.",
+#'          .return="columns")
 #' }
 llm_fn <- function(x,
                    prompt,
@@ -137,7 +139,7 @@ llm_fn <- function(x,
 #' )
 #'
 #' cfg <- llm_config("openai", "gpt-4o-mini",
-#'                   Sys.getenv("OPENAI_API_KEY"), temperature = 0)
+#'                   temperature = 0)
 #'
 #' # Generative: single-turn with multi-column injection
 #' df |>
@@ -168,12 +170,12 @@ llm_fn <- function(x,
 #'   llm_mutate(
 #'     vision_desc,
 #'     .messages = c(user = "{prompt}", file = "{img}"),
-#'     .config = llm_config("openai","gpt-4.1-mini", Sys.getenv("OPENAI_API_KEY"))
+#'     .config = llm_config("openai","gpt-4.1-mini")
 #'   )
 #'
 #' # Embeddings: output name becomes the prefix of embedding columns
 #' emb_cfg <- llm_config("voyage", "voyage-3.5-lite",
-#'                       Sys.getenv("VOYAGE_KEY"), embedding = TRUE)
+#'                       embedding = TRUE)
 #' df |>
 #'   llm_mutate(
 #'     vec,

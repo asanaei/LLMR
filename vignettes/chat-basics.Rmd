@@ -1,0 +1,96 @@
+---
+title: "Simple chat with LLMR"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Simple chat with LLMR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>",
+  eval = identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true")
+)
+```
+
+This vignette shows basic chat usage with four providers and model names:
+- OpenAI: gpt-5-nano
+- Anthropic: claude-sonnet-4-20250514
+- Gemini: gemini-2.5-flash
+- Groq: openai/gpt-oss-20b
+
+You will need API keys in these environment variables: OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, GROQ_API_KEY.
+
+To run these examples locally, set a local flag:
+- Sys.setenv(LLMR_RUN_VIGNETTES = "true")
+- or add LLMR_RUN_VIGNETTES=true to ~/.Renviron
+
+## OpenAI: gpt-5-nano
+```{r}
+library(LLMR)
+
+cfg_openai <- llm_config(
+  provider = "openai",
+  model    = "gpt-5-nano",
+  
+)
+
+chat_oai <- chat_session(cfg_openai, system = "Be concise.")
+chat_oai$send("Say a warm hello in one short sentence.")
+chat_oai$send("Now say it in Esperanto.")
+```
+
+## Anthropic: claude-sonnet-4-20250514
+```{r}
+cfg_anthropic <- llm_config(
+  provider = "anthropic",
+  model    = "claude-sonnet-4-20250514",
+  max_tokens = 512   # avoid warnings; Anthropic requires max_tokens
+)
+
+chat_claude <- chat_session(cfg_anthropic, system = "Be concise.")
+chat_claude$send("Name one interesting fact about honey bees.")
+```
+
+## Gemini: gemini-2.5-flash
+```{r}
+cfg_gemini <- llm_config(
+  provider = "gemini",
+  model    = "gemini-2.5-flash",
+  
+)
+
+chat_gem <- chat_session(cfg_gemini, system = "Be concise.")
+chat_gem$send("Give me a single-sentence fun fact about volcanoes.")
+```
+
+## Groq: openai/gpt-oss-20b
+```{r}
+cfg_groq <- llm_config(
+  provider = "groq",
+  model    = "openai/gpt-oss-20b",
+  
+)
+
+chat_groq <- chat_session(cfg_groq, system = "Be concise.")
+chat_groq$send("Share a short fun fact about octopuses.")
+```
+
+## Structured chat in one call (OpenAI example)
+```{r}
+schema <- list(
+  type = "object",
+  properties = list(
+    answer     = list(type = "string"),
+    confidence = list(type = "number")
+  ),
+  required = list("answer", "confidence"),
+  additionalProperties = FALSE
+)
+
+chat_oai$send_structured(
+  "Return an answer and a confidence score (0-1) about: Why is the sky blue?",
+  schema
+)
+```

@@ -40,8 +40,7 @@ The recommended workflow is:
 \examples{
 \dontrun{
   # Temperature sweep
-  config <- llm_config(provider = "openai", model = "gpt-4.1-nano",
-                       api_key = Sys.getenv("OPENAI_API_KEY"))
+  config <- llm_config(provider = "openai", model = "gpt-4.1-nano")
 
   messages <- "What is 15 * 23?"
   temperatures <- c(0, 0.3, 0.7, 1.0, 1.5)

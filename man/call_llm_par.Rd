@@ -72,8 +72,8 @@ The recommended workflow is:
 \examples{
 \dontrun{
 # Simple example: Compare two models on one prompt
-cfg1 <- llm_config("openai", "gpt-4.1-nano", Sys.getenv("OPENAI_API_KEY"))
-cfg2 <- llm_config("groq", "llama-3.3-70b-versatile", Sys.getenv("GROQ_API_KEY"))
+cfg1 <- llm_config("openai", "gpt-4.1-nano")
+cfg2 <- llm_config("groq", "llama-3.3-70b-versatile")
 
 experiments <- tibble::tibble(
   model_id = c("gpt-4.1-nano", "groq-llama-3.3"),

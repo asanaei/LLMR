@@ -2,12 +2,12 @@ library(testthat)
 library(LLMR)
 
 test_that("llm_fn returns correct length vector", {
-  skip_if_not(nzchar(Sys.getenv("OPENAI_API_KEY")))
+  skip_if_no_env("OPENAI_API_KEY")
   skip_on_cran()                       # avoid API calls on CRAN
   cfg <- llm_config(
     provider = "openai",
     model    = "gpt-4.1-nano",
-    api_key  = Sys.getenv("OPENAI_API_KEY"),
+    api_key  = llm_api_key_env("OPENAI_API_KEY"),
     temperature = 0
   )
 

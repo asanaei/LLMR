@@ -27,8 +27,7 @@ chat_session(config, system = NULL, ...)
 
 \item{system}{Optional system prompt inserted once at the beginning.}
 
-\item{...}{For \code{chat_session()}, default arguments forwarded to every
-\code{\link[=call_llm_robust]{call_llm_robust()}} call (e.g. \code{verbose = TRUE}, \code{json = TRUE}).}
+\item{...}{Default arguments forwarded to every \code{\link[=call_llm_robust]{call_llm_robust()}} call (e.g. \code{verbose = TRUE}).}
 
 \item{x, object}{An \code{llm_chat_session} object.}
 
@@ -75,7 +74,7 @@ print the assistant's reply, and invisibly return it.}
 
 \examples{
 if (interactive()) {
-  cfg  <- llm_config("openai", "gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"))
+  cfg  <- llm_config("openai", "gpt-4o-mini")
   chat <- chat_session(cfg, system = "Be concise.")
   chat$send("Who invented the moon?")
   chat$send("Explain why in one short sentence.")

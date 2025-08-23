@@ -91,7 +91,7 @@ retry_with_backoff <- function(func,
                                backoff_factor = 5,
                                error_filter_func = NULL,
                                ...) {
-  wait_time <- initial_wait
+  wait_time <- initial_wait  # backoff timer; updated after each failure
   for (attempt in seq_len(tries)) {
     result <- tryCatch(
       func(...),
@@ -130,7 +130,6 @@ retry_with_backoff <- function(func,
 #' @param wait_seconds Numeric. Initial wait time (seconds) before the first retry. Default is 10.
 #' @param backoff_factor Numeric. Multiplier for wait time after each failure. Default is 5.
 #' @param verbose Logical. If TRUE, prints the full API response.
-#' @param json Logical. If TRUE, returns the raw JSON as an attribute.
 #' @param memoize Logical. If TRUE, calls are cached to avoid repeated identical requests. Default is FALSE.
 #'
 #' @return The successful result from \code{\link{call_llm}}, or an error if all retries fail.
@@ -158,7 +157,6 @@ call_llm_robust <- function(config, messages,
                             wait_seconds = 10,
                             backoff_factor = 5,
                             verbose = FALSE,
-                            json = FALSE,
                             memoize = FALSE) {
 
   # Internal helper that calls either the direct function or the cached variant
@@ -167,9 +165,9 @@ call_llm_robust <- function(config, messages,
       if (!requireNamespace("memoise", quietly = TRUE)) {
         stop("memoize=TRUE requires the 'memoise' package. Please install it (install.packages('memoise')).")
       }
-      return(cache_llm_call(config, messages, verbose = verbose, json = json))
+      return(cache_llm_call(config, messages, verbose = verbose))
     } else {
-      return(call_llm(config, messages, verbose = verbose, json = json))
+      return(call_llm(config, messages, verbose = verbose))
     }
   }
 
@@ -215,7 +213,6 @@ call_llm_robust <- function(config, messages,
 #' @param config An \code{llm_config} object from \code{\link{llm_config}}.
 #' @param messages A list of message objects or character vector for embeddings.
 #' @param verbose Logical. If TRUE, prints the full API response (passed to \code{\link{call_llm}}).
-#' @param json Logical. If TRUE, returns raw JSON (passed to \code{\link{call_llm}}).
 #'
 #' @details
 #' - Requires the \code{memoise} package. Add \code{memoise} to your
@@ -236,11 +233,11 @@ call_llm_robust <- function(config, messages,
 #'   # Subsequent identical calls won't hit the API unless we clear the cache.
 #'   response2 <- cache_llm_call(my_config, list(list(role="user", content="Hello!")))
 #' }
-cache_llm_call <- memoise::memoise(function(config, messages, verbose = FALSE, json = FALSE) {
+cache_llm_call <- memoise::memoise(function(config, messages, verbose = FALSE) {
   if (!requireNamespace("memoise", quietly = TRUE)) {
     stop("Caching with cache_llm_call requires the 'memoise' package. Please install it (install.packages('memoise')).")
   }
-  call_llm(config, messages, verbose = verbose, json = json)
+  call_llm(config, messages, verbose = verbose)
 })
 
 # -------------------------------------------------------------------

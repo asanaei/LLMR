@@ -7,7 +7,7 @@
 llm_config(
   provider,
   model,
-  api_key,
+  api_key = NULL,
   troubleshooting = FALSE,
   base_url = NULL,
   embedding = NULL,
@@ -69,14 +69,14 @@ or compatible proxies.
 \examples{
 \dontrun{
 # Basic OpenAI config
-cfg <- llm_config("openai", "gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"),
+cfg <- llm_config("openai", "gpt-4o-mini",
                   temperature = 0.7, max_tokens = 300)
 
 # Embeddings (inferred from the model name)
-e_cfg <- llm_config("gemini", "text-embedding-004", Sys.getenv("GEMINI_KEY"))
+e_cfg <- llm_config("gemini", "text-embedding-004")
 
 # Force embeddings even if the model name doesn't contain "embedding"
-e_cfg2 <- llm_config("voyage", "voyage-large-2", Sys.getenv("VOYAGE_API_KEY"),
+e_cfg2 <- llm_config("voyage", "voyage-large-2",
                      embedding = TRUE)
 
 # Point at a compatible proxy

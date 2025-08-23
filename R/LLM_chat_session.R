@@ -60,8 +60,7 @@
 #'
 #' @param config  An [llm_config] **for a generative model** (`embedding = FALSE`).
 #' @param system  Optional system prompt inserted once at the beginning.
-#' @param ...     For `chat_session()`, default arguments forwarded to every
-#'                [call_llm_robust()] call (e.g. `verbose = TRUE`, `json = TRUE`).
+#' @param ...     Default arguments forwarded to every [call_llm_robust()] call (e.g. `verbose = TRUE`).
 #' @param x,object An `llm_chat_session` object.
 #' @param n Number of turns to display.
 #' @param width Character width for truncating long messages.
@@ -76,7 +75,7 @@
 #'
 #' @examples
 #' if (interactive()) {
-#'   cfg  <- llm_config("openai", "gpt-4o-mini", Sys.getenv("OPENAI_API_KEY"))
+#'   cfg  <- llm_config("openai", "gpt-4o-mini")
 #'   chat <- chat_session(cfg, system = "Be concise.")
 #'   chat$send("Who invented the moon?")
 #'   chat$send("Explain why in one short sentence.")
@@ -105,12 +104,18 @@ chat_session <- function(config, system = NULL, ...) {
 
   call_robust <- function(extra = list()) {
     clean <- unname(lapply(e$messages, function(m) .msg(m$role, m$content)))
+    # Allow a per-call config override but avoid duplicate formal args
+    cfg2 <- extra$config %||% config
+    extra$config <- NULL
+    # Guard against accidental 'messages' in extra
+    extra$messages <- NULL
+
     do.call(
       call_llm_robust,
-      c(list(config   = config,
-             messages = clean,
-             json     = TRUE),
-        modifyList(defaults, extra))
+      c(
+        list(config = cfg2, messages = clean),
+        modifyList(defaults, extra)  # tries, wait_seconds, etc. still work
+      )
     )
   }
 
@@ -158,6 +163,34 @@ chat_session <- function(config, system = NULL, ...) {
     invisible(txt)
   }
 
+  send_structured <- function(text, schema, ..., role = "user",
+                              .fields = NULL, .validate_local = TRUE) {
+    stopifnot(is.list(schema))
+    e$messages <- append(e$messages, list(.msg(role, text)))
+
+    cfgs <- enable_structured_output(config, schema = schema)
+    resp <- call_robust(list(config = cfgs, ...))
+
+    txt <- as.character(resp)
+    parsed <- llm_parse_structured(txt)
+    if (!is.null(schema) && isTRUE(.validate_local)) {
+      # local single-row validation
+      df <- data.frame(response_text = txt, stringsAsFactors = FALSE)
+      df$structured_data <- list(parsed)
+      df2 <- llm_validate_structured_col(df, schema, structured_list_col = "structured_data")
+      if (isFALSE(df2$structured_valid[[1]])) {
+        message("Structured validation error: ", df2$structured_error[[1]])
+      }
+    }
+
+    e$sent     <- e$sent     + as.integer(tokens(resp)$sent %||% 0L)
+    e$received <- e$received + as.integer(tokens(resp)$rec  %||% 0L)
+    e$raw      <- append(e$raw, list(resp))
+    e$messages <- append(e$messages, list(.msg("assistant", txt)))
+    print(resp)
+    invisible(parsed)
+  }
+
   history    <- function()  e$messages
   history_df <- function()  data.frame(
     role    = vapply(e$messages, `[[`, "", "role"),
@@ -175,6 +208,7 @@ chat_session <- function(config, system = NULL, ...) {
   structure(
     list(
       send            = send,
+      send_structured = send_structured,
       history         = history,
       history_df      = history_df,
       tokens_sent     = tokens_sent,

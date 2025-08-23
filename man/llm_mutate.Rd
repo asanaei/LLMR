@@ -77,7 +77,7 @@ df <- tibble::tibble(
 )
 
 cfg <- llm_config("openai", "gpt-4o-mini",
-                  Sys.getenv("OPENAI_API_KEY"), temperature = 0)
+                  temperature = 0)
 
 # Generative: single-turn with multi-column injection
 df |>
@@ -108,12 +108,12 @@ pics |>
   llm_mutate(
     vision_desc,
     .messages = c(user = "{prompt}", file = "{img}"),
-    .config = llm_config("openai","gpt-4.1-mini", Sys.getenv("OPENAI_API_KEY"))
+    .config = llm_config("openai","gpt-4.1-mini")
   )
 
 # Embeddings: output name becomes the prefix of embedding columns
 emb_cfg <- llm_config("voyage", "voyage-3.5-lite",
-                      Sys.getenv("VOYAGE_KEY"), embedding = TRUE)
+                      embedding = TRUE)
 df |>
   llm_mutate(
     vec,
