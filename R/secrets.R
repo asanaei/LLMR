@@ -8,7 +8,8 @@
 #' @param required If TRUE, missing variables cause an authentication error at call time.
 #' @param default Optional default if the environment variable is not set.
 #' @return An internal secret handle to be used as `api_key = llm_api_key_env("VARNAME")`.
-#' @export
+#' @keywords internal
+#' @noRd
 llm_api_key_env <- function(var, required = TRUE, default = NULL) {
   structure(
     list(
@@ -22,6 +23,8 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
 }
 
 # Internal: map providers to default environment variables for keys
+#' @keywords internal
+#' @noRd
 .default_api_key_env <- function(provider) {
   switch(tolower(provider),
     openai    = "OPENAI_API_KEY",
@@ -37,6 +40,8 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
 }
 
 # Internal: resolve a secret handle or an env-spec string into a concrete key string
+#' @keywords internal
+#' @noRd
 .resolve_api_key <- function(secret, provider = NULL, model = NULL) {
   # Back-compat: allow plain strings that name the variable, optionally with "env:" prefix
   if (is.character(secret) && length(secret) == 1L) {
@@ -83,6 +88,8 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
 }
 
 # Internal: produce a friendly masked representation for prints
+#' @keywords internal
+#' @noRd
 .mask_api_key <- function(secret) {
   if (inherits(secret, "llmr_secret_env")) return(paste0("<llmr_secret: env:", secret$ref, ">"))
   if (is.character(secret) && length(secret) == 1L) {
@@ -93,6 +100,8 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
 }
 
 # Internal: mask only the api_key field for troubleshooting prints
+#' @keywords internal
+#' @noRd
 .mask_config_for_print <- function(config) {
   cfg <- config
   cfg$api_key <- .mask_api_key(cfg$api_key)
