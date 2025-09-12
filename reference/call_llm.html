@@ -11,7 +11,7 @@ embeddings, plus a simple multimodal shortcut for local files."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">LLMR</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.6.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -89,7 +89,10 @@ retry once replacing <code>max_tokens</code> with <code>max_completion_tokens</c
 “uncapped retry on empty content” is <em>disabled</em> by default to
 avoid unexpected costs.</p></li>
 <li><p><strong>Anthropic:</strong> <code>max_tokens</code> is required; if omitted LLMR uses
-<code>2048</code> and warns. Multimodal images are inlined as base64.</p></li>
+<code>2048</code> and warns. Multimodal images are inlined as base64. Extended
+thinking is supported: provide <code>thinking_budget</code> and
+<code>include_thoughts = TRUE</code> to include a <code>content</code> block of type
+<code>"thinking"</code> in the response; LLMR sets the beta header automatically.</p></li>
 <li><p><strong>Gemini (REST):</strong> <code>systemInstruction</code> is supported; user
 parts use <code>text</code>/<code>inlineData(mimeType,data)</code>; responses are set to
 <code>responseMimeType = "text/plain"</code>.</p></li>
@@ -129,7 +132,16 @@ local file paths.</p>
 <span><span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">r</span><span class="op">)</span></span>
 <span><span class="fu"><a href="llmr_response.html">finish_reason</a></span><span class="op">(</span><span class="va">r</span><span class="op">)</span>; <span class="fu"><a href="llmr_response.html">tokens</a></span><span class="op">(</span><span class="va">r</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co">## 3) Multimodal (named-vector shortcut)</span></span>
+<span><span class="co">## 3) Anthropic extended thinking (single example)</span></span>
+<span><span class="va">a_cfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="llm_config.html">llm_config</a></span><span class="op">(</span><span class="st">"anthropic"</span>, <span class="st">"claude-sonnet-4-20250514"</span>,</span>
+<span>                    max_tokens <span class="op">=</span> <span class="fl">5000</span>,</span>
+<span>                    thinking_budget <span class="op">=</span> <span class="fl">16000</span>,</span>
+<span>                    include_thoughts <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="va">r2</span> <span class="op">&lt;-</span> <span class="fu">call_llm</span><span class="op">(</span><span class="va">a_cfg</span>, <span class="st">"Compute 87*93 in your head. Give only the final number."</span><span class="op">)</span></span>
+<span><span class="co"># thinking (if present): r2$raw$content[[1]]$thinking</span></span>
+<span><span class="co"># final text:            r2$raw$content[[2]]$text</span></span>
+<span></span>
+<span><span class="co">## 4) Multimodal (named-vector shortcut)</span></span>
 <span><span class="va">msg</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
 <span>  system <span class="op">=</span> <span class="st">"Answer briefly."</span>,</span>
 <span>  user   <span class="op">=</span> <span class="st">"Describe this image in one sentence."</span>,</span>
