@@ -406,6 +406,9 @@ get_endpoint <- function(config, default_endpoint) {
 #' @param ... Additional provider-specific parameters (e.g., `temperature`,
 #'   `top_p`, `max_tokens`, `top_k`, `repetition_penalty`, `reasoning_effort`,
 #'   `api_url`, etc.). Values are forwarded verbatim unless documented shims apply.
+#'   For Anthropic extended thinking, supply `thinking_budget` (canonical;
+#'   mapped to `thinking.budget_tokens`) together with `include_thoughts = TRUE`
+#'   to request the thinking block in the response.
 #'
 #' @return An object of class `c("llm_config", provider)`. Fields:
 #'   `provider`, `model`, `api_key`, `troubleshooting`, `embedding`,
@@ -489,7 +492,7 @@ llm_config <- function(provider, model, api_key = NULL,
       # A literal token was supplied. Move it into a temporary env var and keep only its name.
       rand <- paste(sample(c(LETTERS, 0:9), 8, TRUE), collapse = "")
       env_name <- paste0("LLMR_", toupper(provider), "_KEY_", rand)
-     # Sys.setenv(structure(api_key, names = env_name)) ### not right
+      # Sys.setenv(structure(api_key, names = env_name)) ### not right
       do.call(Sys.setenv, setNames(list(api_key), env_name))
       api_key_handle <- llm_api_key_env(env_name)
       if (requireNamespace("cli", quietly = TRUE)) {
@@ -563,7 +566,10 @@ llm_config <- function(provider, model, api_key = NULL,
 #'         “uncapped retry on empty content” is \emph{disabled} by default to
 #'         avoid unexpected costs.
 #'   \item \strong{Anthropic:} `max_tokens` is required; if omitted LLMR uses
-#'         `2048` and warns. Multimodal images are inlined as base64.
+#'         `2048` and warns. Multimodal images are inlined as base64. Extended
+#'         thinking is supported: provide `thinking_budget` and
+#'         `include_thoughts = TRUE` to include a `content` block of type
+#'         `"thinking"` in the response; LLMR sets the beta header automatically.
 #'   \item \strong{Gemini (REST):} `systemInstruction` is supported; user
 #'         parts use `text`/`inlineData(mimeType,data)`; responses are set to
 #'         `responseMimeType = "text/plain"`.
@@ -598,7 +604,16 @@ llm_config <- function(provider, model, api_key = NULL,
 #' as.character(r)
 #' finish_reason(r); tokens(r)
 #'
-#' ## 3) Multimodal (named-vector shortcut)
+#' ## 3) Anthropic extended thinking (single example)
+#' a_cfg <- llm_config("anthropic", "claude-sonnet-4-20250514",
+#'                     max_tokens = 5000,
+#'                     thinking_budget = 16000,
+#'                     include_thoughts = TRUE)
+#' r2 <- call_llm(a_cfg, "Compute 87*93 in your head. Give only the final number.")
+#' # thinking (if present): r2$raw$content[[1]]$thinking
+#' # final text:            r2$raw$content[[2]]$text
+#'
+#' ## 4) Multimodal (named-vector shortcut)
 #' msg <- c(
 #'   system = "Answer briefly.",
 #'   user   = "Describe this image in one sentence.",
@@ -796,11 +811,11 @@ call_llm.anthropic <- function(config, messages, verbose = FALSE) {
     temperature= params$temperature,
     top_p      = params$top_p,
     messages   = processed_user_messages,
-    thinking   = if (!is.null(params$thinking_budget) &&
+    thinking   = if (!is.null(params$budget_tokens) &&
                      !is.null(params$include_thoughts))
       list(
         type          = "enabled",
-        budget_tokens = params$thinking_budget
+        budget_tokens = params$budget_tokens
       )
   ))
 

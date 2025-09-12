@@ -67,5 +67,4 @@ reference:
 - title: Utilities
   contents:
   - bind_tools
-  - llm_api_key_env
 

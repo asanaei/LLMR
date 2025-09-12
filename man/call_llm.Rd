@@ -45,7 +45,10 @@ retry once replacing \code{max_tokens} with \code{max_completion_tokens}
 “uncapped retry on empty content” is \emph{disabled} by default to
 avoid unexpected costs.
 \item \strong{Anthropic:} \code{max_tokens} is required; if omitted LLMR uses
-\code{2048} and warns. Multimodal images are inlined as base64.
+\code{2048} and warns. Multimodal images are inlined as base64. Extended
+thinking is supported: provide \code{thinking_budget} and
+\code{include_thoughts = TRUE} to include a \code{content} block of type
+\code{"thinking"} in the response; LLMR sets the beta header automatically.
 \item \strong{Gemini (REST):} \code{systemInstruction} is supported; user
 parts use \code{text}/\code{inlineData(mimeType,data)}; responses are set to
 \code{responseMimeType = "text/plain"}.
@@ -75,7 +78,16 @@ r
 as.character(r)
 finish_reason(r); tokens(r)
 
-## 3) Multimodal (named-vector shortcut)
+## 3) Anthropic extended thinking (single example)
+a_cfg <- llm_config("anthropic", "claude-sonnet-4-20250514",
+                    max_tokens = 5000,
+                    thinking_budget = 16000,
+                    include_thoughts = TRUE)
+r2 <- call_llm(a_cfg, "Compute 87*93 in your head. Give only the final number.")
+# thinking (if present): r2$raw$content[[1]]$thinking
+# final text:            r2$raw$content[[2]]$text
+
+## 4) Multimodal (named-vector shortcut)
 msg <- c(
   system = "Answer briefly.",
   user   = "Describe this image in one sentence.",

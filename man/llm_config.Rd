@@ -42,7 +42,10 @@ after a server hint; see \code{call_llm()} notes).}
 
 \item{...}{Additional provider-specific parameters (e.g., \code{temperature},
 \code{top_p}, \code{max_tokens}, \code{top_k}, \code{repetition_penalty}, \code{reasoning_effort},
-\code{api_url}, etc.). Values are forwarded verbatim unless documented shims apply.}
+\code{api_url}, etc.). Values are forwarded verbatim unless documented shims apply.
+For Anthropic extended thinking, supply \code{thinking_budget} (canonical;
+mapped to \code{thinking.budget_tokens}) together with \code{include_thoughts = TRUE}
+to request the thinking block in the response.}
 }
 \value{
 An object of class \code{c("llm_config", provider)}. Fields:
