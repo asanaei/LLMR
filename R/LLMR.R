@@ -257,13 +257,12 @@ extract_text <- function(content) {
     cc <- content$content
     if (length(cc) == 0) return(NA_character_)
 
-    # Prefer JSON emitted via tool_use when structured mode is on
+    # Prefer tool_use when structured mode is on (unchanged)
     is_tool_use <- function(b) identical(b$type, "tool_use")
     has_tool <- any(vapply(cc, is_tool_use, logical(1)))
     if (has_tool) {
       idx <- which(vapply(cc, is_tool_use, logical(1)))[1]
       tu  <- cc[[idx]]
-      # tu$input is already a structured R list (from JSON); serialize to JSON string
       if (!is.null(tu$input)) {
         if (is.character(tu$input) && length(tu$input) == 1L) {
           return(tu$input)
@@ -273,10 +272,15 @@ extract_text <- function(content) {
       }
     }
 
-    # Fallback to plain text if no tool_use
-    if (!is.null(cc[[1]]$text)) return(cc[[1]]$text)
+    # pick the last text block, skipping the thinking block
+    text_blocks <- Filter(function(b) !is.null(b$text) && is.character(b$text) && nzchar(b$text[1]), cc)
+    if (length(text_blocks) > 0) {
+      return(text_blocks[[length(text_blocks)]]$text)
+    }
+
     return(NA_character_)
   }
+
 
 
 
@@ -769,76 +773,82 @@ call_llm.anthropic <- function(config, messages, verbose = FALSE) {
   messages <- .normalize_messages(messages)
   endpoint <- get_endpoint(config, default_endpoint = "https://api.anthropic.com/v1/messages")
 
-  use_thinking_beta <- !is.null(config$model_params$thinking_budget) ||
-    isTRUE(config$model_params$include_thoughts)  # kept for future beta headers
-
-  # Use the helper to separate system messages
+  # Separate system text and user/assistant messages
   formatted <- format_anthropic_messages(messages)
 
-  # Process user messages for multimodal content
+  # Build Anthropic message blocks:
+  # - content MUST be an array of blocks; never send a bare string
+  # - images are base64-inlined
   processed_user_messages <- lapply(formatted$user_messages, function(msg) {
-    # ── KEEP STRING CONTENT AS-IS ─────────────────────────────
-    if (is.character(msg$content)) {
-      return(list(role = msg$role, content = msg$content))
+    blocks <- if (is.character(msg$content)) {
+      list(list(type = "text", text = msg$content))
+    } else if (is.list(msg$content)) {
+      purrr::compact(lapply(msg$content, function(part) {
+        if (identical(part$type, "text")) {
+          list(type = "text", text = part$text)
+        } else if (identical(part$type, "file")) {
+          fd <- .process_file_content(part$path)
+          list(
+            type = "image",
+            source = list(
+              type = "base64",
+              media_type = fd$mime_type,
+              data = fd$base64_data
+            )
+          )
+        } else {
+          NULL
+        }
+      }))
+    } else {
+      list(list(type = "text", text = as.character(msg$content)))
     }
-
-    # ── OTHERWISE (images / tools) BUILD BLOCKS ───────────────
-    content_blocks <- lapply(msg$content, function(part) {
-      if (part$type == "text")
-        list(type = "text", text = part$text)
-      else if (part$type == "file") {
-        fd <- .process_file_content(part$path)
-        list(type = "image",
-             source = list(type = "base64",
-                           media_type = fd$mime_type,
-                           data = fd$base64_data))
-      } else NULL
-    })
-    list(role = msg$role, content = content_blocks |> purrr::compact())
+    list(
+      role = if (msg$role %in% c("user","assistant")) msg$role else "user",
+      content = blocks
+    )
   })
 
-  ### translate & pull out Anthropic-specific aliases
+  # Translate canonical params but keep unknowns
   params <- .translate_params("anthropic", config$model_params)
 
   if (is.null(params$max_tokens))
-    warning('Anthropic requires max_tokens; setting it at 2048.')
+    warning("Anthropic requires max_tokens; setting it at 2048.")
 
-
+  # thinking is enabled when either:
+  # - user sets thinking = TRUE (or "enabled"), or
+  # - a budget_tokens is provided directly (or via thinking_budget alias)
+  thinking_enabled <- isTRUE(config$model_params$thinking) ||
+    identical(tolower(as.character(config$model_params$thinking %||% "")), "enabled") ||
+    !is.null(params$budget_tokens)
 
   body <- .drop_null(list(
-    model      = config$model,
-    max_tokens = params$max_tokens %||% 2048,
-    temperature= params$temperature,
-    top_p      = params$top_p,
-    messages   = processed_user_messages,
-    thinking   = if (!is.null(params$budget_tokens) &&
-                     !is.null(params$include_thoughts))
-      list(
-        type          = "enabled",
-        budget_tokens = params$budget_tokens
-      )
+    model       = config$model,
+    max_tokens  = params$max_tokens %||% 2048,
+    temperature = params$temperature,
+    top_p       = params$top_p,
+    system      = formatted$system_text,                    # top-level system
+    messages    = processed_user_messages,
+    thinking    = if (thinking_enabled) .drop_null(list(
+      type          = "enabled",
+      budget_tokens = params$budget_tokens
+    )) else NULL
   ))
 
-  # Pass through any explicit tools/tool_choice already set by enable_structured_output() or user
+  # Respect tools/tool_choice if already present (e.g., from enable_structured_output)
   mp <- config$model_params %||% list()
   if (!is.null(mp$tools))       body$tools       <- c(body$tools %||% list(), mp$tools)
   if (!is.null(mp$tool_choice)) body$tool_choice <- mp$tool_choice
 
-
-
-  # Ensure Anthropic tool names are unique and tool_choice refers to an existing tool
+  # Ensure tool names unique and tool_choice valid, unchanged from your version
   if (!is.null(body$tools) && length(body$tools) > 0) {
-    # keep first occurrence of each name
     nm <- vapply(body$tools, function(t) t$name %||% "", character(1))
     keep <- !duplicated(nm) | nm == ""
     body$tools <- body$tools[keep]
-
-    # fix tool_choice if it points to a missing/empty name
     if (!is.null(body$tool_choice) && identical(body$tool_choice$type, "tool")) {
       want <- body$tool_choice$name %||% ""
       have <- vapply(body$tools, function(t) identical(t$name, want), logical(1))
       if (!nzchar(want) || !any(have)) {
-        # default to first named tool
         first_named <- which(nzchar(vapply(body$tools, function(t) t$name %||% "", character(1))))[1]
         if (!is.na(first_named)) {
           body$tool_choice <- list(type = "tool", name = body$tools[[first_named]]$name)
@@ -854,10 +864,7 @@ call_llm.anthropic <- function(config, messages, verbose = FALSE) {
       "Content-Type"      = "application/json",
       "x-api-key"         = .resolve_api_key(config$api_key, provider = config$provider, model = config$model),
       "anthropic-version" = "2023-06-01",
-      !!! (
-        if (!is.null(body$thinking))
-          list("anthropic-beta" = "extended-thinking-2025-05-14")
-      )
+      !!! ( if (!is.null(mp$anthropic_beta)) list("anthropic-beta" = mp$anthropic_beta) else NULL )
     ) |>
     httr2::req_body_json(body)
 
