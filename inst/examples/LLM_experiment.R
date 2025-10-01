@@ -27,7 +27,7 @@ user_prompts <- c(
   prompt_name("Jared Thompson,")
 )
 labels <- c("Mohamed", "Jared")
-N_REPS <- 50
+N_REPS <- 25
 
 # 3) Factorial design (plain text mode; no schema/JSON mode)
 experiments <- build_factorial_experiments(

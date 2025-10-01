@@ -111,8 +111,9 @@ res_par_cn = res_par |>
 
 res_par_cn |>
   select(config_label, provider, model, sentence, family, confidence, rationale,
-         structured_ok, finish_reason) %>%
-  arrange(config_label) %>% print(n = Inf)
+         structured_ok, finish_reason) |>
+  arrange(config_label) |>
+  print(n = Inf)
 
 ## sometimes "hi/lo" is given instead of numbers
 table(res_par_cn$confidence, res_par$confidence)
@@ -128,7 +129,7 @@ vec_out <- llm_fn_structured(
   .fields = c("family","confidence")) |>
   mutate(confidence = suppressWarnings(as.numeric(confidence)))
 
-print(vec_out %>% select(response_text, family, confidence, structured_ok))
+print(vec_out |> select(response_text, family, confidence, structured_ok))
 
 
 vec_out2 <- llm_fn_structured(
@@ -140,7 +141,7 @@ vec_out2 <- llm_fn_structured(
   .fields = c("family","confidence")) |>
   mutate(confidence = suppressWarnings(as.numeric(confidence)))
 
-print(vec_out2 %>% select(response_text, family, confidence, structured_ok))
+print(vec_out2 |> select(response_text, family, confidence, structured_ok))
 
 
 vec_out3 <- llm_fn_structured(

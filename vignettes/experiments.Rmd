@@ -13,6 +13,15 @@ knitr::opts_chunk$set(
   eval = identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true") )
 ```  
 
+## Overview
+
+This vignette demonstrates:
+
+1. Building factorial experiment designs with `build_factorial_experiments()`
+2. Running experiments in parallel with `call_llm_par()`
+3. Comparing unstructured vs. structured output across providers
+
+The workflow is: **design → parallel execution → analysis**
 
 We will compare three configurations on two prompts, once unstructured and once with structured output. In choosing models, note that at the time of writing this vignette, Gemini models are not guaranteeing the schema output and is more likely to run into trouble. 
 
@@ -44,6 +53,16 @@ res_unstructured |>
   select(provider, model, user_prompt_label, response_text, finish_reason) |>
   head()
 ```
+
+**Understanding the results:**
+
+The `finish_reason` column shows why each response ended:
+
+- `"stop"`: normal completion
+- `"length"`: hit token limit (increase `max_tokens`)
+- `"filter"`: content filter triggered
+
+The `user_prompt_label` helps track which experimental condition produced each response.
 
 ## Structured version
 ```{r}

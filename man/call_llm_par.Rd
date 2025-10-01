@@ -27,7 +27,7 @@ and 'messages' (character vector OR message list).}
 
 \item{wait_seconds}{Numeric. Initial wait time (seconds) before retry. Default is 2.}
 
-\item{backoff_factor}{Numeric. Multiplier for wait time after each failure. Default is 2.}
+\item{backoff_factor}{Numeric. Multiplier for wait time after each failure. Default is 3.}
 
 \item{verbose}{Logical. If TRUE, prints progress and debug information.}
 

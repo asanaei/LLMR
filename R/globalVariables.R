@@ -14,6 +14,7 @@ utils::globalVariables(
 #' @importFrom vctrs vec_ptype_common vec_cast vec_c
 #' @importFrom rlang `:=`
 #' @importFrom stats setNames
+#' @importFrom purrr map map2 keep compact detect list_transpose
 #' @noRd
 NULL
 

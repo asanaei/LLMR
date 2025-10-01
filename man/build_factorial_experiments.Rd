@@ -31,7 +31,7 @@ build_factorial_experiments(
 }
 \value{
 A tibble with columns: config (list-column), messages (list-column),
-config_label, message_label, and repetition. Ready for use with call_llm_par().
+config_label, user_prompt_label, system_prompt_label, and repetition. Ready for use with call_llm_par().
 }
 \description{
 Creates a tibble of experiments for factorial designs where you want to test
@@ -39,16 +39,16 @@ all combinations of configs, messages, and repetitions with automatic metadata.
 }
 \examples{
 \dontrun{
-  # Factorial design: 3 configs x 2 message conditions x 10 reps = 60 experiments
+  # Factorial design: 3 configs x 2 user prompts x 10 reps = 60 experiments
   configs <- list(gpt4_config, claude_config, llama_config)
-  messages <- list("Control prompt", "Treatment prompt")
+  user_prompts <- c("Control prompt", "Treatment prompt")
 
   experiments <- build_factorial_experiments(
     configs = configs,
-    messages = messages,
+    user_prompts = user_prompts,
     repetitions = 10,
     config_labels = c("gpt4", "claude", "llama"),
-    message_labels = c("control", "treatment")
+    user_prompt_labels = c("control", "treatment")
   )
 
   # Use with call_llm_par

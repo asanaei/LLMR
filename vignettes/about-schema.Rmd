@@ -80,7 +80,7 @@ safe({
   library(LLMR)
   cfg <- llm_config(
     provider = "openai",                # try "groq" or "together" too
-    model    = "gpt-4o-mini",
+    model    = "gpt-4.1-nano",
     temperature = 0
   )
 
@@ -141,7 +141,8 @@ safe({
 ```
 
 If your key is set, you should see `structured_ok = TRUE`, `structured_valid = TRUE`, plus parsed columns.
-*(Tip: if you see a 400 complaining about `required`, add **all** properties to `required`, as above.)*
+
+**Common gotcha**: If Groq returns a 400 error complaining about `required`, ensure **all properties** are listed in the `required` array. Groq's structured output implementation is stricter than OpenAI's.
 
 ---
 
@@ -157,7 +158,7 @@ safe({
     additionalProperties=FALSE
   )
 
-  cfg <- llm_config("anthropic","claude-3-7", temperature = 0)
+  cfg <- llm_config("anthropic","claude-3-5-haiku-latest", temperature = 0)
   cfg <- enable_structured_output(cfg, schema = schema, name = "llmr_schema")
 
   res <- call_llm(cfg, c(
@@ -181,7 +182,7 @@ safe({
   library(LLMR)
 
   cfg <- llm_config(
-    "gemini", "gemini-2.0-flash",
+    "gemini", "gemini-2.5-flash-lite",
     response_mime_type = "application/json"  # ask for JSON back
     # Optionally: gemini_enable_response_schema = TRUE, response_schema = <your JSON Schema>
   )
@@ -218,6 +219,36 @@ safe({
 
 **Why this helps**
 Works when outputs arrive fenced, with pre/post text, or when arrays sneak in. Non-scalars become list-columns (set `allow_list = FALSE` to force scalars only).
+
+---
+
+## Pro tip: Combine with parallel execution
+
+For production ETL workflows, combine schema validation with parallelization:
+
+```{r, eval=FALSE}
+library(LLMR); library(dplyr)
+
+cfg_with_schema = llm_config('openai','gpt-4.1-nano')
+  
+setup_llm_parallel(workers = 10)
+
+### Assuming there is a large data frame large_df
+
+large_df |>
+  llm_mutate_structured(
+    result,
+    prompt = "Extract: {text}",
+    .config = cfg_with_schema,
+    .schema = schema,
+    .fields = c("label", "score"),
+    tries = 3  # auto-retry failures
+  )
+
+reset_llm_parallel()
+```
+
+This processes thousands of rows efficiently with automatic retries and validation.
 
 ---
 

@@ -117,6 +117,16 @@ llm_fn <- function(x,
 #'   controls how results are added. `"columns"` (default) adds text plus
 #'   diagnostic columns; `"text"` adds a single text column; `"object"` adds a
 #'   list-column of `llmr_response` objects.
+#' @param .structured Logical. If `TRUE`, enables structured JSON output with automatic
+#'   parsing. Requires `.schema` to be provided. When enabled, this is equivalent to
+#'   calling [llm_mutate_structured()]. Default is `FALSE`.
+#' @param .schema Optional JSON Schema (R list). When `.structured = TRUE`, this schema
+#'   is sent to the provider for validation and used for local parsing. When `NULL`,
+#'   only JSON mode is enabled (no strict schema validation).
+#' @param .fields Optional character vector of fields to extract from parsed JSON.
+#'   Supports nested paths (e.g., `"user.name"` or `"/data/items/0"`). When `NULL`
+#'   and `.schema` is provided, auto-extracts all top-level schema properties.
+#'   Set to `FALSE` to skip field extraction entirely.
 #' @param ... Passed to the underlying calls: [call_llm_broadcast()] in
 #'   generative mode, [get_batched_embeddings()] in embedding mode.
 #'
@@ -133,6 +143,19 @@ llm_fn <- function(x,
 #'
 #' @return `.data` with the new column(s) appended.
 #'
+#' @section Shorthand:
+#' You can supply the output column and prompt in one argument:
+#'
+#' \preformatted{
+#' df |> llm_mutate(answer = "{question} (hint: {hint})", .config = cfg)
+#' df |> llm_mutate(answer = c(system = "One word.", user = "{question}"), .config = cfg)
+#' }
+#'
+#' This is equivalent to:
+#' \preformatted{
+#' df |> llm_mutate(answer, prompt = "{question} (hint: {hint})", .config = cfg)
+#' df |> llm_mutate(answer, .messages = c(system = "One word.", user = "{question}"), .config = cfg)
+#' }
 #' @examples
 #' \dontrun{
 #' library(dplyr)
@@ -188,6 +211,34 @@ llm_fn <- function(x,
 #'     .config = emb_cfg,
 #'     .after  = id
 #'   )
+#'
+#' # Structured output: using .structured = TRUE (equivalent to llm_mutate_structured)
+#' schema <- list(
+#'   type = "object",
+#'   properties = list(
+#'     answer = list(type = "string"),
+#'     confidence = list(type = "number")
+#'   ),
+#'   required = list("answer", "confidence")
+#' )
+#'
+#' df |>
+#'   llm_mutate(
+#'     result,
+#'     prompt = "{question}",
+#'     .config = cfg,
+#'     .structured = TRUE,
+#'     .schema = schema
+#'   )
+#'
+#' # Structured with shorthand
+#' df |>
+#'   llm_mutate(
+#'     result = "{question}",
+#'     .config = cfg,
+#'     .structured = TRUE,
+#'     .schema = schema
+#'   )
 #' }
 #' @export
 #' @importFrom glue glue_data
@@ -200,13 +251,76 @@ llm_mutate <- function(.data,
                        .before = NULL,
                        .after  = NULL,
                        .return = c("columns","text","object"),
+                       .structured = FALSE,
+                       .schema = NULL,
+                       .fields = NULL,
                        ...) {
 
   stopifnot(inherits(.config, "llm_config"))
   roles_allowed <- c("system", "user", "assistant", "file")
+  
+  out_missing <- missing(output)  # shorthand may supply it; final check happens later
+  before_missing <- missing(.before)
+  after_missing  <- missing(.after)
 
-  if (missing(output)) stop("llm_mutate() requires an unquoted output column name, e.g. llm_mutate(score, ...)")
+  dots <- rlang::dots_list(...)
+
+  # Shorthand: llm_mutate(.data, newcol = "<prompt>") or newcol = c(system=..., user=...)
+  if (out_missing && is.null(prompt) && is.null(.messages)) {
+    nm <- names(dots)
+    if (length(dots) && !is.null(nm)) {
+      cand <- which(nzchar(nm) & vapply(dots, function(v) is.character(v) && length(v) >= 1L, logical(1)))
+      if (length(cand) >= 1L) {
+        j <- cand[1]
+        output <- rlang::sym(nm[[j]])
+        if (is.null(names(dots[[j]]))) {
+          prompt <- as.character(dots[[j]])[1]
+        } else {
+          .messages <- dots[[j]]
+          bad <- setdiff(unique(names(.messages)), roles_allowed)
+          if (length(bad)) {
+            stop("Unsupported roles in shorthand mapping: ", paste(bad, collapse = ", "))
+          }
+        }
+        dots[[j]] <- NULL  # consume the mapping; remaining dots are pass-through
+      }
+    }
+  }
+
+  if (out_missing && missing(output)) {
+    stop("llm_mutate() requires an output column name, e.g. llm_mutate(score, ...) or use the shorthand llm_mutate(score = '<prompt>', ...).")
+  }
+
   if (!is.data.frame(.data)) stop("`.data` must be a data.frame or tibble; got: ", paste(class(.data), collapse = "/"))
+
+  # If .structured = TRUE, delegate to llm_mutate_structured
+  if (isTRUE(.structured)) {
+    if (!requireNamespace("LLMR", quietly = TRUE)) {
+      stop("Structured output requires the LLMR package.")
+    }
+
+    args <- list(
+      .data = .data,
+      prompt = prompt,
+      .messages = .messages,
+      .config = .config,
+      .system_prompt = .system_prompt,
+      .schema = .schema,
+      .fields = .fields
+    )
+    if (!before_missing) args$.before <- .before
+    if (!after_missing)  args$.after  <- .after
+
+    if (out_missing) {
+      # Shorthand set `output` to a symbol earlier
+      args$output <- output
+      return(do.call(llm_mutate_structured, c(args, dots)))
+    } else {
+      # User supplied `output`; capture as symbol
+      args$output <- rlang::ensym(output)
+      return(do.call(llm_mutate_structured, c(args, dots)))
+    }
+  }
 
   # -- helpers (local) -------------------------------------------------------
   eval_messages_one_row <- function(row_df, tpl_vec) {
@@ -294,10 +408,9 @@ llm_mutate <- function(.data,
       as.character(glue::glue_data(.data, prompt, .na = ""))
     }
 
-    emb_mat <- get_batched_embeddings(
-      texts        = user_txt,
-      embed_config = .config,
-      ...
+    emb_mat <- do.call(
+      get_batched_embeddings,
+      c(list(texts = user_txt, embed_config = .config), dots)
     )
 
     # Determine prefix
@@ -341,10 +454,9 @@ llm_mutate <- function(.data,
 
   msgs <- build_generative_messages(.data, prompt, .messages, .system_prompt)
 
-  res <- call_llm_broadcast(
-    config   = .config,
-    messages = msgs,
-    ...
+  res <- do.call(
+    call_llm_broadcast,
+    c(list(config = .config, messages = msgs), dots)
   )
 
   .ret <- match.arg(.return)

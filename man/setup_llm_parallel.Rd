@@ -4,14 +4,15 @@
 \alias{setup_llm_parallel}
 \title{Setup Parallel Environment for LLM Processing}
 \usage{
-setup_llm_parallel(strategy = NULL, workers = NULL, verbose = FALSE)
+setup_llm_parallel(workers = NULL, strategy = NULL, verbose = FALSE)
 }
 \arguments{
+\item{workers}{Integer. Number of workers to use. If NULL, auto-detects optimal number
+(availableCores - 1, capped at 8). If called as \code{setup_llm_parallel(4)},
+the single numeric positional argument is interpreted as \code{workers}.}
+
 \item{strategy}{Character. The future strategy to use. Options: "multisession", "multicore", "sequential".
 If NULL (default), automatically chooses "multisession".}
-
-\item{workers}{Integer. Number of workers to use. If NULL, auto-detects optimal number
-(availableCores - 1, capped at 8).}
 
 \item{verbose}{Logical. If TRUE, prints setup information.}
 }
