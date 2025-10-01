@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">LLMR</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -94,11 +94,20 @@ generated column(s) are placed.</p></dd>
 
 
 <dt id="arg--schema">.schema<a class="anchor" aria-label="anchor" href="#arg--schema"></a></dt>
-<dd><p>Optional JSON Schema list; if <code>NULL</code>, only JSON object is enforced.</p></dd>
+<dd><p>Optional JSON Schema (R list). When provided, this schema is sent to
+the provider for strict validation and used for local parsing. When <code>NULL</code>, only
+JSON mode is enabled (no strict schema validation). The schema should follow
+JSON Schema specification (e.g., with <code>type</code>, <code>properties</code>, <code>required</code>).</p></dd>
 
 
 <dt id="arg--fields">.fields<a class="anchor" aria-label="anchor" href="#arg--fields"></a></dt>
-<dd><p>Optional fields to hoist (supports nested paths).</p></dd>
+<dd><p>Optional character vector of fields to extract from parsed JSON.
+Supports:</p><ul><li><p>Character vector: <code>c("name", "score")</code> - extract these fields</p></li>
+<li><p>Named vector: <code>c(person_name = "name", rating = "score")</code> - extract and rename</p></li>
+<li><p>Nested paths: <code>c("user.name", "/data/items/0")</code> - dot notation or JSON Pointer</p></li>
+<li><p><code>NULL</code> (default): auto-extracts all top-level properties from <code>.schema</code></p></li>
+<li><p><code>FALSE</code>: skip field extraction (keep only <code>structured_data</code> list-column)</p></li>
+</ul></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
@@ -106,6 +115,16 @@ generated column(s) are placed.</p></dd>
 generative mode, <code><a href="get_batched_embeddings.html">get_batched_embeddings()</a></code> in embedding mode.</p></dd>
 
 </dl></div>
+    <div class="section level2">
+    <h2 id="shorthand-syntax">Shorthand syntax<a class="anchor" aria-label="anchor" href="#shorthand-syntax"></a></h2>
+
+
+<p>Like <code><a href="llm_mutate.html">llm_mutate()</a></code>, this function supports shorthand syntax:</p>
+<div class="sourceCode"><pre><code><span></span>
+<span><span class="va">df</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/llm_mutate_structured.html">llm_mutate_structured</a></span><span class="op">(</span>result <span class="op">=</span> <span class="st">"{text}"</span>, .schema <span class="op">=</span> <span class="va">schema</span><span class="op">)</span></span>
+<span><span class="va">df</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/llm_mutate_structured.html">llm_mutate_structured</a></span><span class="op">(</span>result <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>system <span class="op">=</span> <span class="st">"Be brief."</span>, user <span class="op">=</span> <span class="st">"{text}"</span><span class="op">)</span>, .schema <span class="op">=</span> <span class="va">schema</span><span class="op">)</span></span></code></pre></div>
+
+    </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

@@ -9,7 +9,7 @@ Automatically detects system capabilities and sets appropriate defaults."></head
 
     <a class="navbar-brand me-2" href="../index.html">LLMR</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -41,21 +41,22 @@ Automatically detects system capabilities and sets appropriate defaults.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">setup_llm_parallel</span><span class="op">(</span>strategy <span class="op">=</span> <span class="cn">NULL</span>, workers <span class="op">=</span> <span class="cn">NULL</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">setup_llm_parallel</span><span class="op">(</span>workers <span class="op">=</span> <span class="cn">NULL</span>, strategy <span class="op">=</span> <span class="cn">NULL</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
     <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
 
-<dl><dt id="arg-strategy">strategy<a class="anchor" aria-label="anchor" href="#arg-strategy"></a></dt>
+<dl><dt id="arg-workers">workers<a class="anchor" aria-label="anchor" href="#arg-workers"></a></dt>
+<dd><p>Integer. Number of workers to use. If NULL, auto-detects optimal number
+(availableCores - 1, capped at 8). If called as <code>setup_llm_parallel(4)</code>,
+the single numeric positional argument is interpreted as <code>workers</code>.</p></dd>
+
+
+<dt id="arg-strategy">strategy<a class="anchor" aria-label="anchor" href="#arg-strategy"></a></dt>
 <dd><p>Character. The future strategy to use. Options: "multisession", "multicore", "sequential".
 If NULL (default), automatically chooses "multisession".</p></dd>
-
-
-<dt id="arg-workers">workers<a class="anchor" aria-label="anchor" href="#arg-workers"></a></dt>
-<dd><p>Integer. Number of workers to use. If NULL, auto-detects optimal number
-(availableCores - 1, capped at 8).</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>

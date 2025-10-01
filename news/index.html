@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">LLMR</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -31,6 +31,37 @@
       <small>Source: <a href="https://github.com/asanaei/LLMR/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.6.2" id="llmr-062">LLMR 0.6.2<a class="anchor" aria-label="anchor" href="#llmr-062"></a></h2>
+<div class="section level3">
+<h3 id="new-features-0-6-2">New Features<a class="anchor" aria-label="anchor" href="#new-features-0-6-2"></a></h3>
+<ul><li>
+<code><a href="../reference/setup_llm_parallel.html">setup_llm_parallel()</a></code> changed parameter order to accept numeric positional argument for <code>workers</code>.</li>
+<li>
+<code><a href="../reference/llm_mutate.html">llm_mutate()</a></code> adds a shorthand form: <code>llm_mutate(answer = "&lt;prompt&gt;" | c(system=..., user=...), .config=...)</code>.</li>
+<li>
+<code><a href="../reference/llm_mutate.html">llm_mutate()</a></code> gains <code>.structured</code> flag: set <code>.structured = TRUE</code> to enable JSON output with automatic parsing (equivalent to calling <code><a href="../reference/llm_mutate_structured.html">llm_mutate_structured()</a></code>).</li>
+<li>
+<code><a href="../reference/llm_mutate_structured.html">llm_mutate_structured()</a></code> now supports shorthand syntax: <code>llm_mutate_structured(result = "{text}", .schema = schema)</code>.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="improvements-0-6-2">Improvements<a class="anchor" aria-label="anchor" href="#improvements-0-6-2"></a></h3>
+<ul><li>Enhanced <code>.fields</code> documentation to clarify auto-extraction behavior and nested path support.</li>
+<li>Clarified that <code>.schema = NULL</code> enables JSON mode without strict schema validation.</li>
+<li>Added comprehensive examples demonstrating new structured output features in vignettes.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-0-6-2">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-6-2"></a></h3>
+<ul><li>Removed unused internal function <code>.category_from_condition</code> in parallel utilities.</li>
+<li>Fixed <code><a href="../reference/build_factorial_experiments.html">build_factorial_experiments()</a></code> documentation to correctly describe return value columns.</li>
+<li>Corrected <code><a href="../reference/call_llm_par.html">call_llm_par()</a></code> default value for <code>backoff_factor</code> parameter (now correctly documented as 3).</li>
+<li>Added missing <code>@importFrom purrr</code> declarations for imported functions.</li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.6.1" id="llmr-061">LLMR 0.6.1<a class="anchor" aria-label="anchor" href="#llmr-061"></a></h2>
+<ul><li>Fixed bug in that affected <code>claude</code> calls.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6.0" id="llmr-060">LLMR 0.6.0<a class="anchor" aria-label="anchor" href="#llmr-060"></a></h2><p class="text-muted">CRAN release: 2025-08-26</p>
 <div class="section level3">

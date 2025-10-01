@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">LLMR</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.6.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.6.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -105,7 +105,7 @@ to ~/.Renviron</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cfg_gemini</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/llm_config.html">llm_config</a></span><span class="op">(</span></span>
 <span>  provider <span class="op">=</span> <span class="st">"gemini"</span>,</span>
-<span>  model    <span class="op">=</span> <span class="st">"gemini-2.5-flash"</span>,</span>
+<span>  model    <span class="op">=</span> <span class="st">"gemini-2.5-flash-lite"</span>,</span>
 <span>  </span>
 <span><span class="op">)</span></span>
 <span></span>
@@ -126,9 +126,27 @@ to ~/.Renviron</p>
 <span><span class="va">chat_groq</span><span class="op">$</span><span class="fu">send</span><span class="op">(</span><span class="st">"Share a short fun fact about octopuses."</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
+<h2 id="using-the-chat-history">Using the chat history<a class="anchor" aria-label="anchor" href="#using-the-chat-history"></a>
+</h2>
+<p>Chat sessions remember context automatically:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">chat_oai</span><span class="op">$</span><span class="fu">send</span><span class="op">(</span><span class="st">"What did I ask you to do in my first message?"</span><span class="op">)</span></span>
+<span><span class="co"># The model can reference the earlier "Say a warm hello" request</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="inspect-the-full-conversation">Inspect the full conversation<a class="anchor" aria-label="anchor" href="#inspect-the-full-conversation"></a>
+</h2>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># View all messages</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="va">chat_oai</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Get summary statistics</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">chat_oai</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
 <h2 id="structured-chat-in-one-call-openai-example">Structured chat in one call (OpenAI example)<a class="anchor" aria-label="anchor" href="#structured-chat-in-one-call-openai-example"></a>
 </h2>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">schema</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
 <span>  type <span class="op">=</span> <span class="st">"object"</span>,</span>
 <span>  properties <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
