@@ -14,7 +14,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-We’ll show both unstructured and structured pipelines, using four model names:
+We will show both unstructured and structured pipelines, using four model names:
 - gpt-5-nano (OpenAI)
 - claude-sonnet-4-20250514 (Anthropic)
 - gemini-2.5-flash (Gemini)
@@ -95,7 +95,59 @@ df_u <- df |>
 df_u
 ```
 
-## llm_mutate_structured: structured (Gemini)
+## llm_mutate: shorthand syntax (NEW in v0.6.2)
+
+The shorthand lets you combine output column and prompt in one argument:
+
+```{r}
+df |>
+  llm_mutate(
+    category = "Give a short category for: {text}",
+    .config = cfg_cld
+  )
+# Equivalent to: llm_mutate(category, prompt = "Give...", .config = cfg_cld)
+```
+
+Or with multi-turn messages:
+
+```{r}
+df |>
+  llm_mutate(
+    classified = c(
+      system = "You are a text classifier. One word only.",
+      user = "Category for: {text}"
+    ),
+    .config = cfg_openai
+  )
+```
+
+## llm_mutate with .structured flag (NEW in v0.6.2)
+
+You can now enable structured output directly in `llm_mutate()` using `.structured = TRUE`:
+
+```{r}
+schema <- list(
+  type = "object",
+  properties = list(
+    category = list(type = "string"),
+    confidence = list(type = "number")
+  ),
+  required = list("category", "confidence")
+)
+
+# Using .structured = TRUE (equivalent to calling llm_mutate_structured)
+df |>
+  llm_mutate(
+    structured_result = "{text}",
+    .config = cfg_openai,
+    .structured = TRUE,
+    .schema = schema
+  )
+```
+
+This is equivalent to calling `llm_mutate_structured()` and supports all the same shorthand syntax.
+
+## llm_mutate_structured: structured with shorthand (Gemini)
 ```{r}
 schema2 <- list(
   type = "object",
@@ -107,6 +159,7 @@ schema2 <- list(
   additionalProperties = FALSE
 )
 
+# Traditional call
 df_s <- df |>
   llm_mutate_structured(
     annot,
@@ -118,4 +171,12 @@ df_s <- df |>
   )
 
 df_s
+
+# Or use shorthand (NEW in v0.6.2)
+df |>
+  llm_mutate_structured(
+    annot = "Extract category and rationale for: {text}",
+    .config = cfg_gemini,
+    .schema = schema2
+  )
 ```

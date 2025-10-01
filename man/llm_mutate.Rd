@@ -14,6 +14,9 @@ llm_mutate(
   .before = NULL,
   .after = NULL,
   .return = c("columns", "text", "object"),
+  .structured = FALSE,
+  .schema = NULL,
+  .fields = NULL,
   ...
 )
 }
@@ -45,6 +48,19 @@ controls how results are added. \code{"columns"} (default) adds text plus
 diagnostic columns; \code{"text"} adds a single text column; \code{"object"} adds a
 list-column of \code{llmr_response} objects.}
 
+\item{.structured}{Logical. If \code{TRUE}, enables structured JSON output with automatic
+parsing. Requires \code{.schema} to be provided. When enabled, this is equivalent to
+calling \code{\link[=llm_mutate_structured]{llm_mutate_structured()}}. Default is \code{FALSE}.}
+
+\item{.schema}{Optional JSON Schema (R list). When \code{.structured = TRUE}, this schema
+is sent to the provider for validation and used for local parsing. When \code{NULL},
+only JSON mode is enabled (no strict schema validation).}
+
+\item{.fields}{Optional character vector of fields to extract from parsed JSON.
+Supports nested paths (e.g., \code{"user.name"} or \code{"/data/items/0"}). When \code{NULL}
+and \code{.schema} is provided, auto-extracts all top-level schema properties.
+Set to \code{FALSE} to skip field extraction entirely.}
+
 \item{...}{Passed to the underlying calls: \code{\link[=call_llm_broadcast]{call_llm_broadcast()}} in
 generative mode, \code{\link[=get_batched_embeddings]{get_batched_embeddings()}} in embedding mode.}
 }
@@ -67,6 +83,22 @@ fail to embed, a single \verb{<output>1} column of \code{NA} is returned.
 \item Diagnostic columns use suffixes: \verb{_finish}, \verb{_sent}, \verb{_rec}, \verb{_tot}, \verb{_reason}, \verb{_ok}, \verb{_err}, \verb{_id}, \verb{_status}, \verb{_ecode}, \verb{_param}, \verb{_t}.
 }
 }
+\section{Shorthand}{
+
+You can supply the output column and prompt in one argument:
+
+\preformatted{
+df |> llm_mutate(answer = "{question} (hint: {hint})", .config = cfg)
+df |> llm_mutate(answer = c(system = "One word.", user = "{question}"), .config = cfg)
+}
+
+This is equivalent to:
+\preformatted{
+df |> llm_mutate(answer, prompt = "{question} (hint: {hint})", .config = cfg)
+df |> llm_mutate(answer, .messages = c(system = "One word.", user = "{question}"), .config = cfg)
+}
+}
+
 \examples{
 \dontrun{
 library(dplyr)
@@ -121,6 +153,34 @@ df |>
     prompt  = "{question}",
     .config = emb_cfg,
     .after  = id
+  )
+
+# Structured output: using .structured = TRUE (equivalent to llm_mutate_structured)
+schema <- list(
+  type = "object",
+  properties = list(
+    answer = list(type = "string"),
+    confidence = list(type = "number")
+  ),
+  required = list("answer", "confidence")
+)
+
+df |>
+  llm_mutate(
+    result,
+    prompt = "{question}",
+    .config = cfg,
+    .structured = TRUE,
+    .schema = schema
+  )
+
+# Structured with shorthand
+df |>
+  llm_mutate(
+    result = "{question}",
+    .config = cfg,
+    .structured = TRUE,
+    .schema = schema
   )
 }
 }

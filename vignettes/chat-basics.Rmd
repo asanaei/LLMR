@@ -57,7 +57,7 @@ chat_claude$send("Name one interesting fact about honey bees.")
 ```{r}
 cfg_gemini <- llm_config(
   provider = "gemini",
-  model    = "gemini-2.5-flash",
+  model    = "gemini-2.5-flash-lite",
   
 )
 
@@ -75,6 +75,25 @@ cfg_groq <- llm_config(
 
 chat_groq <- chat_session(cfg_groq, system = "Be concise.")
 chat_groq$send("Share a short fun fact about octopuses.")
+```
+
+## Using the chat history
+
+Chat sessions remember context automatically:
+
+```{r}
+chat_oai$send("What did I ask you to do in my first message?")
+# The model can reference the earlier "Say a warm hello" request
+```
+
+## Inspect the full conversation
+
+```{r}
+# View all messages
+as.data.frame(chat_oai)
+
+# Get summary statistics
+summary(chat_oai)
 ```
 
 ## Structured chat in one call (OpenAI example)

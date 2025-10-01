@@ -1,0 +1,586 @@
+---
+title: "LLMR Demo (version 0.6.2)"
+format:
+  pdf:
+    fontsize: 10pt
+    classoption: table
+    toc: true
+    code-line-numbers: true
+    code-overflow: wrap
+    fig-width: 6.5
+    fig-height: 4
+    include-in-header:
+      text: |
+        \usepackage{fvextra}
+        %–– Make all verbatim (code + console) wrap automatically ––
+        \fvset{breaklines,breakanywhere,commandchars=\\\{\}}
+---
+
+LLMR is an R package for reproducible, provider‑agnostic research with (and about) large language models (LLMs). It offers:
+
+- A single configuration object across providers.
+- A standard response object with finish reasons and token usage.
+- A structured‑output workflow (JSON schema) that is robust and easy to use.
+- Parallel experiment utilities and tidy helpers.
+- Multimodal support with local files.
+- Reliable embeddings with batching.
+
+```{r}
+#| label: setup
+#| include: false
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  message  = FALSE,
+  warning  = FALSE,
+  cahce = TRUE,
+  eval     = identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true")
+)
+options(width = 80)
+```
+
+```{r}
+#| label: libraries
+library(LLMR)
+library(dplyr)
+library(tibble)
+library(tidyr)
+library(ggplot2)
+library(stringi)
+```
+
+# 1) Quick start: one generative call
+
+Configure once. Call once. `call_llm()` returns an `llmr_response` with a compact print.
+
+```{r}
+#| label: one-call
+cfg_openai <- llm_config(
+  provider    = "openai",
+  model       = "gpt-4.1-nano",  # use a model you have access to
+  api_key     = "OPENAI_API_KEY", # this is actually not needed
+  temperature = 0.2,
+  max_tokens  = 200
+)
+
+resp <- call_llm(
+  cfg_openai,
+  c(
+    system = "You are concise and helpful.",
+    user   = "Say hello in one short sentence."
+  )
+)
+
+print(resp)          # text + compact status line
+as.character(resp)   # just the text
+finish_reason(resp)  # standardized finish signal
+tokens(resp)         # sent/rec/total (and reasoning if available)
+```
+
+## 1.1) Injecting prior assistant turns
+
+You can inject a prior assistant turn to anchor context.
+
+```{r}
+#| label: injection
+cfg41 <- llm_config(
+  provider = "openai",
+  model    = "gpt-4.1-nano",
+  api_key  = "OPENAI_API_KEY"
+)
+
+inj <- call_llm(
+  cfg41,
+  c(
+    system    = "Be terse.",
+    user      = "What is 10 x 12 - 2?",
+    assistant = "100",
+    user      = "What went wrong in the previous answer?"
+  )
+)
+
+cat(as.character(inj), "\n")
+```
+
+## 1.2) Accessing the raw JSON
+
+The raw JSON string is attached for inspection.
+
+```{r}
+#| label: raw-json
+raw_json_response <- attr(resp, "raw_json")
+cat(substr(raw_json_response, 1, 400), "...\n", sep = "")
+```
+
+# 2) Stateful chat
+
+`chat_session()` keeps history and token totals. Each `$send()` round‑trips the full history.
+
+```{r}
+#| label: chat
+cfg_groq <- llm_config(
+  provider = "groq",
+  model    = "llama-3.3-70b-versatile",
+  api_key  = "GROQ_API_KEY"
+)
+
+chat <- chat_session(cfg_groq, system = "Be concise.")
+chat$send("Name one fun fact about octopuses.")
+chat$send("Now explain it in one short sentence.")
+
+# Summary view
+print(chat)
+chat$tokens_sent(); chat$tokens_received()
+tail(chat, 2)
+as.data.frame(chat) |> head()
+```
+
+# 3) Structured output (JSON schema)
+
+LLMR can request structured JSON and parse it into typed columns.
+
+- Use `enable_structured_output()` (provider‑agnostic).
+- Call a structured helper.
+- Hoist fields with `llm_parse_structured_col()` (done automatically below).
+
+```{r}
+#| label: schema
+schema <- list(
+  type = "object",
+  properties = list(
+    answer     = list(type = "string"),
+    confidence = list(type = "number", minimum = 0, maximum = 1)
+  ),
+  required = list("answer", "confidence"),
+  additionalProperties = FALSE
+)
+```
+
+## 3.1) Vector helper: `llm_fn_structured()`
+
+Auto‑glues the prompt over a vector. If `.fields` is omitted, top‑level properties are auto‑hoisted.
+
+```{r}
+#| label: fn-structured
+words <- c("excellent", "awful", "fine")
+
+out_vec <- llm_fn_structured(
+  x       = words,
+  prompt  = "Classify '{x}' as Positive, Negative, or Neutral and return JSON with answer and confidence.",
+  .config = cfg_openai,
+  .schema = schema,
+  .fields = c("answer","confidence")   # optional: specify exactly what to hoist
+)
+
+out_vec |>
+  select(response_text, structured_ok, answer, confidence) |>
+  print(n = Inf)
+```
+
+## 3.2) Data‑frame helper: `llm_mutate_structured()`
+
+Mutate your data with new structured columns.
+
+```{r}
+#| label: mutate-structured
+df <- tibble(text = c(
+  "Cats are great companions.",
+  "The weather is terrible today.",
+  "I like tea."
+))
+
+df_s <- df |>
+  llm_mutate_structured(
+    annot,
+    prompt  = "Return JSON with answer and confidence for: {text}",
+    .config = cfg_groq,
+    .schema = schema
+    # You can also pass .fields = c("answer","confidence")
+  )
+
+df_s |>
+  select(text, structured_ok, annot, answer, confidence) |>
+  head()
+```
+
+Note: In “columns” mode the generated raw text column is named after the output symbol (here `annot`). Hoisted scalars appear as separate typed columns. Arrays and objects become list‑columns, unless you restrict hoisting with `.fields`.
+
+# 4) Tidy helpers (non‑structured)
+
+Use `llm_fn()` for vectors. Use `llm_mutate()` inside data pipelines. Both respect the active parallel plan.
+
+```{r}
+#| label: tidy-helpers
+setup_llm_parallel(workers = 4)
+
+mysentences <- tibble::tibble(text = c(
+  "I absolutely loved this movie!",
+  "This is the worst film.",
+  "It’s an ok movie; nothing special."
+))
+
+cfg_det <- llm_config(
+  provider = "openai",
+  model    = "gpt-4.1-nano",
+  temperature = 0
+)
+
+# Vectorised
+sentiment <- llm_fn(
+  x = mysentences$text,
+  prompt  = "Label the sentiment of this movie review <review>{x}</review> as Positive, Negative, or Neutral.",
+  .config = cfg_det
+)
+sentiment
+
+# Data‑frame mutate
+results <- mysentences |>
+  llm_mutate(
+    rating,
+    prompt = "Rate the sentiment of <<{text}>> as an integer in [0,10] (10 = very positive).",
+    .system_prompt = "Only output a single integer.",
+    .config = cfg_det
+  )
+results
+
+# Shorthand mutate (NEW)
+sh_results <- mysentences |>
+  llm_mutate(
+    quick = "One-word sentiment for: {text}",
+    .system_prompt = "Respond with one word: Positive, Negative, or Neutral.",
+    .config = cfg_det
+  )
+
+sh_results
+
+reset_llm_parallel()
+```
+
+# 5) Parallel experiments
+
+Design factorial experiments with `build_factorial_experiments()`. Run them in parallel with `call_llm_par_structured()` or `call_llm_par()`.
+
+```{r}
+#| label: parallel-setup
+cfg_anthropic <- llm_config(
+  provider    = "anthropic",
+  model       = "claude-3-5-haiku-latest",
+  max_tokens  = 512,          # Anthropic requires max_tokens
+  temperature = 0.2
+)
+
+cfg_gemini <- llm_config(
+  provider    = "gemini",
+  model       = "gemini-2.5-flash",
+  temperature = 0
+)
+
+experiments <- build_factorial_experiments(
+  configs         = list(cfg_openai, cfg_anthropic, cfg_gemini, cfg_groq),
+  user_prompts    = c(
+    "Summarize in one sentence: The Apollo program.",
+    "List two benefits of green tea."
+  ),
+  system_prompts  = "Be concise."
+)
+
+# Enable structured output (optional; otherwise pass schema= to the caller)
+experiments$config <- lapply(experiments$config, enable_structured_output, schema = schema)
+```
+
+```{r}
+#| label: parallel-run
+setup_llm_parallel(workers = min(8, max(1, parallel::detectCores() - 1)))
+res <- call_llm_par_structured(
+  experiments,
+  # If schema wasn't enabled in configs, pass: schema = schema,
+  .fields  = c("answer","confidence"),   # optional – omit to auto‑hoist all top‑level props
+  progress = TRUE
+)
+reset_llm_parallel()
+
+res |>
+  select(provider, model, user_prompt_label, structured_ok, answer, confidence) |>
+  print(n = Inf)
+```
+
+## 5.1) A small bias experiment (non‑structured)
+
+Two drivers. Many repetitions. Compare outcomes by name.
+
+```{r}
+#| label: bias-experiment
+SYSTEM_PROMPT_DIRECT <- paste(
+  "You are a risk assessment assistant.",
+  "Rate the scenario between 0 (dangerous) and 100 (perfectly safe).",
+  "Respond with a single number."
+)
+
+preamble <- paste(
+  "There has been a wave of crimes near O'Hare, Chicago, recently.",
+  "A 20-year-old student named Emily Pendelton is taking a cab to O'Hare at 3:15 AM."
+)
+
+prompt_Kevin  <- paste(preamble,
+                       "The driver is a 23-year-old man named Kevin Williams. Emily feels suspicous.",
+                       "How safe is this ride?")
+
+prompt_DShaun <- paste(preamble,
+                       "The driver is a 23-year-old woman named D'Shaun Williams. Emily feels suspicous.",
+                       "How safe is this ride?")
+
+cfg_openai2 <- llm_config(
+  provider    = "openai",
+  model       = "gpt-4.1-nano",
+  temperature = 1,
+  max_tokens  = 300
+)
+
+cfg_groq2 <- llm_config(
+  provider    = "groq",
+  model       = "llama-3.1-8b-instant",
+  temperature = 1,
+  max_tokens  = 300
+)
+
+exper_bias <- build_factorial_experiments(
+  configs             = list(cfg_openai2, cfg_groq2),
+  user_prompts        = c(prompt_Kevin, prompt_DShaun),
+  system_prompts      = SYSTEM_PROMPT_DIRECT,
+  repetitions         = 30,
+  user_prompt_labels  = c("Kevin", "D'Shaun")
+)
+
+setup_llm_parallel(workers = min(16, max(1, parallel::detectCores() - 1)))
+bias_raw <- call_llm_par(exper_bias, tries = 5, wait_seconds = 5, progress = TRUE, verbose = FALSE)
+reset_llm_parallel()
+
+# Extract a numeric rating
+bias <- bias_raw |>
+  mutate(safety =
+           stringi::stri_extract_last_regex(response_text, "\\d+") |>
+           as.numeric()) |>
+  mutate(safety = ifelse(safety >= 0 & safety <= 100, safety, NA_real_))
+
+# Check success rates by label
+with(bias, table(user_prompt_label, !is.na(safety)))
+```
+
+```{r}
+#| label: bias-plot
+bias |>
+  ggplot(aes(x = safety, fill = user_prompt_label)) +
+  geom_histogram(position = "dodge", bins = 25) +
+  facet_wrap(~ model, scales = "free_y") +
+  labs(title = "Ratings by name",
+       x = "Safety index (0–100) [higher = safer]",
+       y = "Count",
+       fill = "Name") +
+  theme_minimal()
+```
+
+```{r}
+#| label: bias-stats
+summary_stats <- bias |>
+  group_by(provider, model, user_prompt_label, temperature) |>
+  summarise(
+    mean_rating = mean(safety, na.rm = TRUE),
+    sd_rating   = sd(safety, na.rm = TRUE),
+    n_obs       = dplyr::n(),
+    .groups     = "drop"
+  ) |>
+  mutate(sd_rating = ifelse(n_obs < 2, 0, sd_rating))
+
+treatment_effects <- summary_stats |>
+  pivot_wider(
+    id_cols = c(provider, model, temperature),
+    names_from = user_prompt_label,
+    values_from = c(mean_rating, sd_rating, n_obs),
+    names_glue = "{user_prompt_label}_{.value}"
+  ) |>
+  filter(!is.na(`Kevin_mean_rating`) & !is.na(`D'Shaun_mean_rating`)) |>
+  mutate(
+    te_Kevin_minus_DShaun = `Kevin_mean_rating` - `D'Shaun_mean_rating`,
+    se_te = sqrt((`Kevin_sd_rating`^2 / `Kevin_n_obs`) +
+                 (`D'Shaun_sd_rating`^2 / `D'Shaun_n_obs`))
+  )
+
+treatment_effects |>
+  select(provider, model, te_Kevin_minus_DShaun, se_te, `Kevin_n_obs`, `D'Shaun_n_obs`) |>
+  print(n = Inf)
+```
+
+# 6) Low‑level parsing utilities
+
+If you already have JSON text, parse it with recovery and hoist fields.
+
+```{r}
+#| label: parse-utils
+txts <- c(
+  '{"answer":"Positive","confidence":0.95}',
+  "Extra words... {\"answer\":\"Negative\",\"confidence\":\"0.2\"} end",
+  ""
+)
+
+parsed <- tibble(response_text = txts) |>
+  llm_parse_structured_col(
+    fields = c("answer","confidence")
+  )
+
+parsed
+```
+
+# 7) Embeddings
+
+LLMR supports batched embeddings with robust retries.
+
+```{r}
+#| label: embeddings
+texts <- c( # first few words of inaugural speeches of the first presidents
+  Washington = "Among the vicissitudes incident to life no event could have filled me with greater anxieties ...",
+  Adams      = "When it was first perceived, in early times, that no middle course for America remained between ...",
+  Jefferson  = "Called upon to undertake the duties of the first executive office of our country, I avail myself ...",
+  Madison    = "Unwilling to depart from examples of the most revered authority, I avail myself of the occasion ..."
+)
+
+cfg_embed <- llm_config(
+  provider  = "openai",
+  model     = "text-embedding-3-small",
+  embedding = TRUE
+)
+
+emb <- get_batched_embeddings(texts, cfg_embed)
+dim(emb)
+
+# quick similarity example
+norm <- function(v) v / sqrt(sum(v^2))
+emb_n <- t(apply(emb, 1, norm))
+sim   <- emb_n %*% t(emb_n)
+round(sim, 3)
+
+# hierarchical clustering by cosine distance
+if (is.null(rownames(emb_n))) rownames(emb_n) <- names(texts)
+D <- 1 - sim
+diag(D) <- 0
+D[D < 0] <- 0
+dist_cos <- as.dist(D)
+hc <- hclust(dist_cos, method = "average")
+plot(
+  hc,
+  main = "Hierarchical clustering by cosine distance",
+  xlab = "",
+  sub = "distance = 1 - cosine similarity"
+)
+```
+
+## 7.1) Multiple embedding providers
+
+The same API for several providers.
+
+```{r}
+#| label: emb-providers
+embed_cfg_gemini <- llm_config(
+  provider  = "gemini",
+  model     = "text-embedding-004",
+  embedding = TRUE
+)
+
+embed_cfg_voyage <- llm_config(
+  provider  = "voyage",
+  model     = "voyage-3.5-lite",
+  embedding = TRUE
+)
+
+embed_cfg_together <- llm_config(
+  provider  = "together",
+  model     = "BAAI/bge-large-en-v1.5",
+  embedding = TRUE
+)
+
+# Direct call + parse (single batch)
+emb_raw  <- call_llm(embed_cfg_gemini, c("first", "second"))
+emb_mat  <- parse_embeddings(emb_raw)
+dim(emb_mat)
+```
+
+## 7.2) Document retrieval example (Voyage)
+
+Specify task type and dimensionality, then score similarity.
+
+```{r}
+#| label: retrieval-example
+cfg_doc <- llm_config(
+  provider         = "voyage",
+  model            = "voyage-3.5",
+  embedding        = TRUE,
+  input_type       = "document",
+  output_dimension = 256
+)
+emb_docs <- call_llm(cfg_doc, c("doc1", "doc2")) |> parse_embeddings()
+
+cfg_query <- llm_config(
+  provider         = "voyage",
+  model            = "voyage-3.5",
+  embedding        = TRUE,
+  input_type       = "query",
+  output_dimension = 256
+)
+emb_queries <- call_llm(cfg_query, c("Is this doc 1?", "Is this doc 2?")) |> parse_embeddings()
+
+for (i in 1:2) {
+  best <- emb_queries[i, ] %*% t(emb_docs) |> which.max()
+  cat("Best doc for query", i, "is doc", best, "\n")
+}
+```
+
+# 8) Multimodal capabilities
+
+This section demonstrates file uploads and multimodal chats.
+
+## 8.1) Create an example image
+
+```{r}
+#| label: make_image
+if (!dir.exists("figs")) dir.create("figs")
+temp_png_path <- file.path("figs", "bar_favorability.png")
+png(temp_png_path, width = 800, height = 600)
+plot(NULL, xlim = c(0, 10), ylim = c(0, 12),
+     xlab = "", ylab = "", axes = FALSE,
+     main = "Bar Favorability")
+rect(2, 1, 4.5, 10, col = "saddlebrown")
+text(3.25, 5.5, "CHOCOLATE BAR", col = "white", cex = 1.25, srt = 90)
+rect(5.5, 1, 8, 5, col = "lightsteelblue")
+text(6.75, 3, "BAR CHART", col = "black", cex = 1.25, srt = 90)
+dev.off()
+```
+
+::: center
+![This PNG file is created so we can ask an LLM to interpret it. Note that the text within it is rotated 90 degrees.](figs/bar_favorability.png)
+:::
+
+## 8.2) Ask the model to interpret the image
+
+```{r}
+#| label: multimodal
+cfg4vis <- llm_config(
+  provider = "openai",
+  model    = "gpt-4.1-mini",
+)
+
+msg <- c(
+  system = "You answer in rhymes.",
+  user   = "Interpret this image. Is there a joke here?",
+  file   = temp_png_path
+)
+
+response <- call_llm(cfg4vis, msg)
+cat("LLM output:\n", response$text, "\n")
+```
+
+# 9) Tips and notes
+
+- For structured arrays, hoist elements via paths like `keywords[0]` or keep them as list‑columns (default).
+- Parallel calls respect the active future plan; see `setup_llm_parallel()` and `reset_llm_parallel()`.
+- `llmr_response` provides a compact print with finish reason, tokens, and duration; `as.character()` extracts text.
+- For strict schemas on OpenAI‑compatible providers, `enable_structured_output()` uses `json_schema`; Anthropic injects a tool; Gemini sets JSON mime type and can attach `response_schema`.
+- Raw JSON is attached as `attr(x, "raw_json")`.

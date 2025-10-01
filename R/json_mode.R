@@ -523,8 +523,28 @@ llm_fn_structured <- function(x,
 #' Drop-in schema-first variant of [llm_mutate()]. Produces parsed columns.
 #'
 #' @inheritParams llm_mutate
-#' @param .schema Optional JSON Schema list; if `NULL`, only JSON object is enforced.
-#' @param .fields Optional fields to hoist (supports nested paths).
+#' @param .schema Optional JSON Schema (R list). When provided, this schema is sent to
+#'   the provider for strict validation and used for local parsing. When `NULL`, only
+#'   JSON mode is enabled (no strict schema validation). The schema should follow
+#'   JSON Schema specification (e.g., with `type`, `properties`, `required`).
+#' @param .fields Optional character vector of fields to extract from parsed JSON.
+#'   Supports:
+#'   \itemize{
+#'     \item Character vector: `c("name", "score")` - extract these fields
+#'     \item Named vector: `c(person_name = "name", rating = "score")` - extract and rename
+#'     \item Nested paths: `c("user.name", "/data/items/0")` - dot notation or JSON Pointer
+#'     \item `NULL` (default): auto-extracts all top-level properties from `.schema`
+#'     \item `FALSE`: skip field extraction (keep only `structured_data` list-column)
+#'   }
+#'
+#' @section Shorthand syntax:
+#' Like [llm_mutate()], this function supports shorthand syntax:
+#'
+#' \preformatted{
+#' df |> llm_mutate_structured(result = "{text}", .schema = schema)
+#' df |> llm_mutate_structured(result = c(system = "Be brief.", user = "{text}"), .schema = schema)
+#' }
+#'
 #' @export
 llm_mutate_structured <- function(.data,
                             output,
@@ -537,20 +557,63 @@ llm_mutate_structured <- function(.data,
                             .schema = NULL,
                             .fields = NULL,
                             ...) {
-  out <- llm_mutate(.data,
-                    {{ output }},
-                    prompt = prompt,
-                    .messages = .messages,
-                    .config = if (is.null(.schema)) .config else enable_structured_output(.config, schema = .schema),
-                    .system_prompt = .system_prompt,
-                    .before = {{ .before }},
-                    .after  = {{ .after }},
-                    .return = "columns",
-                    ...)
+  # Capture whether output was actually provided
+  output_missing <- missing(output)
+  # Track whether .before / .after were supplied (vs defaulted)
+  before_missing <- missing(.before)
+  after_missing  <- missing(.after)
+  # Capture dots for safe forwarding
+  dots <- rlang::dots_list(...)
+  
+  # Build the config with structured output enabled
+  cfg_structured <- if (is.null(.schema)) .config else enable_structured_output(.config, schema = .schema)
+  
+  # Call llm_mutate with or without output depending on whether shorthand is used
+  if (output_missing) {
+    # Shorthand: let llm_mutate handle the parsing
+    args <- list(
+      .data = .data,
+      prompt = prompt,
+      .messages = .messages,
+      .config = cfg_structured,
+      .system_prompt = .system_prompt,
+      .return = "columns"
+    )
+    if (!before_missing) args$.before <- .before
+    if (!after_missing)  args$.after  <- .after
+    out <- do.call(llm_mutate, c(args, dots))
+    # Extract the output column name from the result
+    # It should be the first new column added
+    new_cols <- setdiff(names(out), names(.data))
+    if (length(new_cols) == 0) {
+      stop("Could not determine output column name from shorthand syntax")
+    }
+    output_name <- new_cols[1]
+  } else {
+    # Explicit output: use it directly
+    output_sym <- rlang::ensym(output)
+    args <- list(
+      .data = .data,
+      output = output_sym,
+      prompt = prompt,
+      .messages = .messages,
+      .config = cfg_structured,
+      .system_prompt = .system_prompt,
+      .return = "columns"
+    )
+    if (!before_missing) args$.before <- .before
+    if (!after_missing)  args$.after  <- .after
+    out <- do.call(llm_mutate, c(args, dots))
+    output_name <- rlang::as_name(output_sym)
+  }
+  
+  # Auto-extract fields from schema if not provided
   fields_auto <- if (is.null(.fields) && !is.null(.schema)) .auto_fields_from_schema(.schema) else .fields
+  
+  # Parse structured output
   out2 <- llm_parse_structured_col(out,
-                                   structured_col = rlang::as_name(rlang::enquo(output)),
-                                   fields   = fields_auto)
+                                   structured_col = output_name,
+                                   fields = fields_auto)
   if (requireNamespace("tibble", quietly = TRUE)) tibble::as_tibble(out2) else out2
 }
 

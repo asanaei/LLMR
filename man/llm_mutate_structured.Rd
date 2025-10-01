@@ -41,9 +41,20 @@ For multimodal, use role \code{"file"} with a column containing a path template.
 \item{.before, .after}{Standard \link[dplyr:relocate]{dplyr::relocate} helpers controlling where the
 generated column(s) are placed.}
 
-\item{.schema}{Optional JSON Schema list; if \code{NULL}, only JSON object is enforced.}
+\item{.schema}{Optional JSON Schema (R list). When provided, this schema is sent to
+the provider for strict validation and used for local parsing. When \code{NULL}, only
+JSON mode is enabled (no strict schema validation). The schema should follow
+JSON Schema specification (e.g., with \code{type}, \code{properties}, \code{required}).}
 
-\item{.fields}{Optional fields to hoist (supports nested paths).}
+\item{.fields}{Optional character vector of fields to extract from parsed JSON.
+Supports:
+\itemize{
+\item Character vector: \code{c("name", "score")} - extract these fields
+\item Named vector: \code{c(person_name = "name", rating = "score")} - extract and rename
+\item Nested paths: \code{c("user.name", "/data/items/0")} - dot notation or JSON Pointer
+\item \code{NULL} (default): auto-extracts all top-level properties from \code{.schema}
+\item \code{FALSE}: skip field extraction (keep only \code{structured_data} list-column)
+}}
 
 \item{...}{Passed to the underlying calls: \code{\link[=call_llm_broadcast]{call_llm_broadcast()}} in
 generative mode, \code{\link[=get_batched_embeddings]{get_batched_embeddings()}} in embedding mode.}
@@ -51,3 +62,13 @@ generative mode, \code{\link[=get_batched_embeddings]{get_batched_embeddings()}}
 \description{
 Drop-in schema-first variant of \code{\link[=llm_mutate]{llm_mutate()}}. Produces parsed columns.
 }
+\section{Shorthand syntax}{
+
+Like \code{\link[=llm_mutate]{llm_mutate()}}, this function supports shorthand syntax:
+
+\preformatted{
+df |> llm_mutate_structured(result = "{text}", .schema = schema)
+df |> llm_mutate_structured(result = c(system = "Be brief.", user = "{text}"), .schema = schema)
+}
+}
+
