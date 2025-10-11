@@ -18,7 +18,7 @@ llm_config(
 \arguments{
 \item{provider}{Character scalar. One of:
 \code{"openai"}, \code{"anthropic"}, \code{"gemini"}, \code{"groq"}, \code{"together"},
-\code{"voyage"} (embeddings only), \code{"deepseek"}, \code{"xai"}.}
+\code{"voyage"} (embeddings only), \code{"deepseek"}, \code{"xai"}, \code{"ollama"}.}
 
 \item{model}{Character scalar. Model name understood by the chosen provider.
 (e.g., \code{"gpt-4o-mini"}, \code{"o4-mini"}, \code{"claude-3.7"}, \code{"gemini-2.0-flash"}, etc.)}

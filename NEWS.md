@@ -1,3 +1,13 @@
+# LLMR 0.6.3
+
+## Improvements
+
+- `ollama` is now supported as a provider, both for generative and embedding models. This, of course, requires a local ollama server to be up. 
+
+## Bug Fixes
+
+- `get_batched_embeddings` was giving ugly column names. Now they go from `v1` to `vn`
+
 # LLMR 0.6.2
 
 ## New Features

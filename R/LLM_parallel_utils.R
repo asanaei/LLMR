@@ -392,6 +392,8 @@ call_llm_compare <- function(configs_list,
 #' @param progress Logical. If TRUE, shows progress bar.
 #' @param json_output Deprecated. Raw JSON string is always included as raw_response_json.
 #'                  This parameter is kept for backward compatibility but has no effect.
+#' @param start_jitter Calls are made after a uniformly distributed delay
+#'                  between 0 and \code{start_jitter} seconds.
 #'
 #' @return A tibble containing all original columns plus:
 #' \itemize{
@@ -443,12 +445,13 @@ call_llm_par <- function(experiments,
                          simplify = TRUE,
                          tries = 10,
                          wait_seconds = 2,
-                         backoff_factor = 3,
+                         backoff_factor = 120^(1/tries),
                          verbose = FALSE,
                          memoize = FALSE,
                          max_workers = NULL,
                          progress = FALSE,
-                         json_output = NULL) {
+                         json_output = NULL,
+                         start_jitter = 5) {
 
   if (!is.null(json_output) && verbose) {
     message("Note: The 'json_output' parameter is deprecated. Raw JSON is always included as 'raw_response_json'.")
@@ -530,6 +533,10 @@ call_llm_par <- function(experiments,
       if (is.null(x) || length(x) == 0 || all(is.na(x))) return(NA_integer_)
       suppressWarnings(as.integer(x[[1]]))
     }
+
+    # random small delay so as to spread out the parallel calls
+    if (start_jitter>0)
+      Sys.sleep(stats::runif(1, 0, start_jitter))
 
     start_time <- Sys.time()
     current_config   <- experiments$config[[i_val]]
@@ -727,7 +734,7 @@ build_factorial_experiments <- function(configs,
                                         config_labels  = NULL,
                                         user_prompt_labels = NULL,
                                         system_prompt_labels = NULL
-                                        ) {
+) {
 
   # if (!missing(messages)) {
   #   lifecycle::deprecate_stop("0.5.0", "build_factorial_experiments(messages = )",

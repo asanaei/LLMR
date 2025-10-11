@@ -13,10 +13,10 @@ test_that("call_llm works with OpenAI API", {
     api_key = llm_api_key_env("OPENAI_API_KEY"),
     temperature = 1,
     max_tokens = 1024,
-    top_p = 1,
+#    top_p = 1,
 #   troubleshooting = FALSE,
-    frequency_penalty = 0,
-    presence_penalty = 0
+#    frequency_penalty = 0,
+#    presence_penalty = 0
   )
 
   messages <- list(

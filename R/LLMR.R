@@ -392,7 +392,7 @@ get_endpoint <- function(config, default_endpoint) {
 #'
 #' @param provider Character scalar. One of:
 #'   `"openai"`, `"anthropic"`, `"gemini"`, `"groq"`, `"together"`,
-#'   `"voyage"` (embeddings only), `"deepseek"`, `"xai"`.
+#'   `"voyage"` (embeddings only), `"deepseek"`, `"xai"`, `"ollama"`.
 #' @param model Character scalar. Model name understood by the chosen provider.
 #'   (e.g., `"gpt-4o-mini"`, `"o4-mini"`, `"claude-3.7"`, `"gemini-2.0-flash"`, etc.)
 #' @param api_key Character scalar. Provider API key.
@@ -536,6 +536,8 @@ llm_config <- function(provider, model, api_key = NULL,
 
 
 
+ 
+
 #' Call an LLM (chat/completions or embeddings) with optional multimodal input
 #'
 #' `call_llm()` dispatches to the correct provider implementation based on
@@ -567,7 +569,7 @@ llm_config <- function(provider, model, api_key = NULL,
 #'         parameter as `max_tokens`, LLMR will, unless `no_change=TRUE`,
 #'         retry once replacing `max_tokens` with `max_completion_tokens`
 #'         (and inform via a `cli_alert_info`). The former experimental
-#'         “uncapped retry on empty content” is \emph{disabled} by default to
+#'         "uncapped retry on empty content" is \emph{disabled} by default to
 #'         avoid unexpected costs.
 #'   \item \strong{Anthropic:} `max_tokens` is required; if omitted LLMR uses
 #'         `2048` and warns. Multimodal images are inlined as base64. Extended
@@ -577,6 +579,8 @@ llm_config <- function(provider, model, api_key = NULL,
 #'   \item \strong{Gemini (REST):} `systemInstruction` is supported; user
 #'         parts use `text`/`inlineData(mimeType,data)`; responses are set to
 #'         `responseMimeType = "text/plain"`.
+#'   \item \strong{Ollama (local):} OpenAI-compatible endpoints on `http://localhost:11434/v1/*`;
+#'         no Authorization header is required. Override with `api_url` as needed.
 #'   \item \strong{Error handling:} HTTP errors raise structured conditions with
 #'         classes like `llmr_api_param_error`, `llmr_api_rate_limit_error`,
 #'         `llmr_api_server_error`; see the condition fields for status, code,
@@ -584,8 +588,8 @@ llm_config <- function(provider, model, api_key = NULL,
 #' }
 #'
 #' @section Message normalization:
-#' See the \emph{“multimodal shortcut”} described under `messages`. Internally,
-#' LLMR expands these into the provider’s native request shape and tilde-expands
+#' See the \emph{"multimodal shortcut"} described under `messages`. Internally,
+#' LLMR expands these into the provider's native request shape and tilde-expands
 #' local file paths.
 #'
 #' @seealso
@@ -625,13 +629,13 @@ llm_config <- function(provider, model, api_key = NULL,
 #' )
 #' call_llm(cfg, msg)
 #'
-#' ## 4) Embeddings
+#' ## 5) Embeddings
 #' e_cfg <- llm_config("voyage", "voyage-large-2",
 #'                     embedding = TRUE)
 #' emb_raw <- call_llm(e_cfg, c("first", "second"))
 #' emb_mat <- parse_embeddings(emb_raw)
 #'
-#' ## 5) With a chat session
+#' ## 6) With a chat session
 #' ch <- chat_session(cfg)
 #' ch$send("Say hello in Greek.")   # prints the same status line as `print.llmr_response`
 #' ch$history()
@@ -718,7 +722,7 @@ call_llm.openai <- function(config, messages, verbose = FALSE) {
       httr2::req_body_json(bdy)
   }
 
-  last_body <- NULL  # used for potential retries; keep for troubleshooting
+  last_body <- NULL  # used for potential retries and debugging
 
   run <- function(bdy) {
     last_body <<- bdy
@@ -742,7 +746,9 @@ call_llm.openai <- function(config, messages, verbose = FALSE) {
             sprintf("Replaced `max_tokens` with `max_completion_tokens` for %s after server hint.", config$model)
           )
         }
-        return(run(b2))
+        res2 <- run(b2)
+        last_body <<- b2
+        return(res2)
       }
       stop(e)
     }
@@ -1184,6 +1190,70 @@ call_llm.xai <- function(config, messages, verbose = FALSE) {
 
 
 
+#' @export
+#' @rdname call_llm
+#' @section Using a local Ollama server:
+#' Ollama provides an OpenAI-compatible HTTP API on localhost by default. Start the
+#' daemon and pull a model first (terminal): `ollama serve` (in background) and
+#' `ollama pull llama3`. Then configure LLMR with
+#' `llm_config("ollama", "llama3", embedding = FALSE)` for chat or
+#' `llm_config("ollama", "nomic-embed-text", embedding = TRUE)` for embeddings.
+#' Override the endpoint with `api_url` if not using the default
+#' `http://localhost:11434/v1/*`.
+call_llm.ollama <- function(config, messages, verbose = FALSE) {
+  if (isTRUE(config$embedding) ||
+      grepl("embedding", config$model, ignore.case = TRUE)) {
+    return(call_llm.ollama_embedding(config, messages, verbose))
+  }
+  messages <- .normalize_messages(messages)
+  endpoint <- get_endpoint(config, default_endpoint = "http://localhost:11434/v1/chat/completions")
+
+  body <- .drop_null(list(
+    model       = config$model,
+    messages    = messages,
+    temperature = config$model_params$temperature,
+    top_p       = config$model_params$top_p,
+    max_tokens  = config$model_params$max_tokens
+  ))
+
+  # Structured outputs (OpenAI-compatible)
+  mp <- config$model_params %||% list()
+  if (!is.null(mp$response_format)) body$response_format <- mp$response_format
+  if (is.null(body$response_format) && !is.null(mp$json_schema)) {
+    body$response_format <- list(
+      type = "json_schema",
+      json_schema = list(name = "llmr_schema", schema = mp$json_schema, strict = TRUE)
+    )
+  }
+  if (!is.null(mp$tools))       body$tools       <- mp$tools
+  if (!is.null(mp$tool_choice)) body$tool_choice <- mp$tool_choice
+
+  req <- httr2::request(endpoint) |>
+    httr2::req_headers(
+      "Content-Type" = "application/json"
+    ) |>
+    httr2::req_body_json(body)
+
+  perform_request(req, verbose, provider = config$provider, model = config$model)
+}
+
+#' @export
+#' @keywords internal
+call_llm.ollama_embedding <- function(config, messages, verbose = FALSE) {
+  endpoint <- get_endpoint(config, default_endpoint = "http://localhost:11434/v1/embeddings")
+  texts <- if (is.character(messages)) messages else vapply(messages, `[[`, "", "content")
+  body <- list(model = config$model, input = texts)
+
+  extras <- config$model_params[setdiff(names(config$model_params), names(body))]
+  body   <- .drop_null(c(body, extras))
+
+  req <- httr2::request(endpoint) |>
+    httr2::req_headers("Content-Type" = "application/json") |>
+    httr2::req_body_json(body)
+
+  perform_request(req, verbose, provider = config$provider, model = config$model)
+}
+
 # ----- Embedding-specific Handlers -----
 
 #' @export
@@ -1405,6 +1475,7 @@ bind_tools <- function(config, tools, tool_choice = NULL) {
 #' @param verbose Logical. If TRUE, prints progress messages. Default is TRUE.
 #'
 #' @return A numeric matrix where each row is an embedding vector for the corresponding text.
+#'   Columns are named \code{v1}, \code{v2}, ..., \code{vK} where K is the embedding dimension.
 #'   If embedding fails for certain texts, those rows will be filled with NA values.
 #'   The matrix will always have the same number of rows as the input texts.
 #'   Returns NULL if no embeddings were successfully generated.
@@ -1515,9 +1586,12 @@ get_batched_embeddings <- function(texts,
   # Combine all embeddings into final matrix
   final_embeddings <- do.call(rbind, emb_list)
 
-  if(!is.null(names(texts))){
+  if (!is.null(names(texts))) {
     rownames(final_embeddings) <- names(texts)
   }
+
+  # Always assign stable column names v1..vK for downstream consistency
+  colnames(final_embeddings) <- paste0("v", seq_len(ncol(final_embeddings)))
 
   if (verbose) {
     n_successful <- sum(stats::complete.cases(final_embeddings))

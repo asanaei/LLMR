@@ -86,8 +86,7 @@ df <- tibble::tibble(
 
 df_u <- df |>
   llm_mutate(
-    answer,
-    prompt  = "Give a short category for: {text}",
+    answer  = "Give a short category for: {text}",
     .config = cfg_cld,
     .return = "columns"
   )
