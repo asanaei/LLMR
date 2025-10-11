@@ -11,7 +11,7 @@ embeddings, plus a simple multimodal shortcut for local files."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">LLMR</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.6.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.6.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -44,7 +44,10 @@ embeddings, plus a simple multimodal shortcut for local files.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">call_llm</span><span class="op">(</span><span class="va">config</span>, <span class="va">messages</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">call_llm</span><span class="op">(</span><span class="va">config</span>, <span class="va">messages</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># S3 method for class 'ollama'</span></span>
+<span><span class="fu">call_llm</span><span class="op">(</span><span class="va">config</span>, <span class="va">messages</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -86,7 +89,7 @@ multimodal content, set <code>content</code> to a list of parts like
 parameter as <code>max_tokens</code>, LLMR will, unless <code>no_change=TRUE</code>,
 retry once replacing <code>max_tokens</code> with <code>max_completion_tokens</code>
 (and inform via a <code>cli_alert_info</code>). The former experimental
-“uncapped retry on empty content” is <em>disabled</em> by default to
+"uncapped retry on empty content" is <em>disabled</em> by default to
 avoid unexpected costs.</p></li>
 <li><p><strong>Anthropic:</strong> <code>max_tokens</code> is required; if omitted LLMR uses
 <code>2048</code> and warns. Multimodal images are inlined as base64. Extended
@@ -96,6 +99,8 @@ thinking is supported: provide <code>thinking_budget</code> and
 <li><p><strong>Gemini (REST):</strong> <code>systemInstruction</code> is supported; user
 parts use <code>text</code>/<code>inlineData(mimeType,data)</code>; responses are set to
 <code>responseMimeType = "text/plain"</code>.</p></li>
+<li><p><strong>Ollama (local):</strong> OpenAI-compatible endpoints on <code>http://localhost:11434/v1/*</code>;
+no Authorization header is required. Override with <code>api_url</code> as needed.</p></li>
 <li><p><strong>Error handling:</strong> HTTP errors raise structured conditions with
 classes like <code>llmr_api_param_error</code>, <code>llmr_api_rate_limit_error</code>,
 <code>llmr_api_server_error</code>; see the condition fields for status, code,
@@ -105,9 +110,21 @@ request id, and (where supplied) the offending parameter.</p></li>
     <h2 id="message-normalization">Message normalization<a class="anchor" aria-label="anchor" href="#message-normalization"></a></h2>
 
 
-<p>See the <em>“multimodal shortcut”</em> described under <code>messages</code>. Internally,
-LLMR expands these into the provider’s native request shape and tilde-expands
+<p>See the <em>"multimodal shortcut"</em> described under <code>messages</code>. Internally,
+LLMR expands these into the provider's native request shape and tilde-expands
 local file paths.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="using-a-local-ollama-server">Using a local Ollama server<a class="anchor" aria-label="anchor" href="#using-a-local-ollama-server"></a></h2>
+
+
+<p>Ollama provides an OpenAI-compatible HTTP API on localhost by default. Start the
+daemon and pull a model first (terminal): <code>ollama serve</code> (in background) and
+<code>ollama pull llama3</code>. Then configure LLMR with
+<code>llm_config("ollama", "llama3", embedding = FALSE)</code> for chat or
+<code>llm_config("ollama", "nomic-embed-text", embedding = TRUE)</code> for embeddings.
+Override the endpoint with <code>api_url</code> if not using the default
+<code>http://localhost:11434/v1/*</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -149,13 +166,13 @@ local file paths.</p>
 <span><span class="op">)</span></span>
 <span><span class="fu">call_llm</span><span class="op">(</span><span class="va">cfg</span>, <span class="va">msg</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co">## 4) Embeddings</span></span>
+<span><span class="co">## 5) Embeddings</span></span>
 <span><span class="va">e_cfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="llm_config.html">llm_config</a></span><span class="op">(</span><span class="st">"voyage"</span>, <span class="st">"voyage-large-2"</span>,</span>
 <span>                    embedding <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="va">emb_raw</span> <span class="op">&lt;-</span> <span class="fu">call_llm</span><span class="op">(</span><span class="va">e_cfg</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"first"</span>, <span class="st">"second"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">emb_mat</span> <span class="op">&lt;-</span> <span class="fu"><a href="parse_embeddings.html">parse_embeddings</a></span><span class="op">(</span><span class="va">emb_raw</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co">## 5) With a chat session</span></span>
+<span><span class="co">## 6) With a chat session</span></span>
 <span><span class="va">ch</span> <span class="op">&lt;-</span> <span class="fu"><a href="llm_chat_session.html">chat_session</a></span><span class="op">(</span><span class="va">cfg</span><span class="op">)</span></span>
 <span><span class="va">ch</span><span class="op">$</span><span class="fu">send</span><span class="op">(</span><span class="st">"Say hello in Greek."</span><span class="op">)</span>   <span class="co"># prints the same status line as `print.llmr_response`</span></span>
 <span><span class="va">ch</span><span class="op">$</span><span class="fu">history</span><span class="op">(</span><span class="op">)</span></span>

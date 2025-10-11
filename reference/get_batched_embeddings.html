@@ -13,7 +13,7 @@ return a numeric matrix."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">LLMR</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.6.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">0.6.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -74,6 +74,7 @@ used as row names in the output matrix.</p></dd>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A numeric matrix where each row is an embedding vector for the corresponding text.
+Columns are named <code>v1</code>, <code>v2</code>, ..., <code>vK</code> where K is the embedding dimension.
 If embedding fails for certain texts, those rows will be filled with NA values.
 The matrix will always have the same number of rows as the input texts.
 Returns NULL if no embeddings were successfully generated.</p>
