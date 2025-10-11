@@ -18,6 +18,7 @@ used as row names in the output matrix.}
 }
 \value{
 A numeric matrix where each row is an embedding vector for the corresponding text.
+Columns are named \code{v1}, \code{v2}, ..., \code{vK} where K is the embedding dimension.
 If embedding fails for certain texts, those rows will be filled with NA values.
 The matrix will always have the same number of rows as the input texts.
 Returns NULL if no embeddings were successfully generated.

@@ -9,12 +9,13 @@ call_llm_par(
   simplify = TRUE,
   tries = 10,
   wait_seconds = 2,
-  backoff_factor = 3,
+  backoff_factor = 120^(1/tries),
   verbose = FALSE,
   memoize = FALSE,
   max_workers = NULL,
   progress = FALSE,
-  json_output = NULL
+  json_output = NULL,
+  start_jitter = 5
 )
 }
 \arguments{
@@ -39,6 +40,9 @@ and 'messages' (character vector OR message list).}
 
 \item{json_output}{Deprecated. Raw JSON string is always included as raw_response_json.
 This parameter is kept for backward compatibility but has no effect.}
+
+\item{start_jitter}{Calls are made after a uniformly distributed delay
+between 0 and \code{start_jitter} seconds.}
 }
 \value{
 A tibble containing all original columns plus:

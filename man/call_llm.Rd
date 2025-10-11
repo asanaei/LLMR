@@ -2,9 +2,12 @@
 % Please edit documentation in R/LLMR.R
 \name{call_llm}
 \alias{call_llm}
+\alias{call_llm.ollama}
 \title{Call an LLM (chat/completions or embeddings) with optional multimodal input}
 \usage{
 call_llm(config, messages, verbose = FALSE)
+
+\method{call_llm}{ollama}(config, messages, verbose = FALSE)
 }
 \arguments{
 \item{config}{An \code{\link{llm_config}} object.}
@@ -42,7 +45,7 @@ embeddings, plus a simple multimodal shortcut for local files.
 parameter as \code{max_tokens}, LLMR will, unless \code{no_change=TRUE},
 retry once replacing \code{max_tokens} with \code{max_completion_tokens}
 (and inform via a \code{cli_alert_info}). The former experimental
-“uncapped retry on empty content” is \emph{disabled} by default to
+"uncapped retry on empty content" is \emph{disabled} by default to
 avoid unexpected costs.
 \item \strong{Anthropic:} \code{max_tokens} is required; if omitted LLMR uses
 \code{2048} and warns. Multimodal images are inlined as base64. Extended
@@ -52,6 +55,8 @@ thinking is supported: provide \code{thinking_budget} and
 \item \strong{Gemini (REST):} \code{systemInstruction} is supported; user
 parts use \code{text}/\code{inlineData(mimeType,data)}; responses are set to
 \code{responseMimeType = "text/plain"}.
+\item \strong{Ollama (local):} OpenAI-compatible endpoints on \verb{http://localhost:11434/v1/*};
+no Authorization header is required. Override with \code{api_url} as needed.
 \item \strong{Error handling:} HTTP errors raise structured conditions with
 classes like \code{llmr_api_param_error}, \code{llmr_api_rate_limit_error},
 \code{llmr_api_server_error}; see the condition fields for status, code,
@@ -61,9 +66,20 @@ request id, and (where supplied) the offending parameter.
 
 \section{Message normalization}{
 
-See the \emph{“multimodal shortcut”} described under \code{messages}. Internally,
-LLMR expands these into the provider’s native request shape and tilde-expands
+See the \emph{"multimodal shortcut"} described under \code{messages}. Internally,
+LLMR expands these into the provider's native request shape and tilde-expands
 local file paths.
+}
+
+\section{Using a local Ollama server}{
+
+Ollama provides an OpenAI-compatible HTTP API on localhost by default. Start the
+daemon and pull a model first (terminal): \verb{ollama serve} (in background) and
+\verb{ollama pull llama3}. Then configure LLMR with
+\code{llm_config("ollama", "llama3", embedding = FALSE)} for chat or
+\code{llm_config("ollama", "nomic-embed-text", embedding = TRUE)} for embeddings.
+Override the endpoint with \code{api_url} if not using the default
+\verb{http://localhost:11434/v1/*}.
 }
 
 \examples{
@@ -95,13 +111,13 @@ msg <- c(
 )
 call_llm(cfg, msg)
 
-## 4) Embeddings
+## 5) Embeddings
 e_cfg <- llm_config("voyage", "voyage-large-2",
                     embedding = TRUE)
 emb_raw <- call_llm(e_cfg, c("first", "second"))
 emb_mat <- parse_embeddings(emb_raw)
 
-## 5) With a chat session
+## 6) With a chat session
 ch <- chat_session(cfg)
 ch$send("Say hello in Greek.")   # prints the same status line as `print.llmr_response`
 ch$history()

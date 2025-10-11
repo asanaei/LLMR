@@ -1,5 +1,5 @@
 ---
-title: "LLMR Demo (version 0.6.2)"
+title: "LLMR Demo (version 0.6.3)"
 format:
   pdf:
     fontsize: 10pt
@@ -16,7 +16,7 @@ format:
         \fvset{breaklines,breakanywhere,commandchars=\\\{\}}
 ---
 
-LLMR is an R package for reproducible, provider‑agnostic research with (and about) large language models (LLMs). It offers:
+LLMR is an R package for reproducible, provider‑agnostic resear ch with (and about) large language models (LLMs). It offers:
 
 - A single configuration object across providers.
 - A standard response object with finish reasons and token usage.
@@ -47,6 +47,7 @@ library(tibble)
 library(tidyr)
 library(ggplot2)
 library(stringi)
+library(kableExtra)
 ```
 
 # 1) Quick start: one generative call
@@ -126,7 +127,7 @@ cfg_groq <- llm_config(
 
 chat <- chat_session(cfg_groq, system = "Be concise.")
 chat$send("Name one fun fact about octopuses.")
-chat$send("Now explain it in one short sentence.")
+chat$send("Now explain the mechanism in one short sentence.")
 
 # Summary view
 print(chat)
@@ -135,77 +136,7 @@ tail(chat, 2)
 as.data.frame(chat) |> head()
 ```
 
-# 3) Structured output (JSON schema)
-
-LLMR can request structured JSON and parse it into typed columns.
-
-- Use `enable_structured_output()` (provider‑agnostic).
-- Call a structured helper.
-- Hoist fields with `llm_parse_structured_col()` (done automatically below).
-
-```{r}
-#| label: schema
-schema <- list(
-  type = "object",
-  properties = list(
-    answer     = list(type = "string"),
-    confidence = list(type = "number", minimum = 0, maximum = 1)
-  ),
-  required = list("answer", "confidence"),
-  additionalProperties = FALSE
-)
-```
-
-## 3.1) Vector helper: `llm_fn_structured()`
-
-Auto‑glues the prompt over a vector. If `.fields` is omitted, top‑level properties are auto‑hoisted.
-
-```{r}
-#| label: fn-structured
-words <- c("excellent", "awful", "fine")
-
-out_vec <- llm_fn_structured(
-  x       = words,
-  prompt  = "Classify '{x}' as Positive, Negative, or Neutral and return JSON with answer and confidence.",
-  .config = cfg_openai,
-  .schema = schema,
-  .fields = c("answer","confidence")   # optional: specify exactly what to hoist
-)
-
-out_vec |>
-  select(response_text, structured_ok, answer, confidence) |>
-  print(n = Inf)
-```
-
-## 3.2) Data‑frame helper: `llm_mutate_structured()`
-
-Mutate your data with new structured columns.
-
-```{r}
-#| label: mutate-structured
-df <- tibble(text = c(
-  "Cats are great companions.",
-  "The weather is terrible today.",
-  "I like tea."
-))
-
-df_s <- df |>
-  llm_mutate_structured(
-    annot,
-    prompt  = "Return JSON with answer and confidence for: {text}",
-    .config = cfg_groq,
-    .schema = schema
-    # You can also pass .fields = c("answer","confidence")
-  )
-
-df_s |>
-  select(text, structured_ok, annot, answer, confidence) |>
-  head()
-```
-
-Note: In “columns” mode the generated raw text column is named after the output symbol (here `annot`). Hoisted scalars appear as separate typed columns. Arrays and objects become list‑columns, unless you restrict hoisting with `.fields`.
-
-# 4) Tidy helpers (non‑structured)
+# 3) Tidy helpers (non‑structured)
 
 Use `llm_fn()` for vectors. Use `llm_mutate()` inside data pipelines. Both respect the active parallel plan.
 
@@ -255,6 +186,137 @@ sh_results
 
 reset_llm_parallel()
 ```
+
+
+# 4) Structured output (JSON schema)
+
+LLMR can request structured JSON and parse it into typed columns.
+
+- Use `enable_structured_output()` (provider‑agnostic).
+- Call a structured helper.
+- Name fields to be hoisted.
+
+```{r}
+#| label: schema
+schema <- list(
+  type = "object",
+  properties = list(
+    answer     = list(type = "string"),
+    confidence = list(type = "number", minimum = 0, maximum = 1)
+  ),
+  required = list("answer", "confidence"),
+  additionalProperties = FALSE
+)
+```
+
+## 4.1) Vector helper: `llm_fn_structured()`
+
+Auto‑glues the prompt over a vector. If `.fields` is omitted, top‑level properties are auto‑hoisted.
+
+```{r}
+#| label: fn-structured
+words <- c("excellent", "awful", "fine")
+
+out_vec <- llm_fn_structured(
+  x       = words,
+  prompt  = "Classify '{x}' as Positive, Negative, or Neutral and return JSON with answer and confidence.",
+  .config = cfg_openai,
+  .schema = schema,
+  .fields = c("answer","confidence")   # optional: specify exactly what to hoist
+)
+
+out_vec |>
+  select(response_text, structured_ok, answer, confidence) |>
+  kable()
+```
+
+## 4.2) Data‑frame helper: `llm_mutate_structured()`
+
+We want to mutate data with structured responses from LLM.
+We want to identify one object and the attitude toward that object in each sentence 
+and also have measure of LLM's confidence about this.
+
+Here is the data:
+
+```{r}
+df <- tibble(text = c(
+  "Cats are great companions.",
+  "The weather is terrible today.",
+  "I like tea.",
+  "Sometimes I like tea."
+))
+```
+
+Like before, let us create a schema first. 
+
+
+```{r}
+#| label: schema2
+schema.att <- list(
+  type = "object",
+  properties = list(
+    object     = list(type = "string"),
+    attitude     = list(type = "number", minimum = 0, maximum = 10),
+    confidence = list(type = "number", minimum = 0, maximum = 1)
+  ),
+  required = list("object","attitude", "confidence"),
+  additionalProperties = FALSE
+)
+```
+
+The above schema is great as it specifies the range for numbers. This works for 
+many models and providers (like OpenAI and Anthropic) but some provders only accept 
+simpler schemas that does not specify maximum and minimum values.
+
+
+```{r}
+#| label: mutate-structured
+
+cfg_together <- 
+llm_config(
+  provider = "together",
+  model="Qwen/Qwen3-235B-A22B-Instruct-2507-tput", #"openai/gpt-oss-20b"
+  reasoning_effort="medium"
+)
+
+df_s <- df |>
+  llm_mutate_structured(
+    the_annotation = "Identify an object and the attitude expressed toward thar object 
+    on a scale of 0 (extremely unfavorable)  to 10 (extremely favorable), 
+    and the confidence you have about this between 0 (no confidence) to 
+    1 (certain about your ruling).
+    Return JSON with object, attitude, and confidence for:\n {text}",
+    .config = cfg_together,
+    .schema = schema.att
+    # You can also pass .fields 
+  )
+```
+
+Let us see what we have obtained:
+
+```{r}
+df_s |>
+  select(object, attitude, confidence) |>
+  kable()
+```
+
+*Note* `llm_mutate_structured` follows the same convention as mutate, but because typically the target variables 
+are named in the schema, we get those hoisted and copied as columns in the output;
+still, the name given is the name used for the unparsed output and as the prefix for other attributes. 
+So the above example we have:
+
+```{r}
+# first row
+df_s$the_annotation[1] 
+
+#how many tokens were received:
+df_s$the_annotation_rec
+
+# all variables
+names(df_s)
+```
+
+
 
 # 5) Parallel experiments
 
@@ -307,6 +369,11 @@ res |>
 ## 5.1) A small bias experiment (non‑structured)
 
 Two drivers. Many repetitions. Compare outcomes by name.
+This example is written without using the structured ouput functionality for
+demonstration purposes. It can similarly be run by `call_llm_par_structured()`
+more easily.
+
+
 
 ```{r}
 #| label: bias-experiment
@@ -432,7 +499,25 @@ parsed
 
 # 7) Embeddings
 
-LLMR supports batched embeddings with robust retries.
+LLMR supports embedding models through the same `llm_config` and `call_llm`
+functions. `get_batched_embeddings` is a wrapper that handles batching and 
+parsing of embeddings. `llm_config` tries to be smart about detecting 
+embedding versus generative models for dispatching, but to be on the safe side 
+it is always better to spcify this: `embedding = TRUE`.
+
+
+Here is an example of an embedding model configuration:
+
+```{r}
+cfg_embed <- llm_config(
+  provider  = "voyage",
+  model     = "voyage-3.5-lite",
+  embedding = TRUE
+)
+```
+
+Let us see, as a simple example, how the first sentences of inagural speeches 
+related to each other:
 
 ```{r}
 #| label: embeddings
@@ -442,16 +527,21 @@ texts <- c( # first few words of inaugural speeches of the first presidents
   Jefferson  = "Called upon to undertake the duties of the first executive office of our country, I avail myself ...",
   Madison    = "Unwilling to depart from examples of the most revered authority, I avail myself of the occasion ..."
 )
+```
 
-cfg_embed <- llm_config(
-  provider  = "openai",
-  model     = "text-embedding-3-small",
-  embedding = TRUE
-)
+We get the embeddings by:
 
+```{r}
 emb <- get_batched_embeddings(texts, cfg_embed)
 dim(emb)
+```
 
+And processing it to see how the president's started their speeches. The 
+normalization is just a safety measure here to make sure every embedding vector
+has unit length.
+
+
+```{r}
 # quick similarity example
 norm <- function(v) v / sqrt(sum(v^2))
 emb_n <- t(apply(emb, 1, norm))

@@ -35,6 +35,7 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
     voyage    = "VOYAGE_API_KEY",
     deepseek  = "DEEPSEEK_API_KEY",
     xai       = "XAI_API_KEY",
+    ollama    = "OLLAMA_API_KEY",
     toupper(paste0(provider, "_API_KEY"))
   )
 }

@@ -30,7 +30,7 @@ knitr::opts_chunk$set(
 
 - **Anthropic (Claude)**  
   No global “JSON mode.” Instead, you **define a tool** with an **`input_schema`** (JSON Schema) and **force** it via `tool_choice`, so the model must return a JSON object that validates the schema.  
-  See [Anthropic Messages API: tools & `input_schema`](https://docs.anthropic.com/en/api/messages#tools)
+  See [Anthropic Messages API: tools & `input_schema`](https://docs.claude.com/en/api/messages#tools)
 
 - **Google Gemini (REST)**  
   Set `responseMimeType = "application/json"` in `generationConfig` to request JSON. Some models also accept **`responseSchema`** for constrained JSON (model-dependent).  
@@ -267,6 +267,6 @@ This processes thousands of rows efficiently with automatic retries and validati
 * Together: Structured Output: [https://docs.together.ai/docs/json-mode](https://docs.together.ai/docs/json-mode)
 * x.ai: Structured Output: [https://docs.x.ai/docs/guides/structured-outputs](https://docs.x.ai/docs/guides/structured-outputs)
 * DeepSeek: JSON Mode: [https://api-docs.deepseek.com/guides/json_mode](https://api-docs.deepseek.com/guides/json_mode)
-* Anthropic: Messages API, tools & `input_schema`: [https://docs.anthropic.com/en/api/messages#body-tool-choice](https://docs.anthropic.com/en/api/messages#body-tool-choice)
+* Anthropic: Messages API, tools & `input_schema`: [https://docs.claude.com/en/api/messages#body-tool-choice](https://docs.claude.com/en/api/messages#body-tool-choice)
 * Google Gemini: Structured Output: [https://ai.google.dev/gemini-api/docs/structured-output](https://ai.google.dev/gemini-api/docs/structured-output)
 
