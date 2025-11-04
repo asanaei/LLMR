@@ -5,8 +5,6 @@
 ^\\.DS_Store$
 paper.md
 ^\.github$
-^paper\.md$
-^paper\.bib$
 ^figures$
 ^^CITATION\\.cff$$
 ^CITATION\.cff$
@@ -15,3 +13,4 @@ paper.md
 ^docs$
 ^pkgdown$
 ^joss_temp$
+^paper$
