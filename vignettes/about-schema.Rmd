@@ -1,5 +1,5 @@
 ---
-title: "JSON output vs. schema-validated output in LLMR"
+title: "Schema-validated output in LLMR"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{JSON output vs. schema-validated output in LLMR}
