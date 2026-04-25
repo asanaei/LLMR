@@ -1,0 +1,91 @@
+# Small experiment with LLMR
+
+``` r
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>",
+  eval = identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true") )
+```
+
+## Overview
+
+This vignette demonstrates:
+
+1.  Building factorial experiment designs with
+    [`build_factorial_experiments()`](https://asanaei.github.io/LLMR/reference/build_factorial_experiments.md)
+2.  Running experiments in parallel with
+    [`call_llm_par()`](https://asanaei.github.io/LLMR/reference/call_llm_par.md)
+3.  Comparing unstructured vs. structured output across providers
+
+The workflow is: **design → parallel execution → analysis**
+
+We will compare three configurations on two prompts, once unstructured
+and once with structured output. In choosing models, note that at the
+time of writing this vignette, Gemini models are not guaranteeing the
+schema output and is more likely to run into trouble.
+
+``` r
+library(LLMR)
+library(dplyr)
+cfg_openai <- llm_config("openai",   "gpt-5-nano")
+cfg_cld    <- llm_config("anthropic","claude-sonnet-4-20250514", max_tokens = 512)
+cfg_gem    <- llm_config("groq",     "openai/gpt-oss-20b")
+```
+
+## Build a factorial design
+
+``` r
+experiments <- build_factorial_experiments(
+  configs       = list(cfg_openai, cfg_cld, cfg_gem),
+  user_prompts  = c("Summarize in one sentence: The Apollo program.",
+                    "List two benefits of green tea."),
+  system_prompts = c("Be concise.")
+)
+experiments
+```
+
+## Run unstructured
+
+``` r
+setup_llm_parallel(workers = 10)
+res_unstructured <- call_llm_par(experiments, progress = TRUE)
+reset_llm_parallel()
+res_unstructured |>
+  select(provider, model, user_prompt_label, response_text, finish_reason) |>
+  head()
+```
+
+**Understanding the results:**
+
+The `finish_reason` column shows why each response ended:
+
+- `"stop"`: normal completion
+- `"length"`: hit token limit (increase `max_tokens`)
+- `"filter"`: content filter triggered
+
+The `user_prompt_label` helps track which experimental condition
+produced each response.
+
+## Structured version
+
+``` r
+schema <- list(
+  type = "object",
+  properties = list(
+    answer = list(type="string"),
+    keywords = list(type="array", items = list(type="string"))
+  ),
+  required = list("answer","keywords"),
+  additionalProperties = FALSE
+)
+
+experiments2 <- experiments
+experiments2$config <- lapply(experiments2$config, enable_structured_output, schema = schema)
+
+setup_llm_parallel(workers = 10)
+res_structured <- call_llm_par_structured(experiments2 , .fields = c("answer","keywords") )
+reset_llm_parallel()
+
+res_structured |>
+  select(provider, model, user_prompt_label, structured_ok, answer) |>
+  head()
+```
