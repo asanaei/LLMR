@@ -178,23 +178,27 @@ print.llmr_response <- function(x, ...) {
 # ---------------------------------------------------------------------------
 
 #' Map provider finish signals to standard labels
-#'
-#' Normalizes heterogeneous finish indicators to one of
-#' \code{c("stop","length","filter","tool","other")}.
-#'
 #' @keywords internal
 #' @noRd
 .std_finish_reason <- function(content) {
-  # OpenAI/Groq: choices[[1]]$finish_reason
   fr <- NULL
   if (!is.null(content$choices) && length(content$choices) >= 1) {
     fr <- content$choices[[1]]$finish_reason %||% content$choices[[1]]$finishReason
   }
-  # Gemini: candidates[[1]]$finishReason
+
+  # OpenAI Responses API (detect via object type)
+  if (is.null(fr) && identical(content$object, "response")) {
+    if (!is.null(content$output) && length(content$output) >= 1) {
+      fr <- content$output[[1]]$status
+    }
+    if (is.null(fr) && !is.null(content$status)) {
+      fr <- content$status
+    }
+  }
+
   if (is.null(fr) && !is.null(content$candidates) && length(content$candidates) >= 1) {
     fr <- content$candidates[[1]]$finishReason
   }
-  # Anthropic: stop_reason
   if (is.null(fr) && !is.null(content$stop_reason)) {
     fr <- content$stop_reason
   }
@@ -202,7 +206,7 @@ print.llmr_response <- function(x, ...) {
   fr <- tolower(as.character(fr %||% ""))
   if (!nzchar(fr)) return("other")
   if (fr %in% c("stop","end_turn","completed","done")) return("stop")
-  if (fr %in% c("length","max_tokens","max_token","maxoutputtokens","max_completion_tokens")) return("length")
+  if (fr %in% c("length","max_tokens","max_token","maxoutputtokens","max_completion_tokens","incomplete")) return("length")
   if (fr %in% c("content_filter","safety","blocked")) return("filter")
   if (fr %in% c("tool_calls","tool_use","tool","function_call")) return("tool")
   "other"
@@ -223,14 +227,22 @@ print.llmr_response <- function(x, ...) {
 #' @keywords internal
 #' @noRd
 .reasoning_tokens_from <- function(content) {
-  # OpenAI
+  # OpenAI Chat Completions
   rt <- tryCatch(
     content$usage$completion_tokens_details$reasoning_tokens,
     error = function(e) NA_integer_
   )
   if (!is.null(rt) && !is.na(rt)) return(as.integer(rt))
+
+  # OpenAI Responses API
+  rt2 <- tryCatch(
+    content$usage$output_tokens_details$reasoning_tokens,
+    error = function(e) NA_integer_
+  )
+  if (!is.null(rt2) && !is.na(rt2)) return(as.integer(rt2))
+
   # Gemini
-  rt <- tryCatch(content$usageMetadata$thoughtsTokenCount, error = function(e) NA_integer_)
-  if (!is.null(rt) && !is.na(rt)) return(as.integer(rt))
+  rt3 <- tryCatch(content$usageMetadata$thoughtsTokenCount, error = function(e) NA_integer_)
+  if (!is.null(rt3) && !is.na(rt3)) return(as.integer(rt3))
   NA_integer_
 }
