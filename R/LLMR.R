@@ -148,10 +148,14 @@
 #' @keywords internal
 #' @noRd
 #' @importFrom httr2 req_perform resp_body_raw resp_body_json req_error resp_status resp_header
-perform_request <- function(req, verbose, provider = NULL, model = NULL) {
+perform_request <- function(req, verbose, provider = NULL, model = NULL, config = NULL) {
   start_time <- Sys.time()
 
-  # Let us inspect 4xx/5xx bodies instead of httr2 throwing first
+  # MODIFIABILITY HOOK 1: Intercept/Modify the raw httr2 HTTP request (headers, etc.)
+  if (!is.null(config) && is.function(config$model_params$req_builder)) {
+    req <- config$model_params$req_builder(req)
+  }
+
   req <- httr2::req_error(req, is_error = \(resp) FALSE)
   resp <- httr2::req_perform(req)
   code <- httr2::resp_status(resp)
@@ -184,29 +188,32 @@ perform_request <- function(req, verbose, provider = NULL, model = NULL) {
   raw_json     <- rawToChar(raw_response)
   content      <- httr2::resp_body_json(resp)
 
+  # MODIFIABILITY HOOK 2: Intercept/Modify the incoming JSON payload before the package parses it
+  if (!is.null(config) && is.function(config$model_params$response_modifier)) {
+    content <- config$model_params$response_modifier(content)
+  }
+
   if (verbose) {
     cat("Full API Response:\n")
     print(content)
   }
 
-  # Detect embeddings and return list for embeddings
   is_embedding_like <- is.list(content) && (!is.null(content$data) || !is.null(content$embedding))
   if (is_embedding_like) {
-    # Return embedding response (list) directly
     return(content)
   }
 
-  # Generative: build an llmr_response
   txt <- extract_text(content)
   fr  <- .std_finish_reason(content)
-
-  # reuse your existing provider-agnostic token counter
   tc  <- .token_counts(content)
   rt  <- .reasoning_tokens_from(content)
 
+  # Support Responses API fallback for total tokens
+  direct_total <- if (!is.null(content$usage) && !is.null(content$usage$total_tokens)) content$usage$total_tokens else NULL
+
   usage <- list(sent = as.integer(tc$sent %||% NA_integer_),
                 rec  = as.integer(tc$rec  %||% NA_integer_),
-                total = as.integer((tc$sent %||% 0L) + (tc$rec %||% 0L)),
+                total = as.integer(direct_total %||% ((tc$sent %||% 0L) + (tc$rec %||% 0L))),
                 reasoning = as.integer(rt %||% NA_integer_))
 
   out <- new_llmr_response(
@@ -221,7 +228,6 @@ perform_request <- function(req, verbose, provider = NULL, model = NULL) {
     raw_json     = raw_json
   )
 
-  # Back-compat attributes expected elsewhere
   attr(out, "full_response") <- content
   attr(out, "raw_json")      <- raw_json
 
@@ -231,19 +237,33 @@ perform_request <- function(req, verbose, provider = NULL, model = NULL) {
 
 
 #' Extract Text from API Response
-#'
-#' Internal helper function to extract text from the API response content.
-#'
 #' @keywords internal
 #' @noRd
 extract_text <- function(content) {
+  if (is.list(content) && (!is.null(content$data) || !is.null(content$embedding))) return(content)
 
-  # Embeddings
-  if (is.list(content) && (!is.null(content$data) || !is.null(content$embedding))) {
-    return(content)
+  # Support for OpenAI's new Responses API structure
+  if (identical(content$object, "response") && !is.null(content$output) && is.list(content$output)) {
+    out_texts <- c()
+    for (item in content$output) {
+      if (identical(item$type, "message") && is.list(item$content)) {
+        for (cblock in item$content) {
+          if (identical(cblock$type, "output_text") || identical(cblock$type, "text")) {
+            if (!is.null(cblock$text)) out_texts <- c(out_texts, cblock$text)
+          }
+        }
+      } else if (identical(item$type, "output_text") || identical(item$type, "text")) {
+          if (!is.null(item$text)) out_texts <- c(out_texts, item$text)
+      } else if (is.character(item$output_text)) {
+          out_texts <- c(out_texts, item$output_text)
+      } else if (is.character(item$text)) {
+          out_texts <- c(out_texts, item$text)
+      }
+    }
+    if (length(out_texts) > 0) return(paste(out_texts, collapse = "\n"))
+    return(NA_character_)
   }
 
-  # OpenAI / Groq / Together
   if (!is.null(content$choices)) {
     if (length(content$choices) == 0) return(NA_character_)
     ch <- content$choices[[1]]
@@ -252,101 +272,67 @@ extract_text <- function(content) {
     return(NA_character_)
   }
 
-  # Anthropic
   if (!is.null(content$content)) {
     cc <- content$content
     if (length(cc) == 0) return(NA_character_)
-
-    # Prefer tool_use when structured mode is on (unchanged)
     is_tool_use <- function(b) identical(b$type, "tool_use")
     has_tool <- any(vapply(cc, is_tool_use, logical(1)))
     if (has_tool) {
       idx <- which(vapply(cc, is_tool_use, logical(1)))[1]
       tu  <- cc[[idx]]
       if (!is.null(tu$input)) {
-        if (is.character(tu$input) && length(tu$input) == 1L) {
-          return(tu$input)
-        } else {
-          return(jsonlite::toJSON(tu$input, auto_unbox = TRUE, null = "null"))
-        }
+        if (is.character(tu$input) && length(tu$input) == 1L) return(tu$input)
+        return(jsonlite::toJSON(tu$input, auto_unbox = TRUE, null = "null"))
       }
     }
-
-    # pick the last text block, skipping the thinking block
     text_blocks <- Filter(function(b) !is.null(b$text) && is.character(b$text) && nzchar(b$text[1]), cc)
-    if (length(text_blocks) > 0) {
-      return(text_blocks[[length(text_blocks)]]$text)
-    }
-
+    if (length(text_blocks) > 0) return(text_blocks[[length(text_blocks)]]$text)
     return(NA_character_)
   }
 
-
-
-
-  # Gemini (REST)
   if (!is.null(content$candidates)) {
     if (length(content$candidates) == 0) return(NA_character_)
     cand <- content$candidates[[1]]
-
-    # 1) Direct character payload
     if (!is.null(cand$content) && is.character(cand$content)) {
       out <- paste(cand$content[nzchar(cand$content)], collapse = "\n")
       return(if (nzchar(out)) out else NA_character_)
     }
-
-    # Helper: parts resolver for both shapes
     get_parts <- function(obj) {
       if (is.null(obj)) return(NULL)
       if (is.list(obj) && !is.null(obj$parts)) return(obj$parts)
-      if (is.list(obj) && length(obj) >= 1L && is.list(obj[[1]]) && !is.null(obj[[1]]$parts)) {
-        return(obj[[1]]$parts)
-      }
+      if (is.list(obj) && length(obj) >= 1L && is.list(obj[[1]]) && !is.null(obj[[1]]$parts)) return(obj[[1]]$parts)
       NULL
     }
-
-    # 2) Standard: content.parts[*].text
     parts <- get_parts(cand$content)
     if (!is.null(parts) && length(parts) > 0) {
       texts <- vapply(parts, function(p) if (!is.null(p$text) && is.character(p$text)) p$text else "", character(1))
       out <- paste(texts[nzchar(texts)], collapse = "\n")
       if (nzchar(out)) return(out)
     }
-
-    # 3) Fallbacks
     if (!is.null(cand$text) && is.character(cand$text) && nzchar(cand$text)) return(cand$text)
-
-    # 4) Strict deep fallback: search only text-like keys; skip 'role'
     allowed_keys <- c("text", "outputText", "output_text", "candidateText")
     find_text <- function(x) {
       if (is.list(x)) {
         nm <- names(x)
         if (!is.null(nm) && length(nm)) {
-          # prefer named text-like keys
-          for (k in allowed_keys) {
-            if (k %in% nm && is.character(x[[k]]) && nzchar(x[[k]][1])) return(x[[k]][1])
-          }
-          # recurse other fields, explicitly skip 'role'
+          for (k in allowed_keys) if (k %in% nm && is.character(x[[k]]) && nzchar(x[[k]][1])) return(x[[k]][1])
           for (nm_i in nm) {
             if (identical(nm_i, "role")) next
             val <- find_text(x[[nm_i]])
             if (!is.null(val) && nzchar(val)) return(val)
           }
         } else {
-          # unnamed list
           for (el in x) {
             val <- find_text(el)
             if (!is.null(val) && nzchar(val)) return(val)
           }
         }
       }
-      # do NOT return bare character scalars here (avoids grabbing 'model')
       NULL
     }
     val <- find_text(cand)
     return(if (!is.null(val) && nzchar(val)) val else NA_character_)
   }
-
   NA_character_
 }
 
@@ -665,19 +651,36 @@ call_llm.openai <- function(config, messages, verbose = FALSE) {
     return(call_llm.openai_embedding(config, messages, verbose))
   }
   messages <- .normalize_messages(messages)
-  endpoint <- get_endpoint(config, default_endpoint = "https://api.openai.com/v1/chat/completions")
+  mp <- config$model_params %||% list()
+  api_url_param <- mp$api_url %||% ""
 
-  # Format messages with multimodal support (inline base64 images)
+  # Auto-detect the Responses API if o1-pro/o1-max are requested
+  is_responses_api <- grepl("v1/responses", api_url_param) ||
+                      isTRUE(mp$use_responses_api) ||
+                      grepl("^(o1|o3)-(pro|max)", config$model)
+
+  if (is_responses_api) {
+      if (grepl("v1/chat/completions/?$", api_url_param)) {
+          endpoint <- sub("v1/chat/completions/?$", "v1/responses", api_url_param)
+      } else if (nzchar(api_url_param)) {
+          endpoint <- api_url_param
+      } else {
+          endpoint <- "https://api.openai.com/v1/responses"
+      }
+  } else {
+      endpoint <- get_endpoint(config, default_endpoint = "https://api.openai.com/v1/chat/completions")
+  }
+
   formatted_messages <- lapply(messages, function(msg) {
     if (msg$role != "user" || is.character(msg$content)) return(msg)
     if (is.list(msg$content)) {
       parts <- lapply(msg$content, function(part) {
         if (part$type == "text") {
-          list(type = "text", text = part$text)
+          list(type = if (is_responses_api) "input_text" else "text", text = part$text)
         } else if (part$type == "file") {
           fd <- .process_file_content(part$path)
-          list(type = "image_url",
-               image_url = list(url = paste0("data:", fd$mime_type, ";base64,", fd$base64_data)))
+          list(type = if (is_responses_api) "input_image" else "image_url",
+               image_url = if (is_responses_api) paste0("data:", fd$mime_type, ";base64,", fd$base64_data) else list(url = paste0("data:", fd$mime_type, ";base64,", fd$base64_data)))
         } else NULL
       })
       msg$content <- purrr::compact(parts)
@@ -685,33 +688,60 @@ call_llm.openai <- function(config, messages, verbose = FALSE) {
     msg
   })
 
-  body0 <- .drop_null(list(
-    model             = config$model,
-    messages          = formatted_messages,
-    temperature       = config$model_params$temperature,
-    top_p             = config$model_params$top_p,
-    frequency_penalty = config$model_params$frequency_penalty,
-    presence_penalty  = config$model_params$presence_penalty
-  ))
-  if (!is.null(config$model_params$max_tokens)) {
-    body0$max_tokens <- config$model_params$max_tokens
+  body0 <- list(model = config$model)
+
+  if (is_responses_api) {
+      sys_msgs <- purrr::keep(formatted_messages, function(x) identical(x$role, "system"))
+      other_msgs <- purrr::keep(formatted_messages, function(x) !identical(x$role, "system"))
+
+      instructions <- if (length(sys_msgs) > 0) {
+        paste(vapply(sys_msgs, function(x) {
+          if (is.list(x$content)) {
+            paste(vapply(x$content, function(p) if (p$type %in% c("text", "input_text")) p$text else "", character(1)), collapse = " ")
+          } else as.character(x$content)
+        }, character(1)), collapse = "\n\n")
+      } else NULL
+
+      body0$input <- if (length(other_msgs) > 0) other_msgs else formatted_messages
+      if (!is.null(instructions)) body0$instructions <- instructions
+      body0$temperature <- mp$temperature
+      body0$top_p <- mp$top_p
+      body0$frequency_penalty <- mp$frequency_penalty
+      body0$presence_penalty  <- mp$presence_penalty
+
+      if (!is.null(mp$max_tokens)) body0$max_output_tokens <- mp$max_tokens
+      if (!is.null(mp$max_output_tokens)) body0$max_output_tokens <- mp$max_output_tokens
+
+  } else {
+      body0$messages          <- formatted_messages
+      body0$temperature       <- mp$temperature
+      body0$top_p             <- mp$top_p
+      body0$frequency_penalty <- mp$frequency_penalty
+      body0$presence_penalty  <- mp$presence_penalty
+      if (!is.null(mp$max_tokens)) body0$max_tokens <- mp$max_tokens
   }
 
-  # Structured outputs (OpenAI-compatible). Pass response_format/tools/tool_choice when present.
-  mp <- config$model_params %||% list()
+  body0 <- .drop_null(body0)
+
   if (!is.null(mp$response_format)) body0$response_format <- mp$response_format
   if (is.null(body0$response_format) && !is.null(mp$json_schema)) {
-    body0$response_format <- list(
-      type = "json_schema",
-      json_schema = list(
-        name   = "llmr_schema",
-        schema = mp$json_schema,
-        strict = TRUE
-      )
-    )
+    body0$response_format <- list(type = "json_schema", json_schema = list(name = "llmr_schema", schema = mp$json_schema, strict = TRUE))
   }
   if (!is.null(mp$tools))       body0$tools       <- mp$tools
   if (!is.null(mp$tool_choice)) body0$tool_choice <- mp$tool_choice
+
+  # MODIFIABILITY HOOK 3: Pass-through any extra configuration params verbatim
+  skip_keys <- c("temperature", "top_p", "frequency_penalty", "presence_penalty",
+                 "max_tokens", "max_output_tokens", "max_completion_tokens",
+                 "response_format", "json_schema", "tools", "tool_choice",
+                 "api_url", "use_responses_api", "request_modifier", "req_builder", "response_modifier")
+  extras <- mp[setdiff(names(mp), skip_keys)]
+  if (length(extras) > 0) body0 <- c(body0, .drop_null(extras))
+
+  # MODIFIABILITY HOOK 4: Allows arbitrary mutation of the entire JSON request before serialization
+  if (is.function(mp$request_modifier)) {
+      body0 <- mp$request_modifier(body0)
+  }
 
   build_req <- function(bdy) {
     httr2::request(endpoint) |>
@@ -722,29 +752,28 @@ call_llm.openai <- function(config, messages, verbose = FALSE) {
       httr2::req_body_json(bdy)
   }
 
-  last_body <- NULL  # used for potential retries and debugging
-
+  last_body <- NULL
   run <- function(bdy) {
     last_body <<- bdy
-    perform_request(build_req(bdy), verbose,
-                    provider = config$provider, model = config$model)
+    # Config is passed down so perform_request can trigger the remaining hooks
+    perform_request(build_req(bdy), verbose, provider = config$provider, model = config$model, config = config)
   }
 
-
-  # 1) First attempt; on 400/param(max_tokens) and no_change=FALSE, retry with max_completion_tokens
   res <- tryCatch(
     run(body0),
     llmr_api_param_error = function(e) {
       if (isTRUE(config$no_change)) stop(e)
-      if (!is.null(e$param) && identical(e$param, "max_tokens") &&
-          !is.null(config$model_params$max_tokens)) {
+      if (!is.null(e$param) && identical(e$param, "max_tokens") && !is.null(mp$max_tokens)) {
         b2 <- body0
-        b2$max_completion_tokens <- b2$max_tokens
+        if (is_responses_api) {
+            b2$max_output_tokens <- b2$max_tokens
+        } else {
+            b2$max_completion_tokens <- b2$max_tokens
+        }
         b2$max_tokens <- NULL
         if (requireNamespace("cli", quietly = TRUE)) {
-          cli::cli_alert_info(
-            sprintf("Replaced `max_tokens` with `max_completion_tokens` for %s after server hint.", config$model)
-          )
+          cli::cli_alert_info(sprintf("Replaced `max_tokens` with `%s` for %s after server hint.",
+                    if(is_responses_api) "max_output_tokens" else "max_completion_tokens", config$model))
         }
         res2 <- run(b2)
         last_body <<- b2
@@ -753,19 +782,6 @@ call_llm.openai <- function(config, messages, verbose = FALSE) {
       stop(e)
     }
   )
-  ### THE following was experimental but it may cause unwanted costs, so it is disabled
-  # 2) If the server returned empty string after the fix, do a final retry without any cap
-  # if (!isTRUE(config$no_change) &&
-  #     is.character(res) && !nzchar(trimws(res)) &&
-  #     ( !is.null(last_body$max_completion_tokens) || !is.null(last_body$max_tokens) )) {
-  #   b3 <- last_body
-  #   b3$max_completion_tokens <- NULL
-  #   b3$max_tokens <- NULL
-  #   if (requireNamespace("cli", quietly = TRUE)) {
-  #     cli::cli_alert_info("Empty content returned; retrying once without a completion cap.")
-  #   }
-  #   res <- run(b3)
-  # }
 
   res
 }
