@@ -1,6 +1,6 @@
 ---
 title: "LLMR: A unified interface for research with Large Language Models in R"
-date: 2025-11-03
+date: 2026-05-01
 authors:
   - name: Ali Sanaei
     orcid: 0000-0002-8513-8169
@@ -12,44 +12,33 @@ bibliography: paper.bib
 ---
 
 ## Summary
-LLMR is an R package that provides researchers with a single provider-agnostic interface for generation and embeddings independently and also in inside tidy data workflows. The design enables cross model studies, parameter sweeps, and structured extraction within familiar R idioms. LLMR supports Ollama, OpenAI, Anthropic, Gemini, Groq, DeepSeek, xAI, Together AI, and Voyage AI, and extending the support to new providers is straightforward through writing an S3 call method.
-LLMR integrates with tidyverse, runs jobs in parallel, caches repeated calls, and offers structured output via JSON Schema. The package is available on CRAN. The source code and the development version are hosted on GitHub. 
+LLMR is an R package for research workflows that use large language models across multiple providers. It provides a common interface for text generation, embeddings, structured extraction, chat-style interaction, and batch execution while keeping prompts, model settings, and outputs inside ordinary R objects and tidy data workflows [@llmr_cran; @wickham2019welcome]. This enables researchers to compare prompts, models, and parameter settings without rewriting downstream analysis code.
+
+LLMR is available on CRAN and supports both hosted providers and local Ollama models [@llmr_cran]. The package also includes helpers for repeated or parallel calls, structured output parsing, and experiment-oriented workflows intended for comparative research in R rather than single-provider application development.
 
 ## Statement of need
-Researchers now employ large language models to embed text, label text, extract fields, conduct vignette scale experiments, and compare models across prompts and parameters. In R, many available tools bind to a single provider or require people to rewrite code when changing models, which slows comparisons and makes replication difficult [@openai_r]. Local deployments via Ollama are common in privacy sensitive work and teaching, yet local and hosted workflows have previously been referred to separate packages [@ollamar_joss; @rollama_arxiv]. LLMR addresses these barriers by treating model calls as data inside tidy pipelines [@wickham2019welcome]. Users define configurations for providers, run model calls as vectorized or row-wise operations, and analyze the resulting columns. This approach would make systematic comparisons and factorial experiments straightforward to set up, and thus researchers retain full control of prompts and parameters while keeping the same idiom for analysis. Similarly, performing combinations of text embedding and text generation is smooth within LLMR.
+Researchers increasingly use large language models for text classification, field extraction, embeddings, annotation, and comparative evaluation. In R, existing tools address this space from different angles, including direct provider access, local inference, chat-oriented interfaces, and broader multi-provider packages [@openai_r; @ollamar_joss; @rollama_cran; @tidychatmodels_rapp; @tidyllm_cran; @ellmer]. For many research tasks, the main challenge is not obtaining a single response but designing reproducible workflows in which prompts, model settings, and outputs can be stored as data, crossed into experimental designs, and analyzed with ordinary R tools [@wickham2019welcome]. LLMR addresses this need by providing provider-agnostic configurations, batch and tidy helpers, structured output handling, and embeddings in a single workflow-oriented package [@llmr_cran]. The target users are researchers and instructors who need to compare models or prompts, run repeated calls at scale, or integrate model outputs into downstream analysis in R.
 
-## Features
-LLMR provides a consistent configuration object for models and providers, a standard response with finish reasons and token counts, and a tidy pipeline that makes calls over vectors or data frames. It supports structured output using provider switches for JSON Schema, with local parsing and optional validation. Parallel execution uses the future package to scale out jobs, caching can reduce repeated cost during iterative analysis, and error handling applies retries with backoff and records basic diagnostics [@bengtsson2021parallelly; @memoise]. For structured output, OpenAI compatible endpoints accept response_format with json_schema [@openai_structured], Anthropic uses tool definitions with an input_schema [@anthropic_tools], and Gemini supports response_mime_type and response_schema for JSON output [@gemini_structured]. In fact the configuration, execution, and parsing steps are kept separate, and thus each portion of the workflow can be replaced or extended without modifying the rest.
+## State of the field
+Several R packages already address parts of this problem space. `openai` provides direct access to the OpenAI API [@openai_r]. `ollamar` and `rollama` focus on local Ollama-based workflows [@ollamar_joss; @rollama_cran]. `tidychatmodels` provides a common interface for chat-style interactions across vendors [@tidychatmodels_rapp]. `tidyllm` and `ellmer` provide broader multi-provider interfaces and higher-level workflows such as batch requests, structured extraction, and tool use [@tidyllm_cran; @ellmer].
 
-## Design Logic
-All workflows need one or more model configurations via `llm_config`, after that, the model can be called via 
-`call_llm` for either embedding or generative calls. `llm_config` tries to resolve the API key from enviornment variables
-through a sensible lookup table based on provider ('OPENAI_API_KEY', 'GEMINI_API_KEY', and so on), but can also be directly provided, either as the actual key string (which should be discouraged) or as the name of an environmental variable. 
+LLMR was created because the main design goal here is narrower and more research-specific: treating prompts, model settings, and responses as data that can be crossed into factorial designs, executed in batches, parsed into structured outputs, and analyzed in tidy pipelines [@wickham2019welcome]. Contributing this approach to an existing package would likely have required a material shift in scope toward comparative experiment management and R-native research workflows. LLMR therefore occupies a distinct niche for users who need provider-agnostic experimental workflows rather than only direct API access, local inference, or chat application tooling.
 
-Provider implementations are S3 methods of `call_llm` but given that most providers follow Open AI's specifications, unsupported providers can typically be called using `provider='openai'` but with 
-an overwriting of the `api_url` argument. The rest of the package is essentially wrappers around the `call_llm` function. The first layer is a `call_llm_robust`.
+## Software Design
+LLMR is organized around a small set of stable abstractions: a model configuration object, a unified call layer, provider-specific methods behind that layer, and separate parsing or post-processing steps. This design trades some provider-specific expressiveness for a consistent interface that preserves downstream analysis code when a researcher switches models or vendors. The package deliberately keeps chat, tidy data workflows, factorial experiments, structured calls, and embedding calls close to the same core call mechanism instead of defining separate interface families. That choice reduces duplicated logic and keeps retry behavior, caching, parallel execution, and response handling consistent across one-off calls and repeated experiments.
 
-- A stateful chat object can be created by `chat_session` which provides an object with methods like `$send` and `$print`. 
-- A typical experimental workflow builds an experiment data frame where each row becomes an API call (this can be done via the helper function `build_factorial_experiments`) and then call `call_llm_par` (or `call_llm_par_structured` for structured calls). 
-- A tidy implementation can use the `llm_mutate` (or `llm_mutate_structured` for structured calls).
-- Finally, a typical embedding call can be done via `get_batched_embeddings`.
+A second design decision is to separate provider-aware request formatting from local parsing and validation. Providers expose different conventions for structured output, embeddings, and response metadata, but LLMR aims to return objects that can be handled predictably inside R and then converted to ordinary vectors, lists, matrices, or data-frame columns. This matters for comparative research, where prompts, providers, and response formats often change repeatedly during the same project. A stable workflow layer lowers the cost of those changes and reduces the need to rewrite analysis code between experiments. The package therefore prioritizes cross-provider workflow stability over exposing every provider-specific feature through a bespoke interface.
 
-Using the future package [@bengtsson2021parallelly] all functions that needs to make more than one api call can be parallized and given the low local computational cost, except for locally run models, there is a considerable speed boost unless a rate-limit is hit from the provider side. 
+## Research Impact Statement
+LLMR is best characterized at present as having credible near-term significance rather than extensive realized impact. The package is available on CRAN, has public source code and documentation, includes vignettes covering chat workflows, structured output, experiments, and embeddings, and is accompanied by automated checks and a public issue tracker [@llmr_cran]. These are community-readiness signals rather than downstream citations, but they matter for a package whose main contribution is methodological infrastructure. LLMR lowers the cost of designing comparative studies across providers, prompts, and parameter settings while keeping those workflows in the R environment used for data preparation, modeling, and analysis. That makes the package potentially useful in computational social science, digital humanities, text analysis, teaching, and other research settings where the same project may combine generation, extraction, embeddings, and structured post-processing. Although the current evidence base is still early, the package is reviewable, reusable, and positioned for uptake by researchers who need reproducible large language model workflows in R.
 
-Structured output follows is implemented differently by different providers, and is presently better supported for Open AI and Anthropic models [@openai_structured, @anthropic_tools]. Gemini accepts response_mime_type for JSON and can take response_schema to constrain the shape [@gemini_structured]. The package also parses and validates JSON locally to keep behavior consistent across providers. Parallel execution uses , and caching during development uses memoise [@memoise]. Error handling applies retries with exponential backoff and records concise diagnostics.
+## AI usage disclosure
+Generative AI tools were used to assist with documentation and manuscript revision for this submission, including section drafting, copy-editing, and bibliography cleanup. In the development of the package, too, AI tools were used to speed up code writing, and to write help files.
 
-## Related work
-In R, single‑provider packages such as openai give direct access to one API [@openai_r]. Several packages target local models through Ollama [@ollamar_joss; @rollama_arxiv]. Others provide a tidy interface for chats across vendors [@tidyllm_cran; @tidychatmodels_rapp]. The Ellmer package provides (younger than LLMR) provides cross-platform support and now supports parallization and structured outputs, but lacks support for embeddings, and its design objective is not scientific experimentation. 
-
-These tools serve important use cases. LLMR's distinct focus is a unified research workflow inside R that treats model calls as data, supports parallel factorial designs and parameter sweeps, and offers provider‑aware structured output with local validation. Libraries in other languages, such as LangChain, give multi‑provider abstractions in Python and JavaScript, but they do not integrate with R's data analysis idiom [@langchain_python].
-
-## Quality control
-The package includes some unit tests for message normalization, structured parsing and validation, and parallel utilities. Continuous integration runs on Linux, macOS, and Windows. Examples that call external APIs are guarded by environment variables to avoid unintended network use during checks. LLMR is available on CRAN and passes routine CRAN checks for the current release.
-
-## Conclusion
-LLMR simplifies research with and research about large language models. It makes cross‑provider model studies simple inside R by turning model calls into data that can be analyze with standard tools. The package covers hosted and local models, supports structured output, and offers parallel execution with caching and retries, which helps researchers run careful comparisons at scale.
+All AI-assisted outputs were reviewed, edited, and validated by the author, who remained responsible for the package design, implementation, and final wording.
 
 ## Acknowledgements
 The author thanks the R community for feedback and contributions to the package development.
 
 ## References
+

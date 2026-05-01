@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/ali/Library/CloudStorage/Box-Box/Research/development/LLMR/**)",
+      "Bash(R CMD INSTALL .)",
+      "Bash(Rscript:*)"
+    ]
+  }
+}
