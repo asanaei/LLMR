@@ -22,6 +22,7 @@ embeddings.
 ## Installation
 
 ``` r
+
 install.packages("LLMR") # CRAN
 # Development:
 # remotes::install_github("asanaei/LLMR")
@@ -32,6 +33,7 @@ install.packages("LLMR") # CRAN
 ### Configure a model
 
 ``` r
+
 library(LLMR)
 
 cfg <- llm_config(
@@ -48,6 +50,7 @@ ANTHROPIC_API_KEY, GEMINI_API_KEY.
 ### One-shot generation
 
 ``` r
+
 r <- call_llm(
 config = cfg,
 messages = c(
@@ -65,6 +68,7 @@ is_truncated(r)
 ### Structured output (JSON with schema)
 
 ``` r
+
 schema <- list(
 type = "object",
 properties = list(
@@ -85,6 +89,7 @@ str(parsed)
 Or use higher-level helpers:
 
 ``` r
+
 words <- c("excellent","awful","fine")
 
 out <- llm_fn_structured(
@@ -100,6 +105,7 @@ out
 ### Embeddings
 
 ``` r
+
 sentences <- c(
 one="Quiet rivers mirror bright skies.",
 two="Thunder shakes the mountain path."
@@ -118,6 +124,7 @@ dim(emb)
 Batch embeddings:
 
 ``` r
+
 emb <- get_batched_embeddings(
 texts = sentences,
 embed_config = emb_cfg,
@@ -128,6 +135,7 @@ batch_size = 8
 ### Conversation with history
 
 ``` r
+
 chat <- chat_session(cfg, system = "You teach statistics tersely.")
 chat$send("Explain p-values in 12 words.")
 chat$send("Now give a three-word analogy.")
@@ -137,6 +145,7 @@ print(chat)
 ### Parallel runs
 
 ``` r
+
 setup_llm_parallel(workers = 4)
 
 experiments <- build_factorial_experiments(
@@ -162,7 +171,12 @@ reset_llm_parallel()
 - Robust retries: call_llm_robust() handles rate limits with exponential
   backoff.
 
-## Contributions
+## Contributions and support
 
-Issues and pull requests are welcome. Include a minimal reproducible
-exampleyy.
+Bug reports, feature requests, and support questions should be opened as
+GitHub issues. Please include a minimal reproducible example when
+relevant. Pull requests are welcome for focused improvements. See
+[CONTRIBUTING.md](https://asanaei.github.io/LLMR/CONTRIBUTING.md) for
+contribution, support, and reporting guidance. See
+[COPYING](https://asanaei.github.io/LLMR/COPYING) for the full MIT
+license text.

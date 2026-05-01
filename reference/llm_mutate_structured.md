@@ -105,5 +105,6 @@ Like
 [`llm_mutate()`](https://asanaei.github.io/LLMR/reference/llm_mutate.md),
 this function supports shorthand syntax:
 
+
     df |> llm_mutate_structured(result = "{text}", .schema = schema)
     df |> llm_mutate_structured(result = c(system = "Be brief.", user = "{text}"), .schema = schema)

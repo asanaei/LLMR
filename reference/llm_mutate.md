@@ -132,10 +132,12 @@ llm_mutate(
 
 You can supply the output column and prompt in one argument:
 
+
     df |> llm_mutate(answer = "{question} (hint: {hint})", .config = cfg)
     df |> llm_mutate(answer = c(system = "One word.", user = "{question}"), .config = cfg)
 
 This is equivalent to:
+
 
     df |> llm_mutate(answer, prompt = "{question} (hint: {hint})", .config = cfg)
     df |> llm_mutate(answer, .messages = c(system = "One word.", user = "{question}"), .config = cfg)

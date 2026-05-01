@@ -1,6 +1,7 @@
 # Tidy pipelines and structured output
 
 ``` r
+
 knitr::opts_chunk$set(
   collapse = TRUE, comment = "#>",
   eval = identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true")
@@ -15,6 +16,7 @@ You will need environment variables OPENAI_API_KEY, ANTHROPIC_API_KEY,
 GEMINI_API_KEY, GROQ_API_KEY.
 
 ``` r
+
 library(LLMR)
 library(dplyr)
 
@@ -27,6 +29,7 @@ cfg_groq   <- llm_config("groq",     "openai/gpt-oss-20b")
 ## llm_fn: unstructured (OpenAI)
 
 ``` r
+
 words <- c("excellent", "awful", "fine")
 out <- llm_fn(
   words,
@@ -40,6 +43,7 @@ out
 ## llm_fn: unstructured (Groq)
 
 ``` r
+
 out_groq <- llm_fn(
   words,
   prompt  = "Classify '{x}' as Positive, Negative, or Neutral.",
@@ -52,6 +56,7 @@ out_groq
 ## llm_fn_structured: schema-first (OpenAI)
 
 ``` r
+
 schema <- list(
   type = "object",
   properties = list(
@@ -75,6 +80,7 @@ out_s
 ## llm_mutate: unstructured (Anthropic)
 
 ``` r
+
 df <- tibble::tibble(
   id   = 1:3,
   text = c("Cats are great pets", "The weather is bad", "I like tea")
@@ -95,6 +101,7 @@ df_u
 The shorthand lets you combine output column and prompt in one argument:
 
 ``` r
+
 df |>
   llm_mutate(
     category = "Give a short category for: {text}",
@@ -106,6 +113,7 @@ df |>
 Or with multi-turn messages:
 
 ``` r
+
 df |>
   llm_mutate(
     classified = c(
@@ -123,6 +131,7 @@ You can now enable structured output directly in
 using `.structured = TRUE`:
 
 ``` r
+
 schema <- list(
   type = "object",
   properties = list(
@@ -149,6 +158,7 @@ and supports all the same shorthand syntax.
 ## llm_mutate_structured: structured with shorthand (Gemini)
 
 ``` r
+
 schema2 <- list(
   type = "object",
   properties = list(

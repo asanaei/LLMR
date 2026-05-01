@@ -1,6 +1,7 @@
 # Simple chat with LLMR
 
 ``` r
+
 knitr::opts_chunk$set(
   collapse = TRUE, comment = "#>",
   eval = identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true")
@@ -21,6 +22,7 @@ to ~/.Renviron
 ## OpenAI: gpt-5-nano
 
 ``` r
+
 library(LLMR)
 
 cfg_openai <- llm_config(
@@ -37,6 +39,7 @@ chat_oai$send("Now say it in Esperanto.")
 ## Anthropic: claude-sonnet-4-20250514
 
 ``` r
+
 cfg_anthropic <- llm_config(
   provider = "anthropic",
   model    = "claude-sonnet-4-20250514",
@@ -50,6 +53,7 @@ chat_claude$send("Name one interesting fact about honey bees.")
 ## Gemini: gemini-2.5-flash
 
 ``` r
+
 cfg_gemini <- llm_config(
   provider = "gemini",
   model    = "gemini-2.5-flash-lite",
@@ -63,6 +67,7 @@ chat_gem$send("Give me a single-sentence fun fact about volcanoes.")
 ## Groq: openai/gpt-oss-20b
 
 ``` r
+
 cfg_groq <- llm_config(
   provider = "groq",
   model    = "openai/gpt-oss-20b",
@@ -78,6 +83,7 @@ chat_groq$send("Share a short fun fact about octopuses.")
 Chat sessions remember context automatically:
 
 ``` r
+
 chat_oai$send("What did I ask you to do in my first message?")
 # The model can reference the earlier "Say a warm hello" request
 ```
@@ -85,6 +91,7 @@ chat_oai$send("What did I ask you to do in my first message?")
 ## Inspect the full conversation
 
 ``` r
+
 # View all messages
 as.data.frame(chat_oai)
 
@@ -95,6 +102,7 @@ summary(chat_oai)
 ## Structured chat in one call (OpenAI example)
 
 ``` r
+
 schema <- list(
   type = "object",
   properties = list(

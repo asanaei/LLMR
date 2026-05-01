@@ -1,6 +1,7 @@
 # Presidential Speech Analysis with Embeddings
 
 ``` r
+
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
@@ -16,6 +17,7 @@ during package installation, and you may need to change the model
 name.\*\*
 
 ``` r
+
 library(LLMR)
 ```
 
@@ -25,6 +27,7 @@ We’ll analyze excerpts from several U.S. presidential inaugural
 addresses:
 
 ``` r
+
 text_input <- c(
   Washington = "Among the vicissitudes incident to life no event could have filled me with greater anxieties than that of which the notification was transmitted by your order, and received on the 14th day of the present month. On the one hand, I was summoned by my Country, whose voice I can never hear but with veneration and love, from a retreat which I had chosen with the fondest predilection, and, in my flattering hopes, with an immutable decision, as the asylum of my declining years--a retreat which was rendered every day more necessary as well as more dear to me by the addition of habit to inclination, and of frequent interruptions in my health to the gradual waste committed on it by time. On the other hand, the magnitude and difficulty of the trust to which the voice of my country called me, being sufficient to awaken in the wisest and most experienced of her citizens a distrustful scrutiny into his qualifications, could not but overwhelm with despondence one who (inheriting inferior endowments from nature and unpracticed in the duties of civil administration) ought to be peculiarly conscious of his own deficiencies. In this conflict of emotions all I dare aver is that it has been my faithful study to collect my duty from a just appreciation of every circumstance by which it might be affected. All I dare hope is that if, in executing this task, I have been too much swayed by a grateful remembrance of former instances, or by an affectionate sensibility to this transcendent proof of the confidence of my fellow-citizens, and have thence too little consulted my incapacity as well as disinclination for the weighty and untried cares before me, my error will be palliated by the motives which mislead me, and its consequences be judged by my country with some share of the partiality in which they originated.",
   Adams = "When it was first perceived, in early times, that no middle course for America remained between unlimited submission to a foreign legislature and a total independence of its claims, men of reflection were less apprehensive of danger from the formidable power of fleets and armies they must determine to resist than from those contests and dissensions which would certainly arise concerning the forms of government to be instituted over the whole and over the parts of this extensive country. Relying, however, on the purity of their intentions, the justice of their cause, and the integrity and intelligence of the people, under an overruling Providence which had so signally protected this country from the first, the representatives of this nation, then consisting of little more than half its present number, not only broke to pieces the chains which were forging and the rod of iron that was lifted up, but frankly cut asunder the ties which had bound them, and launched into an ocean of uncertainty.",
@@ -40,6 +43,7 @@ text_input <- c(
 ## Configure Embedding Model
 
 ``` r
+
 embed_cfg <- llm_config(
   provider  = "gemini",
   model     = "embedding-001", # or "text-embedding-004",
@@ -51,6 +55,7 @@ embed_cfg <- llm_config(
 ## Generate Embeddings
 
 ``` r
+
 embeddings <- get_batched_embeddings(
   texts = text_input,
   embed_config = embed_cfg,
@@ -61,12 +66,14 @@ embeddings <- get_batched_embeddings(
 ## Analyze Similarity
 
 ``` r
+
 # Compute correlation matrix
 cors <- cor(t(embeddings))
 print(round(cors, 2))
 ```
 
 ``` r
+
 # Normalize embeddings for cosine similarity
 embd_normalized <- t(apply(embeddings, 1, 
                           function(x) x / sqrt(sum(x^2))))

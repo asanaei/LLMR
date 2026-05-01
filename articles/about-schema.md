@@ -1,6 +1,7 @@
 # Schema-validated output in LLMR
 
 ``` r
+
 knitr::opts_chunk$set(
   collapse = TRUE, comment = "#>",
   eval = identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true") )
@@ -93,12 +94,14 @@ All chunks use a tiny helper so your document **knits even without API
 keys**.
 
 ``` r
+
 safe <- function(expr) tryCatch(expr, error = function(e) {message("ERROR: ", e$message); NULL})
 ```
 
 ### 1) JSON mode, no schema (works across OpenAI-compatible providers)
 
 ``` r
+
 safe({
   library(LLMR)
   cfg <- llm_config(
@@ -131,6 +134,7 @@ Groq serves Qwen 2.5 Instruct models with OpenAI-compatible APIs. Their
 expects **all properties to be listed under `required`**.
 
 ``` r
+
 safe({
   library(LLMR); library(dplyr)
 
@@ -180,6 +184,7 @@ OpenAI’s.
 ### 3) Anthropic: force a schema via a tool (may require `max_tokens`)
 
 ``` r
+
 safe({
   library(LLMR)
   schema <- list(
@@ -210,6 +215,7 @@ safe({
 ### 4) Gemini: JSON response (plus optional response schema on supported models)
 
 ``` r
+
 safe({
   library(LLMR)
 
@@ -232,6 +238,7 @@ safe({
 ## Defensive patterns (no API calls)
 
 ``` r
+
 safe({
   library(LLMR); library(tibble)
 
@@ -261,6 +268,7 @@ For production ETL workflows, combine schema validation with
 parallelization:
 
 ``` r
+
 library(LLMR); library(dplyr)
 
 cfg_with_schema = llm_config('openai','gpt-4.1-nano')

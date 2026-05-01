@@ -1,6 +1,7 @@
 # Small experiment with LLMR
 
 ``` r
+
 knitr::opts_chunk$set(
   collapse = TRUE, comment = "#>",
   eval = identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true") )
@@ -24,6 +25,7 @@ time of writing this vignette, Gemini models are not guaranteeing the
 schema output and is more likely to run into trouble.
 
 ``` r
+
 library(LLMR)
 library(dplyr)
 cfg_openai <- llm_config("openai",   "gpt-5-nano")
@@ -34,6 +36,7 @@ cfg_gem    <- llm_config("groq",     "openai/gpt-oss-20b")
 ## Build a factorial design
 
 ``` r
+
 experiments <- build_factorial_experiments(
   configs       = list(cfg_openai, cfg_cld, cfg_gem),
   user_prompts  = c("Summarize in one sentence: The Apollo program.",
@@ -46,6 +49,7 @@ experiments
 ## Run unstructured
 
 ``` r
+
 setup_llm_parallel(workers = 10)
 res_unstructured <- call_llm_par(experiments, progress = TRUE)
 reset_llm_parallel()
@@ -68,6 +72,7 @@ produced each response.
 ## Structured version
 
 ``` r
+
 schema <- list(
   type = "object",
   properties = list(
