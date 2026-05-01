@@ -149,6 +149,6 @@ reset_llm_parallel()
 - Embeddings: call_llm() returns a provider-native list; parse_embeddings() converts it to a numeric matrix.
 - Robust retries: call_llm_robust() handles rate limits with exponential backoff.
 
-## Contributions
+## Contributions and support
 
-Issues and pull requests are welcome. Include a minimal reproducible exampleyy.
+Bug reports, feature requests, and support questions should be opened as GitHub issues. Please include a minimal reproducible example when relevant. Pull requests are welcome for focused improvements. See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution, support, and reporting guidance. See [COPYING](COPYING) for the full MIT license text.
