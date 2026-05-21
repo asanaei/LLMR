@@ -1,3 +1,21 @@
+# LLMR 0.6.4
+
+## New Features
+
+- Added soft structured tag output via `llm_mutate_tags()` and `.tags` in `llm_mutate()`.
+- Added opt-in Gemini Vertex AI support through `provider = "gemini", vertex = TRUE`.
+
+## Bug Fixes
+
+- Fixed live tests to use public `llm_config(api_key = "OPENAI_API_KEY")` behavior.
+- Removed an unused internal request-body assignment that triggered a lint warning.
+- Updated examples to use current, inexpensive model identifiers and avoid custom temperature where models may reject it.
+
+## Package Hygiene
+
+- Excluded local Cursor files and built vignette HTML from source builds.
+- Improved package help, README, and vignettes for `llm_mutate()` shorthand, tag extraction, robust calls, and helper selection.
+
 # LLMR 0.6.3
 
 ## Improvements

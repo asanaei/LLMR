@@ -12,14 +12,17 @@ vignette: >
 ```{r}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>",
-  eval = identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true")
+  comment = "#>"
 )
+is_package_check <- nzchar(Sys.getenv("_R_CHECK_PACKAGE_NAME_")) ||
+  nzchar(Sys.getenv("_R_CHECK_CRAN_INCOMING_"))
+run_llmr_vignette <- identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true") &&
+  !is_package_check
 ```
 
 This vignette demonstrates how to use LLMR for embedding analysis of presidential inaugural speeches.
 
-**Note:** This vignette requires a valid Gemini API key and will not run during package installation, and you may need to change the model name.**
+**Note:** This vignette requires a valid Gemini API key and never runs live API calls during package checks. To run it locally, set `LLMR_RUN_VIGNETTES=true` before rendering.**
 
 ```{r setup}
 library(LLMR)
@@ -38,7 +41,7 @@ text_input <- c(
   Bush = "The peaceful transfer of authority is rare in history, yet common in our country. With a simple oath, we affirm old traditions and make new beginnings. As I begin, I thank President Clinton for his service to our Nation, and I thank Vice President Gore for a contest conducted with spirit and ended with grace. I am honored and humbled to stand here where so many of America's leaders have come before me, and so many will follow. We have a place, all of us, in a long story, a story we continue but whose end we will not see. It is a story of a new world that became a friend and liberator of the old, the story of a slaveholding society that became a servant of freedom, the story of a power that went into the world to protect but not possess, to defend but not to conquer.",
   Obama = "My fellow citizens, I stand here today humbled by the task before us, grateful for the trust you have bestowed, mindful of the sacrifices borne by our ancestors. I thank President Bush for his service to our Nation, as well as the generosity and cooperation he has shown throughout this transition. Forty-four Americans have now taken the Presidential oath. The words have been spoken during rising tides of prosperity and the still waters of peace. Yet every so often, the oath is taken amidst gathering clouds and raging storms. At these moments, America has carried on not simply because of the skill or vision of those in high office, but because we the people have remained faithful to the ideals of our forebears and true to our founding documents.",
   Trump = "We, the citizens of America, are now joined in a great national effort to rebuild our country and restore its promise for all of our people. Together, we will determine the course of America and the world for many, many years to come. We will face challenges, we will confront hardships, but we will get the job done. Every 4 years, we gather on these steps to carry out the orderly and peaceful transfer of power, and we are grateful to President Obama and First Lady Michelle Obama for their gracious aid throughout this transition. They have been magnificent. Thank you.",
-  Biden = "This is America's day. This is democracy's day, a day of history and hope, of renewal and resolve. Through a crucible for the ages America has been tested anew, and America has risen to the challenge. Today we celebrate the triumph not of a candidate, but of a cause, the cause of democracy. The people—the will of the people has been heard, and the will of the people has been heeded. We've learned again that democracy is precious, democracy is fragile. And at this hour, my friends, democracy has prevailed."
+  Biden = "This is America's day. This is democracy's day, a day of history and hope, of renewal and resolve. Through a crucible for the ages America has been tested anew, and America has risen to the challenge. Today we celebrate the triumph not of a candidate, but of a cause, the cause of democracy. The people, the will of the people has been heard, and the will of the people has been heeded. We've learned again that democracy is precious, democracy is fragile. And at this hour, my friends, democracy has prevailed."
 )
 ```
 
@@ -47,7 +50,7 @@ text_input <- c(
 ```{r config}
 embed_cfg <- llm_config(
   provider  = "gemini",
-  model     = "embedding-001", # or "text-embedding-004",
+  model     = "gemini-embedding-001",
   task_type = "CLASSIFICATION",
   embedding = TRUE
 )
@@ -56,38 +59,51 @@ embed_cfg <- llm_config(
 ## Generate Embeddings
 
 ```{r embeddings}
-embeddings <- get_batched_embeddings(
-  texts = text_input,
-  embed_config = embed_cfg,
-  batch_size = 5 
-)
+if (run_llmr_vignette) {
+  embeddings <- get_batched_embeddings(
+    texts = text_input,
+    embed_config = embed_cfg,
+    batch_size = 5
+  )
+} else {
+  embeddings <- NULL
+  message("Set LLMR_RUN_VIGNETTES=true to generate live Gemini embeddings.")
+}
 ```
 
 ## Analyze Similarity
 
 ```{r analysis}
-# Compute correlation matrix
-cors <- cor(t(embeddings))
-print(round(cors, 2))
+if (run_llmr_vignette) {
+  # Compute correlation matrix
+  cors <- cor(t(embeddings))
+  print(round(cors, 2))
+} else {
+  message("Set LLMR_RUN_VIGNETTES=true to compute live embedding similarities.")
+}
 ```
 
 ```{r clustering}
-# Normalize embeddings for cosine similarity
-embd_normalized <- t(apply(embeddings, 1, 
-                          function(x) x / sqrt(sum(x^2))))
+if (run_llmr_vignette) {
+  # Normalize embeddings for cosine similarity
+  embd_normalized <- t(apply(embeddings, 1,
+                            function(x) x / sqrt(sum(x^2))))
 
-# Compute cosine similarity matrix
-sim_matrix <- embd_normalized %*% t(embd_normalized)
+  # Compute cosine similarity matrix
+  sim_matrix <- embd_normalized %*% t(embd_normalized)
 
-# Convert similarity to distance
-dist_matrix <- 1 - sim_matrix
+  # Convert similarity to distance
+  dist_matrix <- 1 - sim_matrix
 
-# Convert to a distance object
-dist_object <- as.dist(dist_matrix)
+  # Convert to a distance object
+  dist_object <- as.dist(dist_matrix)
 
-# Perform hierarchical clustering
-hc <- hclust(dist_object, method = "ward.D2")
-plot(hc, main = "Clustering of Presidential Inaugural Speeches\n(only beginning the paragraphs)")
+  # Perform hierarchical clustering
+  hc <- hclust(dist_object, method = "ward.D2")
+  plot(hc, main = "Clustering of Presidential Inaugural Speeches\n(only beginning the paragraphs)")
+} else {
+  message("Set LLMR_RUN_VIGNETTES=true to run live embedding clustering.")
+}
 ```
 
 ## Expected Results
@@ -99,4 +115,4 @@ When run with a valid API key, this analysis would:
 3. Create a dendrogram clustering presidents by linguistic similarity
 4. Reveal historical and stylistic patterns in presidential rhetoric
 
-**To run this vignette yourself:** Set your Gemini API key with `Sys.setenv(GEMINI_API_KEY = "your_key_here")` before running the code chunks.
+**To run this vignette yourself:** Set your Gemini API key in your environment and set `LLMR_RUN_VIGNETTES=true` before rendering the vignette.

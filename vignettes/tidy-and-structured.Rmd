@@ -16,8 +16,8 @@ knitr::opts_chunk$set(
 
 We will show both unstructured and structured pipelines, using four model names:
 - gpt-5-nano (OpenAI)
-- claude-sonnet-4-20250514 (Anthropic)
-- gemini-2.5-flash (Gemini)
+- claude-sonnet-4-6 (Anthropic)
+- gemini-2.5-flash-lite (Gemini)
 - openai/gpt-oss-20b (Groq)
 
 You will need environment variables OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, GROQ_API_KEY.
@@ -27,8 +27,8 @@ library(LLMR)
 library(dplyr)
 
 cfg_openai <- llm_config("openai",   "gpt-5-nano")
-cfg_cld    <- llm_config("anthropic","claude-sonnet-4-20250514", max_tokens = 512)  # avoid warnings; Anthropic requires max_tokens
-cfg_gemini <- llm_config("gemini",   "gemini-2.5-flash")
+cfg_cld    <- llm_config("anthropic","claude-sonnet-4-6", max_tokens = 512)  # avoid warnings; Anthropic requires max_tokens
+cfg_gemini <- llm_config("gemini",   "gemini-2.5-flash-lite")
 cfg_groq   <- llm_config("groq",     "openai/gpt-oss-20b")
 ```
 
@@ -145,6 +145,29 @@ df |>
 ```
 
 This is equivalent to calling `llm_mutate_structured()` and supports all the same shorthand syntax.
+
+## Soft structured output with tags
+
+When a strict JSON schema is unnecessary, request simple XML-like tags and let
+LLMR parse them into columns. Tags should not be nested.
+
+```{r}
+cities <- tibble::tibble(city = c("Cairo", "Lima", "Seoul"))
+
+cities |>
+  llm_mutate(
+    geo = "Where is {city}? Give country and continent in their own tags.",
+    .config = cfg_groq,
+    .system_prompt = paste(
+      "Use XML tags to specify different parts of the answer, but do not nest tags.",
+      "Return <country>...</country> and <continent>...</continent>."
+    ),
+    .tags = c("country", "continent")
+  )
+```
+
+The result includes `tags_ok`, `tags_data`, and one column per requested tag.
+Use `llm_parse_tags_col()` to parse an existing response column.
 
 ## llm_mutate_structured: structured with shorthand (Gemini)
 ```{r}

@@ -79,7 +79,7 @@
 #'
 #' @examples
 #' if (interactive()) {
-#'   cfg  <- llm_config("openai", "gpt-4o-mini")
+#'   cfg  <- llm_config("openai", "gpt-5-nano")
 #'   chat <- chat_session(cfg, system = "Be concise.")
 #'   chat$send("Who invented the moon?")
 #'   chat$send("Explain why in one short sentence.")

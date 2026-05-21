@@ -29,7 +29,7 @@ cfg_openai <- llm_config(
 
 cfg_anthropic <- llm_config(
   provider = "anthropic",
-  model    = "claude-sonnet-4-20250514",
+  model    = "claude-sonnet-4-6",
   max_tokens = 512,
   temperature = 1
 )
@@ -37,7 +37,7 @@ cfg_anthropic <- llm_config(
 
 cfg_gemini <- llm_config(
   provider = "gemini",
-  model    = "gemini-2.5-flash",
+  model    = "gemini-2.5-flash-lite",
   temperature = 1
 )
 

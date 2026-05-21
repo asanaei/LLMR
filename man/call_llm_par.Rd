@@ -62,16 +62,17 @@ The \code{response} column holds \code{llmr_response} objects on success, or \co
 \description{
 Processes experiments from a tibble where each row contains a config and message pair.
 This is the core parallel processing function. Metadata columns are preserved.
-This function requires setting up the parallel environment using \code{setup_llm_parallel}.
+Use \code{\link[=setup_llm_parallel]{setup_llm_parallel()}} when you want explicit control over workers.
 }
 \section{Parallel Workflow}{
 
-All parallel functions require the \code{future} backend to be configured.
-The recommended workflow is:
+Recommended workflow:
 \enumerate{
 \item Call \code{setup_llm_parallel()} once at the start of your script.
 \item Run one or more parallel experiments (e.g., \code{call_llm_broadcast()}).
 \item Call \code{reset_llm_parallel()} at the end to restore sequential processing.
+If the active future plan is sequential, this function temporarily switches
+to \code{multisession} for the duration of the call.
 }
 }
 
@@ -79,10 +80,10 @@ The recommended workflow is:
 \dontrun{
 # Simple example: Compare two models on one prompt
 cfg1 <- llm_config("openai", "gpt-4.1-nano")
-cfg2 <- llm_config("groq", "llama-3.3-70b-versatile")
+cfg2 <- llm_config("groq", "openai/gpt-oss-20b")
 
 experiments <- tibble::tibble(
-  model_id = c("gpt-4.1-nano", "groq-llama-3.3"),
+  model_id = c("gpt-4.1-nano", "groq-gpt-oss-20b"),
   config = list(cfg1, cfg2),
   messages = "Count the number of the letter e in this word: Freundschaftsbeziehungen "
 )

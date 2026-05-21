@@ -1,5 +1,5 @@
 ---
-title: "LLMR Demo (version 0.6.3)"
+title: "LLMR Demo (version 0.6.4)"
 format:
   pdf:
     fontsize: 10pt
@@ -113,6 +113,23 @@ raw_json_response <- attr(resp, "raw_json")
 cat(substr(raw_json_response, 1, 400), "...\n", sep = "")
 ```
 
+## 1.3) Robust single calls
+
+Use `call_llm_robust()` when transient rate limits or server errors are
+plausible. Parallel helpers use the same robust path internally.
+
+```{r}
+#| label: robust-call
+robust_resp <- call_llm_robust(
+  config = cfg_openai,
+  messages = "Say hello in one short sentence.",
+  tries = 3,
+  wait_seconds = 2
+)
+
+as.character(robust_resp)
+```
+
 # 2) Stateful chat
 
 `chat_session()` keeps history and token totals. Each `$send()` round‑trips the full history.
@@ -121,7 +138,7 @@ cat(substr(raw_json_response, 1, 400), "...\n", sep = "")
 #| label: chat
 cfg_groq <- llm_config(
   provider = "groq",
-  model    = "llama-3.3-70b-versatile",
+  model    = "openai/gpt-oss-20b",
   api_key  = "GROQ_API_KEY"
 )
 
@@ -275,8 +292,7 @@ simpler schemas that does not specify maximum and minimum values.
 cfg_together <- 
 llm_config(
   provider = "together",
-  model="Qwen/Qwen3-235B-A22B-Instruct-2507-tput", #"openai/gpt-oss-20b"
-  reasoning_effort="medium"
+  model = "LiquidAI/LFM2-24B-A2B"
 )
 
 df_s <- df |>
@@ -316,6 +332,31 @@ df_s$the_annotation_rec
 names(df_s)
 ```
 
+## 4.3) Soft structured output with tags
+
+Use tag mode when a small set of fields is enough and strict JSON schema is
+unnecessary. Tags should not be nested.
+
+```{r}
+#| label: tag-mutate
+cities <- tibble::tibble(city = c("Cairo", "Lima", "Seoul"))
+
+tagged <- cities |>
+  llm_mutate(
+    geo = "Where is {city}? Give country and continent in their own tags.",
+    .config = cfg_det,
+    .system_prompt = paste(
+      "Use XML tags to specify different parts of the answer, but do not nest tags.",
+      "Return <country>...</country> and <continent>...</continent>."
+    ),
+    .tags = c("country", "continent")
+  )
+
+tagged |>
+  select(city, tags_ok, country, continent) |>
+  kable()
+```
+
 
 
 # 5) Parallel experiments
@@ -326,14 +367,14 @@ Design factorial experiments with `build_factorial_experiments()`. Run them in p
 #| label: parallel-setup
 cfg_anthropic <- llm_config(
   provider    = "anthropic",
-  model       = "claude-3-5-haiku-latest",
+  model       = "claude-sonnet-4-6",
   max_tokens  = 512,          # Anthropic requires max_tokens
   temperature = 0.2
 )
 
 cfg_gemini <- llm_config(
   provider    = "gemini",
-  model       = "gemini-2.5-flash",
+  model       = "gemini-2.5-flash-lite",
   temperature = 0
 )
 
@@ -405,7 +446,7 @@ cfg_openai2 <- llm_config(
 
 cfg_groq2 <- llm_config(
   provider    = "groq",
-  model       = "llama-3.1-8b-instant",
+  model       = "openai/gpt-oss-20b",
   temperature = 1,
   max_tokens  = 300
 )
@@ -497,6 +538,19 @@ parsed <- tibble(response_text = txts) |>
 parsed
 ```
 
+The same idea works for text that uses XML-like tags.
+
+```{r}
+#| label: parse-tags
+tag_txts <- c(
+  "<country>Egypt</country><continent>Africa</continent>",
+  "Answer: <country>Peru</country><continent>South America</continent>"
+)
+
+tibble(response_text = tag_txts) |>
+  llm_parse_tags_col(tags = c("country", "continent"))
+```
+
 # 7) Embeddings
 
 LLMR supports embedding models through the same `llm_config` and `call_llm`
@@ -571,7 +625,7 @@ The same API for several providers.
 #| label: emb-providers
 embed_cfg_gemini <- llm_config(
   provider  = "gemini",
-  model     = "text-embedding-004",
+  model     = "gemini-embedding-001",
   embedding = TRUE
 )
 

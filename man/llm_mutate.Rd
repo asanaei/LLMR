@@ -17,6 +17,7 @@ llm_mutate(
   .structured = FALSE,
   .schema = NULL,
   .fields = NULL,
+  .tags = NULL,
   ...
 )
 }
@@ -24,7 +25,9 @@ llm_mutate(
 \item{.data}{A data.frame / tibble.}
 
 \item{output}{Unquoted name that becomes \strong{the new column} (generative) \emph{or}
-\strong{the prefix} for embedding columns.}
+\strong{the prefix} for embedding columns. In shorthand form, omit this argument
+and pass \code{newcol = "<glue prompt>"} or
+\code{newcol = c(system = "...", user = "...")} through \code{...}.}
 
 \item{prompt}{Optional glue template string for a single user turn; reference
 any columns in \code{.data} (e.g. \code{"{id}. {question}\\nContext: {context}"}).
@@ -49,17 +52,23 @@ diagnostic columns; \code{"text"} adds a single text column; \code{"object"} add
 list-column of \code{llmr_response} objects.}
 
 \item{.structured}{Logical. If \code{TRUE}, enables structured JSON output with automatic
-parsing. Requires \code{.schema} to be provided. When enabled, this is equivalent to
-calling \code{\link[=llm_mutate_structured]{llm_mutate_structured()}}. Default is \code{FALSE}.}
+parsing. When enabled, this is equivalent to calling \code{\link[=llm_mutate_structured]{llm_mutate_structured()}}.
+Default is \code{FALSE}.}
 
 \item{.schema}{Optional JSON Schema (R list). When \code{.structured = TRUE}, this schema
 is sent to the provider for validation and used for local parsing. When \code{NULL},
 only JSON mode is enabled (no strict schema validation).}
 
-\item{.fields}{Optional character vector of fields to extract from parsed JSON.
-Supports nested paths (e.g., \code{"user.name"} or \code{"/data/items/0"}). When \code{NULL}
-and \code{.schema} is provided, auto-extracts all top-level schema properties.
-Set to \code{FALSE} to skip field extraction entirely.}
+\item{.fields}{Optional character vector of fields to extract from parsed JSON
+or tag output. In JSON mode, supports nested paths (e.g., \code{"user.name"} or
+\code{"/data/items/0"}). When \code{NULL} and \code{.schema} is provided, auto-extracts all
+top-level schema properties. In tag mode, \code{NULL} extracts all \code{.tags}. Set
+to \code{FALSE} to skip field extraction entirely.}
+
+\item{.tags}{Optional character vector of XML-like tag names to request and parse,
+such as \code{c("age", "job")}. When supplied, \code{\link[=llm_mutate]{llm_mutate()}} delegates to
+\code{\link[=llm_mutate_tags]{llm_mutate_tags()}} and adds \code{tags_ok}, \code{tags_data}, and one column per tag
+unless \code{.fields = FALSE}.}
 
 \item{...}{Passed to the underlying calls: \code{\link[=call_llm_broadcast]{call_llm_broadcast()}} in
 generative mode, \code{\link[=get_batched_embeddings]{get_batched_embeddings()}} in embedding mode.}
@@ -75,8 +84,11 @@ Adds one or more columns to \code{.data} that are produced by a Large-Language-M
 \item \strong{Multi-column injection:} templating is NA-safe (\code{NA} -> empty string).
 \item \strong{Multi-turn templating:} supply \code{.messages = c(system=..., user=..., file=...)}.
 Duplicate role names are allowed (e.g., two \code{user} turns).
-\item \strong{Generative mode:} one request per row via \code{\link[=call_llm_broadcast]{call_llm_broadcast()}}. Parallel
-execution follows the active \strong{future} plan; see \code{\link[=setup_llm_parallel]{setup_llm_parallel()}}.
+\item \strong{Generative mode:} one request per row via \code{\link[=call_llm_broadcast]{call_llm_broadcast()}}.
+\item \strong{Parallelism:} calls \code{\link[=call_llm_broadcast]{call_llm_broadcast()}}, which uses
+\code{\link[=call_llm_robust]{call_llm_robust()}} under the hood. If no future plan is active,
+workers are auto-configured; call \code{\link[=setup_llm_parallel]{setup_llm_parallel()}} to set worker
+count explicitly.
 \item \strong{Embedding mode:} the per-row text is embedded via \code{\link[=get_batched_embeddings]{get_batched_embeddings()}}.
 Result expands to numeric columns named \verb{paste0(<output>, 1:N)}. If all rows
 fail to embed, a single \verb{<output>1} column of \code{NA} is returned.
@@ -90,12 +102,22 @@ You can supply the output column and prompt in one argument:
 \preformatted{
 df |> llm_mutate(answer = "{question} (hint: {hint})", .config = cfg)
 df |> llm_mutate(answer = c(system = "One word.", user = "{question}"), .config = cfg)
+df |> llm_mutate(country = "Where is {city}? Answer with only the country.", .config = cfg)
 }
 
 This is equivalent to:
 \preformatted{
 df |> llm_mutate(answer, prompt = "{question} (hint: {hint})", .config = cfg)
 df |> llm_mutate(answer, .messages = c(system = "One word.", user = "{question}"), .config = cfg)
+}
+}
+
+\section{Structured modes}{
+
+\itemize{
+\item \code{.structured = TRUE} delegates to \code{\link[=llm_mutate_structured]{llm_mutate_structured()}} for JSON.
+\item \code{.tags} delegates to \code{\link[=llm_mutate_tags]{llm_mutate_tags()}} for XML-like tags.
+If both are supplied, \code{.structured} takes precedence.
 }
 }
 
@@ -109,7 +131,7 @@ df <- tibble::tibble(
   hint     = c("European city", "English novelist")
 )
 
-cfg <- llm_config("openai", "gpt-4o-mini",
+cfg <- llm_config("openai", "gpt-4.1-nano",
                   temperature = 0)
 
 # Generative: single-turn with multi-column injection
@@ -182,5 +204,30 @@ df |>
     .structured = TRUE,
     .schema = schema
   )
+
+# Soft structured output with XML-like tags
+df |>
+  llm_mutate(
+    result = "Extract the person's age and job from: {question}",
+    .config = cfg,
+    .tags = c("age", "job")
+  )
+
+cities <- tibble::tibble(city = c("Cairo", "Lima"))
+cities |>
+  llm_mutate(
+    geo = "Where is {city}? Give country and continent in their own tags.",
+    .config = cfg,
+    .system_prompt = paste(
+      "Use XML tags for different parts of the answer, but do not nest tags.",
+      "Return <country>...</country> and <continent>...</continent>."
+    ),
+    .tags = c("country", "continent")
+  )
 }
+}
+\seealso{
+\code{\link[=llm_fn]{llm_fn()}}, \code{\link[=llm_mutate_structured]{llm_mutate_structured()}}, \code{\link[=llm_mutate_tags]{llm_mutate_tags()}},
+\code{\link[=llm_parse_structured_col]{llm_parse_structured_col()}}, \code{\link[=llm_parse_tags_col]{llm_parse_tags_col()}},
+\code{\link[=call_llm_broadcast]{call_llm_broadcast()}}, \code{\link[=setup_llm_parallel]{setup_llm_parallel()}}
 }

@@ -10,7 +10,7 @@ test_that("call_llm works with OpenAI API", {
   config <- llm_config(
     provider = "openai",
     model = "gpt-4.1-nano",
-    api_key = llm_api_key_env("OPENAI_API_KEY"),
+    api_key = "OPENAI_API_KEY",
     temperature = 1,
     max_tokens = 1024,
 #    top_p = 1,

@@ -13,3 +13,6 @@ disable_structured_output(config)
 Removes response_format/response_schema/response_mime_type and schema tool if present.
 Keeps user tools intact.
 }
+\seealso{
+\code{\link[=enable_structured_output]{enable_structured_output()}}
+}

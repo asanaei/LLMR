@@ -18,3 +18,7 @@ call_llm_par_structured(experiments, schema = NULL, .fields = NULL, ...)
 \description{
 Enables structured output on each config (if not already set), runs, then parses JSON.
 }
+\seealso{
+\code{\link[=call_llm_par]{call_llm_par()}}, \code{\link[=llm_parse_structured_col]{llm_parse_structured_col()}},
+\code{\link[=enable_structured_output]{enable_structured_output()}}
+}

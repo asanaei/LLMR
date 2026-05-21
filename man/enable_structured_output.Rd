@@ -33,3 +33,14 @@ Modified \code{llm_config}.
 Turn on structured output for a model configuration. Supports OpenAI‑compatible
 providers (OpenAI, Groq, Together, x.ai, DeepSeek), Anthropic, and Gemini.
 }
+\section{When to use tags instead}{
+
+For tasks where strict JSON schema is unnecessary or unsupported, consider
+\code{\link[=llm_mutate]{llm_mutate()}} with \code{.tags} or \code{\link[=llm_mutate_tags]{llm_mutate_tags()}} for soft structured output.
+}
+
+\seealso{
+\code{\link[=disable_structured_output]{disable_structured_output()}}, \code{\link[=llm_parse_structured]{llm_parse_structured()}},
+\code{\link[=llm_parse_structured_col]{llm_parse_structured_col()}}, \code{\link[=llm_mutate_structured]{llm_mutate_structured()}},
+\code{\link[=llm_mutate_tags]{llm_mutate_tags()}}
+}

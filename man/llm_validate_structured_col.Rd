@@ -21,3 +21,6 @@ llm_validate_structured_col(
 Adds \code{structured_valid} (logical) and \code{structured_error} (chr) by validating
 each row's \code{structured_data} against \code{schema}. No provider calls are made.
 }
+\seealso{
+\code{\link[=llm_parse_structured_col]{llm_parse_structured_col()}}, \code{\link[=llm_fn_structured]{llm_fn_structured()}}
+}

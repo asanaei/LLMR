@@ -26,3 +26,11 @@ The return contract is list-or-NULL; scalar-only JSON is treated as failure.
 
 Numerics are coerced to double for stability.
 }
+\examples{
+llm_parse_structured('{"score": 5, "label": "good"}')
+
+}
+\seealso{
+\code{\link[=llm_parse_structured_col]{llm_parse_structured_col()}}, \code{\link[=llm_fn_structured]{llm_fn_structured()}},
+\code{\link[=llm_mutate_structured]{llm_mutate_structured()}}, \code{\link[=llm_parse_tags]{llm_parse_tags()}}
+}

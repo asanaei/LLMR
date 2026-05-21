@@ -25,7 +25,7 @@ Converts the embedding response data to a numeric matrix.
   # Configure the embedding API provider (example with Voyage API)
   voyage_config <- llm_config(
     provider = "voyage",
-    model = "voyage-large-2",
+    model = "voyage-3.5-lite",
     api_key = Sys.getenv("VOYAGE_API_KEY")
   )
 

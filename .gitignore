@@ -9,3 +9,6 @@
 inst/doc
 docs
 joss_temp
+*.Rcheck
+*.tar.gz
+CRAN-SUBMISSION

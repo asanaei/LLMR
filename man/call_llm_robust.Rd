@@ -41,7 +41,7 @@ not need fresh results each time.
 \examples{
 \dontrun{
 robust_resp <- call_llm_robust(
-config = llm_config("openai","gpt-4o-mini"),
+config = llm_config("openai", "gpt-5-nano"),
 messages = list(list(role = "user", content = "Hello, LLM!")),
 tries = 5,
 wait_seconds = 10,

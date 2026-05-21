@@ -22,7 +22,9 @@ llm_mutate_structured(
 \item{.data}{A data.frame / tibble.}
 
 \item{output}{Unquoted name that becomes \strong{the new column} (generative) \emph{or}
-\strong{the prefix} for embedding columns.}
+\strong{the prefix} for embedding columns. In shorthand form, omit this argument
+and pass \code{newcol = "<glue prompt>"} or
+\code{newcol = c(system = "...", user = "...")} through \code{...}.}
 
 \item{prompt}{Optional glue template string for a single user turn; reference
 any columns in \code{.data} (e.g. \code{"{id}. {question}\\nContext: {context}"}).
@@ -72,3 +74,7 @@ df |> llm_mutate_structured(result = c(system = "Be brief.", user = "{text}"), .
 }
 }
 
+\seealso{
+\code{\link[=llm_mutate]{llm_mutate()}}, \code{\link[=llm_fn_structured]{llm_fn_structured()}}, \code{\link[=enable_structured_output]{enable_structured_output()}},
+\code{\link[=llm_parse_structured_col]{llm_parse_structured_col()}}, \code{\link[=llm_mutate_tags]{llm_mutate_tags()}}
+}

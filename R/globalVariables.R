@@ -8,7 +8,8 @@ utils::globalVariables(
     "user_prompt_label", "system_prompt_label",
     ":=",
     "structured_ok", "structured_data",
-    "structured_valid", "structured_error")
+    "structured_valid", "structured_error",
+    "tags_ok", "tags_data")
 )
 #' @importFrom utils head tail modifyList
 #' @importFrom vctrs vec_ptype_common vec_cast vec_c

@@ -29,14 +29,14 @@ We will compare three configurations on two prompts, once unstructured and once 
 library(LLMR)
 library(dplyr)
 cfg_openai <- llm_config("openai",   "gpt-5-nano")
-cfg_cld    <- llm_config("anthropic","claude-sonnet-4-20250514", max_tokens = 512)
-cfg_gem    <- llm_config("groq",     "openai/gpt-oss-20b")
+cfg_cld    <- llm_config("anthropic","claude-sonnet-4-6", max_tokens = 512)
+cfg_groq   <- llm_config("groq",     "openai/gpt-oss-20b")
 ```
 
 ## Build a factorial design
 ```{r}
 experiments <- build_factorial_experiments(
-  configs       = list(cfg_openai, cfg_cld, cfg_gem),
+  configs       = list(cfg_openai, cfg_cld, cfg_groq),
   user_prompts  = c("Summarize in one sentence: The Apollo program.",
                     "List two benefits of green tea."),
   system_prompts = c("Be concise.")

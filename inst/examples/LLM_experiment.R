@@ -7,11 +7,11 @@ library(stringr)
 library(ggplot2)
 
 
-# 1) Configs (use the Groq model that worked for you before)
+# 1) Configs
 configurations <- list(
   llm_config("openai", "gpt-4.1-nano",
              max_tokens = 16, temperature = 1),
-  llm_config("groq",   "llama-3.1-8b-instant",
+  llm_config("groq",   "openai/gpt-oss-20b",
              max_tokens = 16, temperature = 1)
 )
 

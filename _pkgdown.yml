@@ -33,7 +33,6 @@ reference:
   contents:
   - llm_config
   - call_llm
-  - call_llm_robust
   - llmr_response
   - finish_reason
   - tokens
@@ -45,9 +44,12 @@ reference:
   - disable_structured_output
   - llm_parse_structured
   - llm_parse_structured_col
+  - llm_parse_tags
+  - llm_parse_tags_col
   - llm_validate_structured_col
   - llm_fn_structured
   - llm_mutate_structured
+  - llm_mutate_tags
   - call_llm_par_structured
 - title: Tidy helpers and parallel
   contents:
@@ -64,6 +66,11 @@ reference:
   contents:
   - parse_embeddings
   - get_batched_embeddings
+- title: Reliability
+  contents:
+  - call_llm_robust
+  - cache_llm_call
+  - log_llm_error
 - title: Utilities
   contents:
   - bind_tools

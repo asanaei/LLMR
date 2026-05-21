@@ -44,6 +44,14 @@
 #'   per provider. You rarely need to change this.
 #' @param strict Logical. Request strict validation when supported (OpenAI-compatible).
 #' @return Modified `llm_config`.
+#'
+#' @section When to use tags instead:
+#' For tasks where strict JSON schema is unnecessary or unsupported, consider
+#' [llm_mutate()] with `.tags` or [llm_mutate_tags()] for soft structured output.
+#'
+#' @seealso [disable_structured_output()], [llm_parse_structured()],
+#'   [llm_parse_structured_col()], [llm_mutate_structured()],
+#'   [llm_mutate_tags()]
 #' @export
 enable_structured_output <- function(config,
                               schema = NULL,
@@ -102,6 +110,7 @@ enable_structured_output <- function(config,
 #' Removes response_format/response_schema/response_mime_type and schema tool if present.
 #' Keeps user tools intact.
 #' @param config llm_config
+#' @seealso [enable_structured_output()]
 #' @export
 disable_structured_output <- function(config) {
   stopifnot(inherits(config, "llm_config"))
@@ -198,6 +207,12 @@ disable_structured_output <- function(config) {
 #' @param strict_only If TRUE, do not attempt recovery via substring extraction.
 #' @param simplify Logical passed to jsonlite::fromJSON (`simplifyVector = FALSE` when FALSE).
 #' @return A parsed R object (list), or NULL on failure.
+#'
+#' @examples
+#' llm_parse_structured('{"score": 5, "label": "good"}')
+#'
+#' @seealso [llm_parse_structured_col()], [llm_fn_structured()],
+#'   [llm_mutate_structured()], [llm_parse_tags()]
 #' @export
 llm_parse_structured <- function(x, strict_only = FALSE, simplify = FALSE) {
   if (inherits(x, "llmr_response")) x <- x$text %||% ""
@@ -288,6 +303,13 @@ llm_parse_structured <- function(x, strict_only = FALSE, simplify = FALSE) {
 #'   are hoisted as list-columns instead of being dropped. If FALSE, only scalar
 #'   fields are hoisted and non-scalars become NA.
 #' @return `.data` with diagnostics and one new column per requested field.
+#'
+#' @examples
+#' df <- data.frame(response_text = '{"score": 5, "label": "good"}')
+#' llm_parse_structured_col(df, fields = c("score", "label"))
+#'
+#' @seealso [llm_parse_structured()], [llm_mutate_structured()],
+#'   [llm_parse_tags_col()]
 #' @export
 llm_parse_structured_col <- function(.data, fields, structured_col = "response_text", prefix = "", allow_list = TRUE) {
   # Always work on a data.frame and always return a tibble
@@ -449,6 +471,7 @@ llm_parse_structured_col <- function(.data, fields, structured_col = "response_t
 #' @param .data A data.frame with a `structured_data` list-column.
 #' @param schema JSON Schema (R list)
 #' @param structured_list_col Column name with parsed JSON. Default "structured_data".
+#' @seealso [llm_parse_structured_col()], [llm_fn_structured()]
 #' @export
 llm_validate_structured_col <- function(.data, schema, structured_list_col = "structured_data") {
   stopifnot(is.data.frame(.data))
@@ -494,6 +517,8 @@ llm_validate_structured_col <- function(.data, schema, structured_list_col = "st
 #' @param .fields Optional fields to hoist from parsed JSON (supports nested paths).
 #' @param .local_only If TRUE, do not send schema to the provider (parse/validate locally).
 #' @param .validate_local If TRUE and `.schema` provided, validate locally.
+#' @seealso [llm_fn()], [llm_mutate_structured()], [enable_structured_output()],
+#'   [llm_parse_structured_col()]
 #' @export
 llm_fn_structured <- function(x,
                         prompt,
@@ -545,6 +570,8 @@ llm_fn_structured <- function(x,
 #' df |> llm_mutate_structured(result = c(system = "Be brief.", user = "{text}"), .schema = schema)
 #' }
 #'
+#' @seealso [llm_mutate()], [llm_fn_structured()], [enable_structured_output()],
+#'   [llm_parse_structured_col()], [llm_mutate_tags()]
 #' @export
 llm_mutate_structured <- function(.data,
                             output,
@@ -625,6 +652,8 @@ llm_mutate_structured <- function(.data,
 #' @param schema Optional JSON Schema list.
 #' @param .fields Optional fields to hoist from parsed JSON (supports nested paths).
 #' @param ... Passed to [call_llm_par()].
+#' @seealso [call_llm_par()], [llm_parse_structured_col()],
+#'   [enable_structured_output()]
 #' @export
 call_llm_par_structured <- function(experiments, schema = NULL, .fields = NULL, ...) {
   stopifnot(is.data.frame(experiments), all(c("config","messages") %in% names(experiments)))
