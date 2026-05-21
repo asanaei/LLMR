@@ -37,7 +37,7 @@ return a numeric matrix.
 
   embed_cfg <- llm_config(
     provider = "voyage",
-    model = "voyage-large-2-instruct",
+    model = "voyage-3.5-lite",
     embedding = TRUE,
     api_key = Sys.getenv("VOYAGE_API_KEY")
   )

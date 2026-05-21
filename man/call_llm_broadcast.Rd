@@ -21,16 +21,17 @@ all model parameters, response_text, raw_response_json, success, error_message.
 \description{
 Broadcasts different messages using the same configuration in parallel.
 Perfect for batch processing different prompts with consistent settings.
-This function requires setting up the parallel environment using \code{setup_llm_parallel}.
+Use \code{\link[=setup_llm_parallel]{setup_llm_parallel()}} when you want explicit control over workers.
 }
 \section{Parallel Workflow}{
 
-All parallel functions require the \code{future} backend to be configured.
-The recommended workflow is:
+Recommended workflow:
 \enumerate{
 \item Call \code{setup_llm_parallel()} once at the start of your script.
 \item Run one or more parallel experiments (e.g., \code{call_llm_broadcast()}).
 \item Call \code{reset_llm_parallel()} at the end to restore sequential processing.
+If the active future plan is sequential, \code{\link[=call_llm_par]{call_llm_par()}} temporarily switches
+to \code{multisession} for the duration of the call.
 }
 }
 
@@ -51,5 +52,6 @@ The recommended workflow is:
 }
 }
 \seealso{
-\code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}}
+\code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}},
+\code{\link{call_llm_par}}, \code{\link{llm_fn}}, \code{\link{llm_mutate}}
 }

@@ -21,7 +21,7 @@ Logs an error with a timestamp for troubleshooting.
   # Use a deliberately fake API key to force an error
   config_test <- llm_config(
     provider = "openai",
-    model = "gpt-3.5-turbo",
+    model = "gpt-4.1-nano",
     api_key = "FAKE_KEY",
     temperature = 0.5,
     top_p = 1,

@@ -20,24 +20,25 @@ all varying model parameters, response_text, raw_response_json, success, error_m
 \description{
 Compares different configurations (models, providers, settings) using the same message.
 Perfect for benchmarking across different models or providers.
-This function requires setting up the parallel environment using \code{setup_llm_parallel}.
+Use \code{\link[=setup_llm_parallel]{setup_llm_parallel()}} when you want explicit control over workers.
 }
 \section{Parallel Workflow}{
 
-All parallel functions require the \code{future} backend to be configured.
-The recommended workflow is:
+Recommended workflow:
 \enumerate{
 \item Call \code{setup_llm_parallel()} once at the start of your script.
 \item Run one or more parallel experiments (e.g., \code{call_llm_broadcast()}).
 \item Call \code{reset_llm_parallel()} at the end to restore sequential processing.
+If the active future plan is sequential, \code{\link[=call_llm_par]{call_llm_par()}} temporarily switches
+to \code{multisession} for the duration of the call.
 }
 }
 
 \examples{
 \dontrun{
   # Compare different models
-  config1 <- llm_config(provider = "openai", model = "gpt-4o-mini")
-  config2 <- llm_config(provider = "openai", model = "gpt-4.1-nano")
+  config1 <- llm_config(provider = "openai", model = "gpt-5-nano")
+  config2 <- llm_config(provider = "groq", model = "openai/gpt-oss-20b")
 
   configs_list <- list(config1, config2)
   messages <- "Explain quantum computing"
@@ -48,5 +49,6 @@ The recommended workflow is:
 }
 }
 \seealso{
-\code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}}
+\code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}},
+\code{\link{call_llm_par}}
 }

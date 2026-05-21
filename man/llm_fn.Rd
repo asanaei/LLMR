@@ -43,15 +43,16 @@ For embedding mode, always a numeric matrix.
 Apply an LLM prompt over vectors/data frames
 }
 \examples{
-if (interactive()) {
-  words <- c("excellent","awful")
-  cfg <- llm_config("openai","gpt-4o-mini", temperature = 0)
-  llm_fn(words, "Classify '{x}' as Positive/Negative.",
-         cfg,
-         .system_prompt="One word.",
-         .return="columns")
+\dontrun{
+words <- c("excellent", "awful")
+cfg <- llm_config("openai", "gpt-4.1-nano", temperature = 0)
+llm_fn(words, "Classify '{x}' as Positive/Negative.", cfg, .return = "text")
+
+df <- tibble::tibble(text = words, source = c("review", "review"))
+llm_fn(df, "Classify '{text}' from {source}.", cfg, .return = "columns")
 }
 }
 \seealso{
-\code{\link[=llm_mutate]{llm_mutate()}}, \code{\link[=setup_llm_parallel]{setup_llm_parallel()}}, \code{\link[=call_llm_broadcast]{call_llm_broadcast()}}
+\code{\link[=llm_mutate]{llm_mutate()}}, \code{\link[=llm_fn_structured]{llm_fn_structured()}}, \code{\link[=setup_llm_parallel]{setup_llm_parallel()}},
+\code{\link[=call_llm_broadcast]{call_llm_broadcast()}}, \code{\link[=get_batched_embeddings]{get_batched_embeddings()}}
 }

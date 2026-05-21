@@ -54,7 +54,8 @@ thinking is supported: provide \code{thinking_budget} and
 \code{"thinking"} in the response; LLMR sets the beta header automatically.
 \item \strong{Gemini (REST):} \code{systemInstruction} is supported; user
 parts use \code{text}/\code{inlineData(mimeType,data)}; responses are set to
-\code{responseMimeType = "text/plain"}.
+\code{responseMimeType = "text/plain"}. For Vertex AI, use
+\verb{provider = "gemini", vertex = TRUE, project = ...}.
 \item \strong{Ollama (local):} OpenAI-compatible endpoints on \verb{http://localhost:11434/v1/*};
 no Authorization header is required. Override with \code{api_url} as needed.
 \item \strong{Error handling:} HTTP errors raise structured conditions with
@@ -85,7 +86,7 @@ Override the endpoint with \code{api_url} if not using the default
 \examples{
 \dontrun{
 ## 1) Basic generative call
-cfg <- llm_config("openai", "gpt-4o-mini")
+cfg <- llm_config("openai", "gpt-5-nano")
 call_llm(cfg, "Say hello in Greek.")
 
 ## 2) Generative with rich return
@@ -95,7 +96,7 @@ as.character(r)
 finish_reason(r); tokens(r)
 
 ## 3) Anthropic extended thinking (single example)
-a_cfg <- llm_config("anthropic", "claude-sonnet-4-20250514",
+a_cfg <- llm_config("anthropic", "claude-sonnet-4-6",
                     max_tokens = 5000,
                     thinking_budget = 16000,
                     include_thoughts = TRUE)
@@ -112,7 +113,7 @@ msg <- c(
 call_llm(cfg, msg)
 
 ## 5) Embeddings
-e_cfg <- llm_config("voyage", "voyage-large-2",
+e_cfg <- llm_config("voyage", "voyage-3.5-lite",
                     embedding = TRUE)
 emb_raw <- call_llm(e_cfg, c("first", "second"))
 emb_mat <- parse_embeddings(emb_raw)

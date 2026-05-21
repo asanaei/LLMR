@@ -91,8 +91,8 @@ retry_with_backoff <- function(func,
                                backoff_factor = 5,
                                error_filter_func = NULL,
                                ...) {
-  wait_time <- initial_wait  # backoff timer; updated after each failure
   for (attempt in seq_len(tries)) {
+    wait_time <- initial_wait * (backoff_factor ^ (attempt - 1L))
     result <- tryCatch(
       func(...),
       error = function(e) {
@@ -102,7 +102,6 @@ retry_with_backoff <- function(func,
         message(sprintf("Error on attempt %d: %s", attempt, conditionMessage(e)))
         message(sprintf("Waiting %d seconds before retry...", wait_time))
         Sys.sleep(wait_time)
-        wait_time <- wait_time * backoff_factor
         return(NULL)
       }
     )
@@ -143,7 +142,7 @@ retry_with_backoff <- function(func,
 #' @examples
 #' \dontrun{
 #' robust_resp <- call_llm_robust(
-#' config = llm_config("openai","gpt-4o-mini"),
+#' config = llm_config("openai", "gpt-5-nano"),
 #' messages = list(list(role = "user", content = "Hello, LLM!")),
 #' tries = 5,
 #' wait_seconds = 10,
@@ -261,7 +260,7 @@ cache_llm_call <- memoise::memoise(function(config, messages, verbose = FALSE) {
 #'   # Use a deliberately fake API key to force an error
 #'   config_test <- llm_config(
 #'     provider = "openai",
-#'     model = "gpt-3.5-turbo",
+#'     model = "gpt-4.1-nano",
 #'     api_key = "FAKE_KEY",
 #'     temperature = 0.5,
 #'     top_p = 1,

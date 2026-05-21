@@ -155,7 +155,7 @@
 #'
 #' Sweeps through different values of a single parameter while keeping the message constant.
 #' Perfect for hyperparameter tuning, temperature experiments, etc.
-#' This function requires setting up the parallel environment using `setup_llm_parallel`.
+#' Use [setup_llm_parallel()] when you want explicit control over workers.
 #'
 #' @param base_config Base llm_config object to modify.
 #' @param param_name Character. Name of the parameter to vary (e.g., "temperature", "max_tokens").
@@ -166,13 +166,15 @@
 #' @return A tibble with columns: swept_param_name, the varied parameter column, provider, model,
 #'   all other model parameters, response_text, raw_response_json, success, error_message.
 #' @section Parallel Workflow:
-#' All parallel functions require the `future` backend to be configured.
-#' The recommended workflow is:
+#' Recommended workflow:
 #' 1. Call `setup_llm_parallel()` once at the start of your script.
 #' 2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
 #' 3. Call `reset_llm_parallel()` at the end to restore sequential processing.
+#' If the active future plan is sequential, [call_llm_par()] temporarily switches
+#' to `multisession` for the duration of the call.
 #'
-#' @seealso \code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}}
+#' @seealso \code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}},
+#'   \code{\link{call_llm_par}}
 #' @export
 #'
 #' @examples
@@ -233,7 +235,7 @@ call_llm_sweep <- function(base_config,
 #'
 #' Broadcasts different messages using the same configuration in parallel.
 #' Perfect for batch processing different prompts with consistent settings.
-#' This function requires setting up the parallel environment using `setup_llm_parallel`.
+#' Use [setup_llm_parallel()] when you want explicit control over workers.
 #'
 #' @param config Single llm_config object to use for all calls.
 #' @param messages A character vector (each element is a prompt) OR
@@ -243,13 +245,15 @@ call_llm_sweep <- function(base_config,
 #' @return A tibble with columns: message_index (metadata), provider, model,
 #'   all model parameters, response_text, raw_response_json, success, error_message.
 #' @section Parallel Workflow:
-#' All parallel functions require the `future` backend to be configured.
-#' The recommended workflow is:
+#' Recommended workflow:
 #' 1. Call `setup_llm_parallel()` once at the start of your script.
 #' 2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
 #' 3. Call `reset_llm_parallel()` at the end to restore sequential processing.
+#' If the active future plan is sequential, [call_llm_par()] temporarily switches
+#' to `multisession` for the duration of the call.
 #'
-#' @seealso \code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}}
+#' @seealso \code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}},
+#'   \code{\link{call_llm_par}}, \code{\link{llm_fn}}, \code{\link{llm_mutate}}
 #'
 #' @export
 #'
@@ -310,7 +314,7 @@ call_llm_broadcast <- function(config,
 #'
 #' Compares different configurations (models, providers, settings) using the same message.
 #' Perfect for benchmarking across different models or providers.
-#' This function requires setting up the parallel environment using `setup_llm_parallel`.
+#' Use [setup_llm_parallel()] when you want explicit control over workers.
 #'
 #' @param configs_list A list of llm_config objects to compare.
 #' @param messages A character vector or a list of message objects (same for all configs).
@@ -319,20 +323,22 @@ call_llm_broadcast <- function(config,
 #' @return A tibble with columns: config_index (metadata), provider, model,
 #'   all varying model parameters, response_text, raw_response_json, success, error_message.
 #' @section Parallel Workflow:
-#' All parallel functions require the `future` backend to be configured.
-#' The recommended workflow is:
+#' Recommended workflow:
 #' 1. Call `setup_llm_parallel()` once at the start of your script.
 #' 2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
 #' 3. Call `reset_llm_parallel()` at the end to restore sequential processing.
+#' If the active future plan is sequential, [call_llm_par()] temporarily switches
+#' to `multisession` for the duration of the call.
 #'
-#' @seealso \code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}}
+#' @seealso \code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}},
+#'   \code{\link{call_llm_par}}
 #' @export
 #'
 #' @examples
 #' \dontrun{
 #'   # Compare different models
-#'   config1 <- llm_config(provider = "openai", model = "gpt-4o-mini")
-#'   config2 <- llm_config(provider = "openai", model = "gpt-4.1-nano")
+#'   config1 <- llm_config(provider = "openai", model = "gpt-5-nano")
+#'   config2 <- llm_config(provider = "groq", model = "openai/gpt-oss-20b")
 #'
 #'   configs_list <- list(config1, config2)
 #'   messages <- "Explain quantum computing"
@@ -378,7 +384,7 @@ call_llm_compare <- function(configs_list,
 #'
 #' Processes experiments from a tibble where each row contains a config and message pair.
 #' This is the core parallel processing function. Metadata columns are preserved.
-#' This function requires setting up the parallel environment using `setup_llm_parallel`.
+#' Use [setup_llm_parallel()] when you want explicit control over workers.
 #'
 #' @param experiments A tibble/data.frame with required list-columns 'config' (llm_config objects)
 #'   and 'messages' (character vector OR message list).
@@ -410,11 +416,12 @@ call_llm_compare <- function(configs_list,
 #' The `response` column holds `llmr_response` objects on success, or `NULL` on failure.
 
 #' @section Parallel Workflow:
-#' All parallel functions require the `future` backend to be configured.
-#' The recommended workflow is:
+#' Recommended workflow:
 #' 1. Call `setup_llm_parallel()` once at the start of your script.
 #' 2. Run one or more parallel experiments (e.g., `call_llm_broadcast()`).
 #' 3. Call `reset_llm_parallel()` at the end to restore sequential processing.
+#' If the active future plan is sequential, this function temporarily switches
+#' to `multisession` for the duration of the call.
 #'
 #' @seealso
 #' For setting up the environment: \code{\link{setup_llm_parallel}}, \code{\link{reset_llm_parallel}}.
@@ -426,10 +433,10 @@ call_llm_compare <- function(configs_list,
 #' \dontrun{
 #' # Simple example: Compare two models on one prompt
 #' cfg1 <- llm_config("openai", "gpt-4.1-nano")
-#' cfg2 <- llm_config("groq", "llama-3.3-70b-versatile")
+#' cfg2 <- llm_config("groq", "openai/gpt-oss-20b")
 #'
 #' experiments <- tibble::tibble(
-#'   model_id = c("gpt-4.1-nano", "groq-llama-3.3"),
+#'   model_id = c("gpt-4.1-nano", "groq-gpt-oss-20b"),
 #'   config = list(cfg1, cfg2),
 #'   messages = "Count the number of the letter e in this word: Freundschaftsbeziehungen "
 #' )

@@ -5,16 +5,16 @@ Depends: R (>= 4.1.0)
 Authors@R: 
     person("Ali", "Sanaei", , "sanaei@uchicago.edu", role = c("aut", "cre"))
 Description: Provides a unified interface to large language models across multiple
-  providers. Supports text generation, structured output with optional JSON
-  Schema validation, and embeddings. Includes tidyverse-friendly helpers,
-  chat session, consistent error handling, and parallel batch tools.
+  providers. Supports text generation, tidy data workflows, structured output
+  with optional JSON Schema validation, XML-like tag extraction, and embeddings.
+  Includes chat sessions, consistent error handling, and parallel batch tools.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Imports: httr2, purrr, dplyr, tidyr, rlang, memoise, future, future.apply,
         tibble, base64enc, mime,  glue (>= 1.6.0),  cli (>= 3.6.0), jsonlite, vctrs 
 Suggests: testthat (>= 3.0.0), roxygen2 (>= 7.1.2), httptest2,
        progressr, knitr, rmarkdown, ggplot2, R.rsp, jsonvalidate
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 Roxygen: list(markdown = TRUE)
 Config/testthat/edition: 3
 URL: https://github.com/asanaei/LLMR, https://asanaei.github.io/LLMR/

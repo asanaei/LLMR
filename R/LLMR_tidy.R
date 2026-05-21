@@ -24,16 +24,17 @@
 #' - `.return = "object"`: list of `llmr_response` (or `NA` on failure)
 #' For embedding mode, always a numeric matrix.
 #'
-#' @seealso [llm_mutate()], [setup_llm_parallel()], [call_llm_broadcast()]
+#' @seealso [llm_mutate()], [llm_fn_structured()], [setup_llm_parallel()],
+#'   [call_llm_broadcast()], [get_batched_embeddings()]
 #'
 #' @examples
-#' if (interactive()) {
-#'   words <- c("excellent","awful")
-#'   cfg <- llm_config("openai","gpt-4o-mini", temperature = 0)
-#'   llm_fn(words, "Classify '{x}' as Positive/Negative.",
-#'          cfg,
-#'          .system_prompt="One word.",
-#'          .return="columns")
+#' \dontrun{
+#' words <- c("excellent", "awful")
+#' cfg <- llm_config("openai", "gpt-4.1-nano", temperature = 0)
+#' llm_fn(words, "Classify '{x}' as Positive/Negative.", cfg, .return = "text")
+#'
+#' df <- tibble::tibble(text = words, source = c("review", "review"))
+#' llm_fn(df, "Classify '{text}' from {source}.", cfg, .return = "columns")
 #' }
 llm_fn <- function(x,
                    prompt,
@@ -100,7 +101,9 @@ llm_fn <- function(x,
 #'
 #' @param .data A data.frame / tibble.
 #' @param output Unquoted name that becomes **the new column** (generative) *or*
-#'   **the prefix** for embedding columns.
+#'   **the prefix** for embedding columns. In shorthand form, omit this argument
+#'   and pass `newcol = "<glue prompt>"` or
+#'   `newcol = c(system = "...", user = "...")` through `...`.
 #' @param prompt Optional glue template string for a single user turn; reference
 #'   any columns in `.data` (e.g. `"{id}. {question}\nContext: {context}"`).
 #'   Ignored if `.messages` is supplied.
@@ -118,15 +121,20 @@ llm_fn <- function(x,
 #'   diagnostic columns; `"text"` adds a single text column; `"object"` adds a
 #'   list-column of `llmr_response` objects.
 #' @param .structured Logical. If `TRUE`, enables structured JSON output with automatic
-#'   parsing. Requires `.schema` to be provided. When enabled, this is equivalent to
-#'   calling [llm_mutate_structured()]. Default is `FALSE`.
+#'   parsing. When enabled, this is equivalent to calling [llm_mutate_structured()].
+#'   Default is `FALSE`.
 #' @param .schema Optional JSON Schema (R list). When `.structured = TRUE`, this schema
 #'   is sent to the provider for validation and used for local parsing. When `NULL`,
 #'   only JSON mode is enabled (no strict schema validation).
-#' @param .fields Optional character vector of fields to extract from parsed JSON.
-#'   Supports nested paths (e.g., `"user.name"` or `"/data/items/0"`). When `NULL`
-#'   and `.schema` is provided, auto-extracts all top-level schema properties.
-#'   Set to `FALSE` to skip field extraction entirely.
+#' @param .fields Optional character vector of fields to extract from parsed JSON
+#'   or tag output. In JSON mode, supports nested paths (e.g., `"user.name"` or
+#'   `"/data/items/0"`). When `NULL` and `.schema` is provided, auto-extracts all
+#'   top-level schema properties. In tag mode, `NULL` extracts all `.tags`. Set
+#'   to `FALSE` to skip field extraction entirely.
+#' @param .tags Optional character vector of XML-like tag names to request and parse,
+#'   such as `c("age", "job")`. When supplied, [llm_mutate()] delegates to
+#'   [llm_mutate_tags()] and adds `tags_ok`, `tags_data`, and one column per tag
+#'   unless `.fields = FALSE`.
 #' @param ... Passed to the underlying calls: [call_llm_broadcast()] in
 #'   generative mode, [get_batched_embeddings()] in embedding mode.
 #'
@@ -134,8 +142,11 @@ llm_fn <- function(x,
 #' - **Multi-column injection:** templating is NA-safe (`NA` -> empty string).
 #' - **Multi-turn templating:** supply `.messages = c(system=..., user=..., file=...)`.
 #'   Duplicate role names are allowed (e.g., two `user` turns).
-#' - **Generative mode:** one request per row via [call_llm_broadcast()]. Parallel
-#'   execution follows the active **future** plan; see [setup_llm_parallel()].
+#' - **Generative mode:** one request per row via [call_llm_broadcast()].
+#' - **Parallelism:** calls [call_llm_broadcast()], which uses
+#'   [call_llm_robust()] under the hood. If no future plan is active,
+#'   workers are auto-configured; call [setup_llm_parallel()] to set worker
+#'   count explicitly.
 #' - **Embedding mode:** the per-row text is embedded via [get_batched_embeddings()].
 #'   Result expands to numeric columns named `paste0(<output>, 1:N)`. If all rows
 #'   fail to embed, a single `<output>1` column of `NA` is returned.
@@ -149,6 +160,7 @@ llm_fn <- function(x,
 #' \preformatted{
 #' df |> llm_mutate(answer = "{question} (hint: {hint})", .config = cfg)
 #' df |> llm_mutate(answer = c(system = "One word.", user = "{question}"), .config = cfg)
+#' df |> llm_mutate(country = "Where is {city}? Answer with only the country.", .config = cfg)
 #' }
 #'
 #' This is equivalent to:
@@ -156,6 +168,15 @@ llm_fn <- function(x,
 #' df |> llm_mutate(answer, prompt = "{question} (hint: {hint})", .config = cfg)
 #' df |> llm_mutate(answer, .messages = c(system = "One word.", user = "{question}"), .config = cfg)
 #' }
+#'
+#' @section Structured modes:
+#' - `.structured = TRUE` delegates to [llm_mutate_structured()] for JSON.
+#' - `.tags` delegates to [llm_mutate_tags()] for XML-like tags.
+#' If both are supplied, `.structured` takes precedence.
+#'
+#' @seealso [llm_fn()], [llm_mutate_structured()], [llm_mutate_tags()],
+#'   [llm_parse_structured_col()], [llm_parse_tags_col()],
+#'   [call_llm_broadcast()], [setup_llm_parallel()]
 #' @examples
 #' \dontrun{
 #' library(dplyr)
@@ -166,7 +187,7 @@ llm_fn <- function(x,
 #'   hint     = c("European city", "English novelist")
 #' )
 #'
-#' cfg <- llm_config("openai", "gpt-4o-mini",
+#' cfg <- llm_config("openai", "gpt-4.1-nano",
 #'                   temperature = 0)
 #'
 #' # Generative: single-turn with multi-column injection
@@ -239,6 +260,26 @@ llm_fn <- function(x,
 #'     .structured = TRUE,
 #'     .schema = schema
 #'   )
+#'
+#' # Soft structured output with XML-like tags
+#' df |>
+#'   llm_mutate(
+#'     result = "Extract the person's age and job from: {question}",
+#'     .config = cfg,
+#'     .tags = c("age", "job")
+#'   )
+#'
+#' cities <- tibble::tibble(city = c("Cairo", "Lima"))
+#' cities |>
+#'   llm_mutate(
+#'     geo = "Where is {city}? Give country and continent in their own tags.",
+#'     .config = cfg,
+#'     .system_prompt = paste(
+#'       "Use XML tags for different parts of the answer, but do not nest tags.",
+#'       "Return <country>...</country> and <continent>...</continent>."
+#'     ),
+#'     .tags = c("country", "continent")
+#'   )
 #' }
 #' @export
 #' @importFrom glue glue_data
@@ -254,6 +295,7 @@ llm_mutate <- function(.data,
                        .structured = FALSE,
                        .schema = NULL,
                        .fields = NULL,
+                       .tags = NULL,
                        ...) {
 
   stopifnot(inherits(.config, "llm_config"))
@@ -320,6 +362,23 @@ llm_mutate <- function(.data,
       args$output <- rlang::ensym(output)
       return(do.call(llm_mutate_structured, c(args, dots)))
     }
+  }
+
+  if (!is.null(.tags)) {
+    args <- list(
+      .data = .data,
+      prompt = prompt,
+      .messages = .messages,
+      .config = .config,
+      .system_prompt = .system_prompt,
+      .tags = .tags,
+      .fields = .fields
+    )
+    if (!before_missing) args$.before <- .before
+    if (!after_missing)  args$.after  <- .after
+
+    args$output <- if (out_missing) output else rlang::ensym(output)
+    return(do.call(llm_mutate_tags, c(args, dots)))
   }
 
   # -- helpers (local) -------------------------------------------------------
@@ -446,7 +505,6 @@ llm_mutate <- function(.data,
   }
   # -------------------------------------------------------------------------
 
-  # ---- Generative branch ---------------------------------------------------
   # ---- Generative branch ---------------------------------------------------
   if (!is.null(.messages) && !is.null(prompt)) {
     warning("Both '.messages' and 'prompt' supplied; 'prompt' will be ignored.")

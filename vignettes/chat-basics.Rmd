@@ -16,8 +16,8 @@ knitr::opts_chunk$set(
 
 This vignette shows basic chat usage with four providers and model names:
 - OpenAI: gpt-5-nano
-- Anthropic: claude-sonnet-4-20250514
-- Gemini: gemini-2.5-flash
+- Anthropic: claude-sonnet-4-6
+- Gemini: gemini-2.5-flash-lite
 - Groq: openai/gpt-oss-20b
 
 You will need API keys in these environment variables: OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, GROQ_API_KEY.
@@ -41,11 +41,11 @@ chat_oai$send("Say a warm hello in one short sentence.")
 chat_oai$send("Now say it in Esperanto.")
 ```
 
-## Anthropic: claude-sonnet-4-20250514
+## Anthropic: claude-sonnet-4-6
 ```{r}
 cfg_anthropic <- llm_config(
   provider = "anthropic",
-  model    = "claude-sonnet-4-20250514",
+  model    = "claude-sonnet-4-6",
   max_tokens = 512   # avoid warnings; Anthropic requires max_tokens
 )
 
@@ -53,7 +53,7 @@ chat_claude <- chat_session(cfg_anthropic, system = "Be concise.")
 chat_claude$send("Name one interesting fact about honey bees.")
 ```
 
-## Gemini: gemini-2.5-flash
+## Gemini: gemini-2.5-flash-lite
 ```{r}
 cfg_gemini <- llm_config(
   provider = "gemini",

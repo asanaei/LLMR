@@ -41,3 +41,7 @@ columns (\code{{col}}); with a vector the placeholder is \code{{x}}.}
 Schema-first variant of \code{\link[=llm_fn]{llm_fn()}}. It enables structured output on the config,
 calls the model via \code{\link[=call_llm_broadcast]{call_llm_broadcast()}}, parses JSON, and optionally validates.
 }
+\seealso{
+\code{\link[=llm_fn]{llm_fn()}}, \code{\link[=llm_mutate_structured]{llm_mutate_structured()}}, \code{\link[=enable_structured_output]{enable_structured_output()}},
+\code{\link[=llm_parse_structured_col]{llm_parse_structured_col()}}
+}

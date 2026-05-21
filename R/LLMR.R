@@ -13,6 +13,30 @@
 #   5. (New) Support for multimodal inputs (text and files) for capable providers.
 # -------------------------------------------------------------------
 
+#' LLMR: unified LLM workflows for R
+#'
+#' LLMR provides provider-agnostic text generation, embeddings, structured JSON,
+#' XML-like tag extraction, chat sessions, robust retries, and parallel
+#' experiment utilities.
+#'
+#' @section Common workflows:
+#' - One prompt: [call_llm()] or [call_llm_robust()]
+#' - Vectors or data frames: [llm_fn()]
+#' - dplyr pipelines: [llm_mutate()], including shorthand
+#'   `llm_mutate(new_col = "{existing_col}", .config = cfg)`
+#' - Strict structured fields: [llm_mutate_structured()] or [llm_mutate()]
+#'   with `.structured = TRUE`
+#' - Soft structured fields: [llm_mutate_tags()] or [llm_mutate()] with `.tags`
+#' - Factorial experiments: [build_factorial_experiments()] and [call_llm_par()]
+#'
+#' @section Reliability and parallel execution:
+#' [call_llm_robust()] retries transient failures. [setup_llm_parallel()]
+#' controls worker count for parallel helpers; [llm_fn()] and [llm_mutate()]
+#' use [call_llm_broadcast()] internally.
+#'
+#' @keywords internal
+"_PACKAGE"
+
 # ----- Internal Helper Functions -----
 
 #' Normalise message inputs  (LLMR.R)
@@ -380,7 +404,8 @@ get_endpoint <- function(config, default_endpoint) {
 #'   `"openai"`, `"anthropic"`, `"gemini"`, `"groq"`, `"together"`,
 #'   `"voyage"` (embeddings only), `"deepseek"`, `"xai"`, `"ollama"`.
 #' @param model Character scalar. Model name understood by the chosen provider.
-#'   (e.g., `"gpt-4o-mini"`, `"o4-mini"`, `"claude-3.7"`, `"gemini-2.0-flash"`, etc.)
+#'   (e.g., `"gpt-4.1-nano"`, `"gpt-5-nano"`, `"gemini-2.5-flash-lite"`,
+#'   `"openai/gpt-oss-20b"`, etc.)
 #' @param api_key Character scalar. Provider API key.
 #' @param troubleshooting Logical. If `TRUE`, prints the full request payloads
 #'   (including your API key!) for debugging. **Use with extreme caution.**
@@ -406,11 +431,18 @@ get_endpoint <- function(config, default_endpoint) {
 #'
 #' @section Temperature range clamping:
 #' Anthropic temperatures must be in `[0, 1]`; others in `[0, 2]`. Out-of-range
-#' values are clamped with a warning.
+#' values are clamped with a warning. Reasoning or thinking-oriented models may
+#' reject custom temperature values; omit `temperature` unless the selected
+#' model accepts it.
 #'
 #' @section Endpoint overrides:
 #' You can pass `api_url` (or `base_url=` alias) in `...` to point to gateways
 #' or compatible proxies.
+#'
+#' @section Vertex Gemini:
+#' Use `provider = "gemini", vertex = TRUE` for Gemini on Vertex AI. Supply
+#' `project` and optionally `location`; when `api_key` is omitted, LLMR looks for
+#' `VERTEX_ACCESS_TOKEN` and sends it as a Bearer token.
 #'
 #' @seealso
 #'   \code{\link{call_llm}},
@@ -424,7 +456,7 @@ get_endpoint <- function(config, default_endpoint) {
 #' @examples
 #' \dontrun{
 #' # Basic OpenAI config
-#' cfg <- llm_config("openai", "gpt-4o-mini",
+#' cfg <- llm_config("openai", "gpt-4.1-nano",
 #' temperature = 0.7, max_tokens = 300)
 #'
 #' # Generative call returns an llmr_response object
@@ -433,10 +465,19 @@ get_endpoint <- function(config, default_endpoint) {
 #' as.character(r)
 #'
 #' # Embeddings (inferred from the model name)
-#' e_cfg <- llm_config("gemini", "text-embedding-004")
+#' e_cfg <- llm_config("gemini", "gemini-embedding-001")
 #'
 #' # Force embeddings even if model name does not contain "embedding"
-#' e_cfg2 <- llm_config("voyage", "voyage-large-2", embedding = TRUE)
+#' e_cfg2 <- llm_config("voyage", "voyage-3.5-lite", embedding = TRUE)
+#'
+#' # Gemini through Vertex AI. VERTEX_ACCESS_TOKEN should contain a Bearer token.
+#' v_cfg <- llm_config(
+#'   "gemini", "gemini-2.5-flash-lite",
+#'   vertex = TRUE,
+#'   project = "my-gcp-project",
+#'   location = "us-central1",
+#'   api_key = "VERTEX_ACCESS_TOKEN"
+#' )
 #' }
 llm_config <- function(provider, model, api_key = NULL,
                        troubleshooting = FALSE,
@@ -470,7 +511,13 @@ llm_config <- function(provider, model, api_key = NULL,
   # Normalize API key: keep only an environment reference in the config
   api_key_handle <- NULL
   if (missing(api_key) || is.null(api_key)) {
-    api_key_handle <- llm_api_key_env(.default_api_key_env(provider))
+    default_key_env <- if (identical(tolower(provider), "gemini") &&
+                           isTRUE(model_params$vertex)) {
+      "VERTEX_ACCESS_TOKEN"
+    } else {
+      .default_api_key_env(provider)
+    }
+    api_key_handle <- llm_api_key_env(default_key_env)
   } else if (inherits(api_key, "llmr_secret")) {
     api_key_handle <- api_key
   } else if (is.character(api_key) && length(api_key) == 1L) {
@@ -564,7 +611,8 @@ llm_config <- function(provider, model, api_key = NULL,
 #'         `"thinking"` in the response; LLMR sets the beta header automatically.
 #'   \item \strong{Gemini (REST):} `systemInstruction` is supported; user
 #'         parts use `text`/`inlineData(mimeType,data)`; responses are set to
-#'         `responseMimeType = "text/plain"`.
+#'         `responseMimeType = "text/plain"`. For Vertex AI, use
+#'         `provider = "gemini", vertex = TRUE, project = ...`.
 #'   \item \strong{Ollama (local):} OpenAI-compatible endpoints on `http://localhost:11434/v1/*`;
 #'         no Authorization header is required. Override with `api_url` as needed.
 #'   \item \strong{Error handling:} HTTP errors raise structured conditions with
@@ -589,7 +637,7 @@ llm_config <- function(provider, model, api_key = NULL,
 #' @examples
 #' \dontrun{
 #' ## 1) Basic generative call
-#' cfg <- llm_config("openai", "gpt-4o-mini")
+#' cfg <- llm_config("openai", "gpt-5-nano")
 #' call_llm(cfg, "Say hello in Greek.")
 #'
 #' ## 2) Generative with rich return
@@ -599,7 +647,7 @@ llm_config <- function(provider, model, api_key = NULL,
 #' finish_reason(r); tokens(r)
 #'
 #' ## 3) Anthropic extended thinking (single example)
-#' a_cfg <- llm_config("anthropic", "claude-sonnet-4-20250514",
+#' a_cfg <- llm_config("anthropic", "claude-sonnet-4-6",
 #'                     max_tokens = 5000,
 #'                     thinking_budget = 16000,
 #'                     include_thoughts = TRUE)
@@ -616,7 +664,7 @@ llm_config <- function(provider, model, api_key = NULL,
 #' call_llm(cfg, msg)
 #'
 #' ## 5) Embeddings
-#' e_cfg <- llm_config("voyage", "voyage-large-2",
+#' e_cfg <- llm_config("voyage", "voyage-3.5-lite",
 #'                     embedding = TRUE)
 #' emb_raw <- call_llm(e_cfg, c("first", "second"))
 #' emb_mat <- parse_embeddings(emb_raw)
@@ -752,9 +800,7 @@ call_llm.openai <- function(config, messages, verbose = FALSE) {
       httr2::req_body_json(bdy)
   }
 
-  last_body <- NULL
   run <- function(bdy) {
-    last_body <<- bdy
     # Config is passed down so perform_request can trigger the remaining hooks
     perform_request(build_req(bdy), verbose, provider = config$provider, model = config$model, config = config)
   }
@@ -776,7 +822,6 @@ call_llm.openai <- function(config, messages, verbose = FALSE) {
                     if(is_responses_api) "max_output_tokens" else "max_completion_tokens", config$model))
         }
         res2 <- run(b2)
-        last_body <<- b2
         return(res2)
       }
       stop(e)
@@ -895,6 +940,73 @@ call_llm.anthropic <- function(config, messages, verbose = FALSE) {
 
 # --- Gemini ------------------------------------------------------------------
 
+.gemini_is_vertex <- function(config) {
+  isTRUE(config$model_params$vertex)
+}
+
+.gemini_vertex_endpoint <- function(config, suffix = "generateContent") {
+  mp <- config$model_params %||% list()
+  project <- mp$project %||% mp$vertex_project
+  if (is.null(project) || !nzchar(as.character(project)[1])) {
+    stop("Vertex Gemini mode requires `project` in llm_config(...).")
+  }
+
+  location <- mp$location %||% mp$region %||% "us-central1"
+  location <- as.character(location)[1]
+  project <- as.character(project)[1]
+  suffix <- sub("^:", "", as.character(suffix)[1])
+
+  default_endpoint <- sprintf(
+    "https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:%s",
+    location,
+    project,
+    location,
+    config$model,
+    suffix
+  )
+  get_endpoint(config, default_endpoint)
+}
+
+.gemini_developer_endpoint <- function(config, suffix = "generateContent") {
+  suffix <- sub("^:", "", as.character(suffix)[1])
+  get_endpoint(
+    config,
+    default_endpoint = paste0(
+      "https://generativelanguage.googleapis.com/v1beta/models/",
+      config$model,
+      ":",
+      suffix
+    )
+  )
+}
+
+.gemini_auth_headers <- function(config) {
+  key <- .resolve_api_key(config$api_key, provider = config$provider, model = config$model)
+  if (.gemini_is_vertex(config)) {
+    return(list("Authorization" = paste("Bearer", key)))
+  }
+  list("x-goog-api-key" = key)
+}
+
+.gemini_embedding_params <- function(mp, body_names = character()) {
+  skip <- c(body_names, "vertex", "project", "vertex_project", "location",
+            "region", "api_url")
+  extras <- mp[setdiff(names(mp), skip)]
+  if ("task_type" %in% names(extras)) {
+    extras$taskType <- extras$task_type
+    extras$task_type <- NULL
+  }
+  if ("output_dimensionality" %in% names(extras)) {
+    extras$outputDimensionality <- extras$output_dimensionality
+    extras$output_dimensionality <- NULL
+  }
+  if ("auto_truncate" %in% names(extras)) {
+    extras$autoTruncate <- extras$auto_truncate
+    extras$auto_truncate <- NULL
+  }
+  extras
+}
+
 #' @export
 call_llm.gemini <- function(config, messages, verbose = FALSE) {
 
@@ -904,13 +1016,11 @@ call_llm.gemini <- function(config, messages, verbose = FALSE) {
   }
 
   messages  <- .normalize_messages(messages)
-  endpoint  <- get_endpoint(
-    config,
-    default_endpoint = paste0(
-      "https://generativelanguage.googleapis.com/v1beta/models/",
-      config$model,
-      ":generateContent")
-  )
+  endpoint  <- if (.gemini_is_vertex(config)) {
+    .gemini_vertex_endpoint(config, "generateContent")
+  } else {
+    .gemini_developer_endpoint(config, "generateContent")
+  }
 
   # Canonical -> Gemini names (camelCase inside generationConfig)
   params <- .translate_params("gemini", config$model_params, auto_fix = !isTRUE(config$no_change))
@@ -967,95 +1077,12 @@ call_llm.gemini <- function(config, messages, verbose = FALSE) {
   req <- httr2::request(endpoint) |>
     httr2::req_headers(
       "Content-Type"   = "application/json",
-      "x-goog-api-key" = .resolve_api_key(config$api_key, provider = config$provider, model = config$model)
+      !!!.gemini_auth_headers(config)
     ) |>
     httr2::req_body_json(body)
 
   perform_request(req, verbose, provider = config$provider, model = config$model)
 }
-
-
-
-
-# call_llm.gemini <- function(config, messages, verbose = FALSE, json = FALSE) {
-#   if (isTRUE(config$embedding) || grepl("embedding", config$model, ignore.case = TRUE)) {
-#     return(call_llm.gemini_embedding(config, messages, verbose, json))
-#   }
-#   messages <- .normalize_messages(messages)
-#   endpoint <- get_endpoint(config, default_endpoint = paste0("https://generativelanguage.googleapis.com/v1beta/models/", config$model, ":generateContent"))
-#
-#   ## convert canonical names ---> Gemini native
-#   params <- .translate_params("gemini", config$model_params)
-#
-#   system_messages <- purrr::keep(messages, ~ .x$role == "system")
-#   other_messages <- purrr::keep(messages, ~ .x$role != "system")
-#   system_instruction <- if (length(system_messages) > 0) {
-#     list(parts = list(list(text = paste(sapply(system_messages, function(x) x$content), collapse = " "))))
-#   } else {
-#     NULL
-#   }
-#
-#   formatted_messages <- lapply(other_messages, function(msg) {
-#     role <- if (msg$role == "assistant") "model" else "user"
-#     content_parts <- list()
-#     if (is.character(msg$content)) {
-#       content_parts <- list(list(text = msg$content))
-#     } else if (is.list(msg$content)) {
-#       content_parts <- lapply(msg$content, function(part) {
-#         if (part$type == "text") {
-#           return(list(text = part$text))
-#         } else if (part$type == "file") {
-#           file_data <- .process_file_content(part$path)
-#           return(list(inlineData = list(mimeType = file_data$mime_type, data = file_data$base64_data)))
-#         } else {
-#           return(NULL)
-#         }
-#       })
-#       content_parts <- purrr::compact(content_parts)
-#     }
-#     list(role = role, parts = content_parts)
-#   })
-#
-#   body <- .drop_null(list(
-#     contents = formatted_messages,
-#     generationConfig = .drop_null(list(
-#       temperature     = params$temperature,
-#       maxOutputTokens = params$maxOutputTokens,
-#       topP            = params$topP,
-#       topK            = params$topK
-#     )),
-#     generationConfig = .drop_null(list(
-#       temperature       = params$temperature,
-#       maxOutputTokens   = params$maxOutputTokens,
-#       topP              = params$topP,
-#       topK              = params$topK,
-#       responseMimeType  = "text/plain",
-#       thinkingConfig    = if (!is.null(params$thinkingBudget) ||
-#                               !is.null(params$includeThoughts))
-#         .drop_null(list(
-#           thinkingBudget = params$thinkingBudget,
-#           includeThoughts= isTRUE(params$includeThoughts)))
-#     )),
-#     # thinkingConfig = if (!is.null(params$thinkingBudget) ||
-#     #                      !is.null(params$includeThoughts))
-#     #   .drop_null(list(
-#     #     budgetTokens   = params$thinkingBudget,
-#     #     includeThoughts= isTRUE(params$includeThoughts)))
-#   ))
-#
-#
-#   if (!is.null(system_instruction))
-#     body$systemInstruction <- system_instruction
-#
-#   req <- httr2::request(endpoint) |>
-#     httr2::req_headers(
-#       "Content-Type" = "application/json",
-#       "x-goog-api-key" = config$api_key
-#     ) |>
-#     httr2::req_body_json(body)
-#
-#   perform_request(req, verbose, json)
-# }
 
 #' @export
 call_llm.groq <- function(config, messages, verbose = FALSE) {
@@ -1341,26 +1368,32 @@ call_llm.gemini_embedding <- function(config, messages,
            character(1))
 
   # 2. endpoint ---------------------------------------------------------------
-  endpoint <- sprintf(
-    "https://generativelanguage.googleapis.com/v1beta/models/%s:embedContent",
-    config$model)
+  endpoint <- if (.gemini_is_vertex(config)) {
+    .gemini_vertex_endpoint(config, "embedContent")
+  } else {
+    .gemini_developer_endpoint(config, "embedContent")
+  }
 
   # 3. loop -------------------------------------------------------------------
   out <- lapply(texts, function(txt) {
 
-    body <- list(
-      model   = paste0("models/", config$model),      # mandatory
-      content = list(parts = list(list(text = txt)))  # exactly one text
-    )
+    body <- if (.gemini_is_vertex(config)) {
+      list(content = list(parts = list(list(text = txt))))
+    } else {
+      list(
+        model   = paste0("models/", config$model),
+        content = list(parts = list(list(text = txt)))
+      )
+    }
 
     ## allowing extra parameters to be sent to the api
-    extras <- config$model_params[setdiff(names(config$model_params), names(body))]
+    extras <- .gemini_embedding_params(config$model_params, names(body))
     body   <- .drop_null(c(body, extras))
 
     resp <- httr2::request(endpoint) |>
       httr2::req_headers(
         "Content-Type"   = "application/json",
-        "x-goog-api-key" = .resolve_api_key(config$api_key, provider = config$provider, model = config$model)
+        !!!.gemini_auth_headers(config)
       ) |>
       httr2::req_body_json(body) |>
       httr2::req_perform()
@@ -1396,7 +1429,7 @@ call_llm.gemini_embedding <- function(config, messages,
 #'   # Configure the embedding API provider (example with Voyage API)
 #'   voyage_config <- llm_config(
 #'     provider = "voyage",
-#'     model = "voyage-large-2",
+#'     model = "voyage-3.5-lite",
 #'     api_key = Sys.getenv("VOYAGE_API_KEY")
 #'   )
 #'
@@ -1509,7 +1542,7 @@ bind_tools <- function(config, tools, tool_choice = NULL) {
 #'
 #'   embed_cfg <- llm_config(
 #'     provider = "voyage",
-#'     model = "voyage-large-2-instruct",
+#'     model = "voyage-3.5-lite",
 #'     embedding = TRUE,
 #'     api_key = Sys.getenv("VOYAGE_API_KEY")
 #'   )

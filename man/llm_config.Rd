@@ -21,7 +21,8 @@ llm_config(
 \code{"voyage"} (embeddings only), \code{"deepseek"}, \code{"xai"}, \code{"ollama"}.}
 
 \item{model}{Character scalar. Model name understood by the chosen provider.
-(e.g., \code{"gpt-4o-mini"}, \code{"o4-mini"}, \code{"claude-3.7"}, \code{"gemini-2.0-flash"}, etc.)}
+(e.g., \code{"gpt-4.1-nano"}, \code{"gpt-5-nano"}, \code{"gemini-2.5-flash-lite"},
+\code{"openai/gpt-oss-20b"}, etc.)}
 
 \item{api_key}{Character scalar. Provider API key.}
 
@@ -60,7 +61,9 @@ parameters via \code{...}; LLMR forwards them as-is, with a few safe convenience
 \section{Temperature range clamping}{
 
 Anthropic temperatures must be in \verb{[0, 1]}; others in \verb{[0, 2]}. Out-of-range
-values are clamped with a warning.
+values are clamped with a warning. Reasoning or thinking-oriented models may
+reject custom temperature values; omit \code{temperature} unless the selected
+model accepts it.
 }
 
 \section{Endpoint overrides}{
@@ -69,10 +72,17 @@ You can pass \code{api_url} (or \verb{base_url=} alias) in \code{...} to point t
 or compatible proxies.
 }
 
+\section{Vertex Gemini}{
+
+Use \verb{provider = "gemini", vertex = TRUE} for Gemini on Vertex AI. Supply
+\code{project} and optionally \code{location}; when \code{api_key} is omitted, LLMR looks for
+\code{VERTEX_ACCESS_TOKEN} and sends it as a Bearer token.
+}
+
 \examples{
 \dontrun{
 # Basic OpenAI config
-cfg <- llm_config("openai", "gpt-4o-mini",
+cfg <- llm_config("openai", "gpt-4.1-nano",
 temperature = 0.7, max_tokens = 300)
 
 # Generative call returns an llmr_response object
@@ -81,10 +91,19 @@ print(r)
 as.character(r)
 
 # Embeddings (inferred from the model name)
-e_cfg <- llm_config("gemini", "text-embedding-004")
+e_cfg <- llm_config("gemini", "gemini-embedding-001")
 
 # Force embeddings even if model name does not contain "embedding"
-e_cfg2 <- llm_config("voyage", "voyage-large-2", embedding = TRUE)
+e_cfg2 <- llm_config("voyage", "voyage-3.5-lite", embedding = TRUE)
+
+# Gemini through Vertex AI. VERTEX_ACCESS_TOKEN should contain a Bearer token.
+v_cfg <- llm_config(
+  "gemini", "gemini-2.5-flash-lite",
+  vertex = TRUE,
+  project = "my-gcp-project",
+  location = "us-central1",
+  api_key = "VERTEX_ACCESS_TOKEN"
+)
 }
 }
 \seealso{

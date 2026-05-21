@@ -40,3 +40,12 @@ or JSON Pointer (\code{/a/b/0/c}).
 they yield \code{NA} and only scalars are hoisted.
 }
 }
+\examples{
+df <- data.frame(response_text = '{"score": 5, "label": "good"}')
+llm_parse_structured_col(df, fields = c("score", "label"))
+
+}
+\seealso{
+\code{\link[=llm_parse_structured]{llm_parse_structured()}}, \code{\link[=llm_mutate_structured]{llm_mutate_structured()}},
+\code{\link[=llm_parse_tags_col]{llm_parse_tags_col()}}
+}
