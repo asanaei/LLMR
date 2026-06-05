@@ -56,6 +56,10 @@
 #'     Send a message with structured-output enabled using `schema`, append the assistant's reply,
 #'     parse JSON (and optionally validate locally when `.validate_local = TRUE`),
 #'     returning the parsed result invisibly.}
+#'   \item{\code{$send_tags(text, .tags, ..., role = "user", .fields = NULL)}}{
+#'     Send a message with XML-like tag instructions injected, append the
+#'     assistant's reply, parse the requested tags, and invisibly return
+#'     the parsed list.}
 #'   \item{\code{$history()}}{Raw list of messages.}
 #'   \item{\code{$history_df()}}{Two-column data frame (`role`, `content`).}
 #'   \item{\code{$tokens_sent()}/\code{$tokens_received()}}{Running token totals.}
@@ -127,7 +131,13 @@ chat_session <- function(config, system = NULL, ...) {
   send <- function(text, ..., role = "user") {
     e$messages <- append(e$messages, list(.msg(role, text)))
 
-    resp <- call_robust(list(...))
+    resp <- tryCatch(
+      call_robust(list(...)),
+      error = function(err) {
+        e$messages <- e$messages[-length(e$messages)]
+        stop(err)
+      }
+    )
 
     if (inherits(resp, "llmr_response")) {
       txt  <- as.character(resp)
@@ -173,7 +183,13 @@ chat_session <- function(config, system = NULL, ...) {
     e$messages <- append(e$messages, list(.msg(role, text)))
 
     cfgs <- enable_structured_output(config, schema = schema)
-    resp <- call_robust(list(config = cfgs, ...))
+    resp <- tryCatch(
+      call_robust(list(config = cfgs, ...)),
+      error = function(err) {
+        e$messages <- e$messages[-length(e$messages)]
+        stop(err)
+      }
+    )
 
     txt <- as.character(resp)
     parsed <- llm_parse_structured(txt)
@@ -186,6 +202,30 @@ chat_session <- function(config, system = NULL, ...) {
         message("Structured validation error: ", df2$structured_error[[1]])
       }
     }
+
+    e$sent     <- e$sent     + as.integer(tokens(resp)$sent %||% 0L)
+    e$received <- e$received + as.integer(tokens(resp)$rec  %||% 0L)
+    e$raw      <- append(e$raw, list(resp))
+    e$messages <- append(e$messages, list(.msg("assistant", txt)))
+    print(resp)
+    invisible(parsed)
+  }
+
+  send_tags <- function(text, .tags, ..., role = "user", .fields = NULL) {
+    tags <- .validate_tags(.tags)
+    instruction <- .tag_prompt(tags)
+    augmented <- paste(text, instruction, sep = "\n\n")
+    e$messages <- append(e$messages, list(.msg(role, augmented)))
+
+    resp <- tryCatch(
+      call_robust(list(...)),
+      error = function(err) {
+        e$messages <- e$messages[-length(e$messages)]
+        stop(err)
+      }
+    )
+    txt <- as.character(resp)
+    parsed <- llm_parse_tags(txt, tags = tags)
 
     e$sent     <- e$sent     + as.integer(tokens(resp)$sent %||% 0L)
     e$received <- e$received + as.integer(tokens(resp)$rec  %||% 0L)
@@ -213,6 +253,7 @@ chat_session <- function(config, system = NULL, ...) {
     list(
       send            = send,
       send_structured = send_structured,
+      send_tags       = send_tags,
       history         = history,
       history_df      = history_df,
       tokens_sent     = tokens_sent,

@@ -1,69 +1,43 @@
-# LLMR 0.6.4
+# LLMR 0.7.0
 
-## New Features
+## New features
 
-- Added soft structured tag output via `llm_mutate_tags()` and `.tags` in `llm_mutate()`.
-- Added opt-in Gemini Vertex AI support through `provider = "gemini", vertex = TRUE`.
+- **Soft structured output via XML-like tags.** `llm_mutate()` gains `.tags`,
+  backed by `llm_mutate_tags()`, `llm_fn_tags()`, `llm_parse_tags()`,
+  `llm_parse_tags_col()`, and `call_llm_par_tags()`.
+- **Four new providers:** Xiaomi MiMo, Alibaba Qwen, Zhipu (GLM), and Moonshot
+  (Kimi). All use OpenAI-compatible structured output.
+- **Gemini Vertex AI** supported via `llm_config("gemini", ..., vertex = TRUE)`.
+- **Multi-variable API key fallback.** Providers can declare multiple
+  environment variable names (e.g., `XIAOMI_KEY` or `XIAOMI_API_KEY`); the first
+  one found is used.
 
-## Bug Fixes
+## Bug fixes
 
-- Fixed live tests to use public `llm_config(api_key = "OPENAI_API_KEY")` behavior.
-- Removed an unused internal request-body assignment that triggered a lint warning.
-- Updated examples to use current, inexpensive model identifiers and avoid custom temperature where models may reject it.
+- Fixed API key resolution for providers with multiple fallback env vars.
+- Removed dead `requireNamespace("LLMR")` guard inside `llm_mutate()`.
 
-## Package Hygiene
-
-- Excluded local Cursor files and built vignette HTML from source builds.
-- Improved package help, README, and vignettes for `llm_mutate()` shorthand, tag extraction, robust calls, and helper selection.
+---
 
 # LLMR 0.6.3
 
-## Improvements
-
-- `ollama` is now supported as a provider, both for generative and embedding models. This, of course, requires a local ollama server to be up. 
-
-## Bug Fixes
-
-- `get_batched_embeddings` was giving ugly column names. Now they go from `v1` to `vn`
+- Added Ollama provider (local generative and embedding models).
+- Stable column names (`v1`...`vN`) in `get_batched_embeddings()`.
 
 # LLMR 0.6.2
 
-## New Features
-
-- `setup_llm_parallel()` changed parameter order to accept numeric positional argument for `workers`.
-- `llm_mutate()` adds a shorthand form: `llm_mutate(answer = "<prompt>" | c(system=..., user=...), .config=...)`.
-- `llm_mutate()` gains `.structured` flag: set `.structured = TRUE` to enable JSON output with automatic parsing (equivalent to calling `llm_mutate_structured()`).
-- `llm_mutate_structured()` now supports shorthand syntax: `llm_mutate_structured(result = "{text}", .schema = schema)`.
-
-## Improvements
-
-- Enhanced `.fields` documentation to clarify auto-extraction behavior and nested path support.
-- Clarified that `.schema = NULL` enables JSON mode without strict schema validation.
-- Added comprehensive examples demonstrating new structured output features in vignettes.
-
-## Bug Fixes
-
-- Removed unused internal function `.category_from_condition` in parallel utilities.
-- Fixed `build_factorial_experiments()` documentation to correctly describe return value columns.
-- Corrected `call_llm_par()` default value for `backoff_factor` parameter (now correctly documented as 3).
-- Added missing `@importFrom purrr` declarations for imported functions.
+- `llm_mutate()` shorthand: `llm_mutate(answer = "{question}", .config = cfg)`.
+- `.structured = TRUE` flag in `llm_mutate()` for inline JSON parsing.
+- `setup_llm_parallel()` accepts a positional numeric `workers` argument.
 
 # LLMR 0.6.1
-- Fixed bug in that affected `claude` calls.
+
+- Fixed a bug that affected Anthropic calls.
 
 # LLMR 0.6.0
 
-## Breaking changes
-
-- Returns and objects:
-- call_llm() in generative mode now returns an llmr_response object by default. Use as.character(x) to extract text; print(x) shows a concise status line; helpers include finish_reason(), tokens(), and is_truncated().
-- Legacy json= arguments are removed. Generative calls always return an llmr_response.
-
-## New
-
-- Improved API key handling. 
-	(1) You can give the key name instead of actual token
-	(2) Even if actual token is provided, it is immediately turned into a system variable and not stored directly
-
-- json output and fixed structure are now possible.
-- llm_mutate can inject multiple pieces of text from columns.
+- `call_llm()` now returns an `llmr_response` object. Use `as.character(x)` for
+  plain text. Legacy `json=` arguments are removed.
+- Secure API key handling: literal keys are moved to temporary env vars.
+- Structured JSON output and schema validation.
+- Multi-column injection in `llm_mutate()`.

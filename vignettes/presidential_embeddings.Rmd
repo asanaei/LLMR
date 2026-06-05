@@ -16,8 +16,7 @@ knitr::opts_chunk$set(
 )
 is_package_check <- nzchar(Sys.getenv("_R_CHECK_PACKAGE_NAME_")) ||
   nzchar(Sys.getenv("_R_CHECK_CRAN_INCOMING_"))
-run_llmr_vignette <- identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true") &&
-  !is_package_check
+run_llmr_vignette <- FALSE # Force FALSE to avoid API costs for embeddings
 ```
 
 This vignette demonstrates how to use LLMR for embedding analysis of presidential inaugural speeches.

@@ -99,12 +99,12 @@
           if (msg_names[j] == "user") {
             user_parts <- append(user_parts,
                                  list(list(type = "text",
-                                           text = messages[j])))
+                                           text = unname(messages[j]))))
             has_text <- TRUE
           } else {  # msg_names[j] == "file"
             user_parts <- append(user_parts,
                                  list(list(type = "file",
-                                           path = path.expand(messages[j]))))
+                                           path = path.expand(unname(messages[j])))))
           }
           j <- j + 1L
         }
@@ -118,7 +118,7 @@
       } else {                                           # system / assistant
         final_messages <- append(final_messages,
                                  list(list(role = role,
-                                           content = messages[i])))
+                                           content = unname(messages[i]))))
         i <- i + 1L
       }
     }
@@ -402,7 +402,7 @@ get_endpoint <- function(config, default_endpoint) {
 #'
 #' @param provider Character scalar. One of:
 #'   `"openai"`, `"anthropic"`, `"gemini"`, `"groq"`, `"together"`,
-#'   `"voyage"` (embeddings only), `"deepseek"`, `"xai"`, `"ollama"`.
+#'   `"deepseek"`, `"xiaomi"`, `"qwen"`, `"zhipu"`, `"moonshot"`, `"xai"`, `"ollama"`.
 #' @param model Character scalar. Model name understood by the chosen provider.
 #'   (e.g., `"gpt-4.1-nano"`, `"gpt-5-nano"`, `"gemini-2.5-flash-lite"`,
 #'   `"openai/gpt-oss-20b"`, etc.)
@@ -526,29 +526,14 @@ llm_config <- function(provider, model, api_key = NULL,
     } else if (grepl("^[A-Z][A-Z0-9_]*$", api_key) && nzchar(Sys.getenv(api_key, unset = ""))) {
       api_key_handle <- llm_api_key_env(api_key)
     } else {
-      # A literal token was supplied. Move it into a temporary env var and keep only its name.
-      rand <- paste(sample(c(LETTERS, 0:9), 8, TRUE), collapse = "")
-      env_name <- paste0("LLMR_", toupper(provider), "_KEY_", rand)
-      # Sys.setenv(structure(api_key, names = env_name)) ### not right
-      do.call(Sys.setenv, setNames(list(api_key), env_name))
-      api_key_handle <- llm_api_key_env(env_name)
-      if (requireNamespace("cli", quietly = TRUE)) {
-        # cli::cli_alert_warning(paste0(
-        #   "A literal API key was supplied to llm_config(). ",
-        #   "For security, it was moved to a temporary environment variable '{", env_name, "}'. ",
-        #   "Prefer defining '", .default_api_key_env(provider), "' in your .Renviron."
-        # ))
-        warning(sprintf(
-          "A literal API key was supplied. Moved to temporary env var '%s'. Prefer '%s' in ~/.Renviron.",
-          env_name, .default_api_key_env(provider)
-        ))
-
-      } else {
-        warning(paste0(
-          "A literal API key was supplied. It was moved to temporary env var '", env_name,
-          "'. Prefer using ", .default_api_key_env(provider), " in your .Renviron."
-        ))
-      }
+      api_key_handle <- structure(
+        list(kind = "literal", value = api_key),
+        class = c("llmr_secret", "llmr_secret_literal")
+      )
+      warning(sprintf(
+        "A literal API key was supplied. Prefer '%s' in ~/.Renviron.",
+        paste(.default_api_key_env(provider), collapse = " or ")
+      ))
     }
   } else {
     stop("Unsupported 'api_key' argument. Use llm_api_key_env(\"", .default_api_key_env(provider), "\") or a valid env var name.")
@@ -1063,16 +1048,15 @@ call_llm.gemini <- function(config, messages, verbose = FALSE) {
     responseMimeType= resp_mime %||% "text/plain"
   ))
 
+  if (!is.null(config$model_params$response_schema)) {
+    gen_cfg$responseSchema <- config$model_params$response_schema
+  }
+
   body <- .drop_null(list(
     contents          = formatted_messages,
     generationConfig  = gen_cfg,
     systemInstruction = systemInstruction
   ))
-
-  # Optional schema (Gemini supports JSON inline schemas)
-  if (!is.null(config$model_params$response_schema)) {
-    body$responseSchema <- config$model_params$response_schema
-  }
 
   req <- httr2::request(endpoint) |>
     httr2::req_headers(
@@ -1190,6 +1174,147 @@ call_llm.deepseek <- function(config, messages, verbose = FALSE) {
     httr2::req_body_json(body)
   perform_request(req, verbose, provider = config$provider, model = config$model)
 }
+
+#' @export
+call_llm.xiaomi <- function(config, messages, verbose = FALSE) {
+  if (isTRUE(config$embedding)) {
+    stop("Embedding models are not currently supported for Xiaomi MiMo!")
+  }
+  messages <- .normalize_messages(messages)
+  endpoint <- get_endpoint(config, default_endpoint = "https://api.xiaomimimo.com/v1/chat/completions")
+
+  body <- .drop_null(list(
+    model      = config$model %||% "mimo-v2.5-pro",
+    messages   = messages,
+    temperature= config$model_params$temperature,
+    max_tokens = config$model_params$max_tokens,
+    top_p      = config$model_params$top_p
+  ))
+
+  # Structured outputs (OpenAI-compatible)
+  if (!is.null(config$model_params$response_format)) {
+    body$response_format <- config$model_params$response_format
+  } else if (!is.null(config$model_params$json_schema)) {
+    body$response_format <- list(
+      type = "json_schema",
+      json_schema = list(name="llmr_schema", schema = config$model_params$json_schema, strict = TRUE)
+    )
+  }
+
+  req <- httr2::request(endpoint) |>
+    httr2::req_headers(
+      "Content-Type" = "application/json",
+      "api-key" = .resolve_api_key(config$api_key, provider = config$provider, model = config$model)
+    ) |>
+    httr2::req_body_json(body)
+  perform_request(req, verbose, provider = config$provider, model = config$model)
+}
+
+#' @export
+call_llm.qwen <- function(config, messages, verbose = FALSE) {
+  if (isTRUE(config$embedding)) {
+    stop("Embedding models are not currently supported for Qwen!")
+  }
+  messages <- .normalize_messages(messages)
+  endpoint <- get_endpoint(config, default_endpoint = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions")
+
+  body <- .drop_null(list(
+    model      = config$model %||% "qwen-plus",
+    messages   = messages,
+    temperature= config$model_params$temperature,
+    max_tokens = config$model_params$max_tokens,
+    top_p      = config$model_params$top_p
+  ))
+
+  # Structured outputs (OpenAI-compatible)
+  if (!is.null(config$model_params$response_format)) {
+    body$response_format <- config$model_params$response_format
+  } else if (!is.null(config$model_params$json_schema)) {
+    body$response_format <- list(
+      type = "json_schema",
+      json_schema = list(name="llmr_schema", schema = config$model_params$json_schema, strict = TRUE)
+    )
+  }
+
+  req <- httr2::request(endpoint) |>
+    httr2::req_headers(
+      "Content-Type" = "application/json",
+      "Authorization" = paste("Bearer", .resolve_api_key(config$api_key, provider = config$provider, model = config$model))
+    ) |>
+    httr2::req_body_json(body)
+  perform_request(req, verbose, provider = config$provider, model = config$model)
+}
+
+#' @export
+call_llm.zhipu <- function(config, messages, verbose = FALSE) {
+  if (isTRUE(config$embedding)) {
+    stop("Embedding models are not currently supported for Zhipu!")
+  }
+  messages <- .normalize_messages(messages)
+  endpoint <- get_endpoint(config, default_endpoint = "https://open.bigmodel.cn/api/paas/v4/chat/completions")
+
+  body <- .drop_null(list(
+    model      = config$model %||% "glm-4",
+    messages   = messages,
+    temperature= config$model_params$temperature,
+    max_tokens = config$model_params$max_tokens,
+    top_p      = config$model_params$top_p
+  ))
+
+  # Structured outputs (OpenAI-compatible)
+  if (!is.null(config$model_params$response_format)) {
+    body$response_format <- config$model_params$response_format
+  } else if (!is.null(config$model_params$json_schema)) {
+    body$response_format <- list(
+      type = "json_schema",
+      json_schema = list(name="llmr_schema", schema = config$model_params$json_schema, strict = TRUE)
+    )
+  }
+
+  req <- httr2::request(endpoint) |>
+    httr2::req_headers(
+      "Content-Type" = "application/json",
+      "Authorization" = paste("Bearer", .resolve_api_key(config$api_key, provider = config$provider, model = config$model))
+    ) |>
+    httr2::req_body_json(body)
+  perform_request(req, verbose, provider = config$provider, model = config$model)
+}
+
+#' @export
+call_llm.moonshot <- function(config, messages, verbose = FALSE) {
+  if (isTRUE(config$embedding)) {
+    stop("Embedding models are not currently supported for Moonshot!")
+  }
+  messages <- .normalize_messages(messages)
+  endpoint <- get_endpoint(config, default_endpoint = "https://api.moonshot.cn/v1/chat/completions")
+
+  body <- .drop_null(list(
+    model      = config$model %||% "moonshot-v1-8k",
+    messages   = messages,
+    temperature= config$model_params$temperature,
+    max_tokens = config$model_params$max_tokens,
+    top_p      = config$model_params$top_p
+  ))
+
+  # Structured outputs (OpenAI-compatible)
+  if (!is.null(config$model_params$response_format)) {
+    body$response_format <- config$model_params$response_format
+  } else if (!is.null(config$model_params$json_schema)) {
+    body$response_format <- list(
+      type = "json_schema",
+      json_schema = list(name="llmr_schema", schema = config$model_params$json_schema, strict = TRUE)
+    )
+  }
+
+  req <- httr2::request(endpoint) |>
+    httr2::req_headers(
+      "Content-Type" = "application/json",
+      "Authorization" = paste("Bearer", .resolve_api_key(config$api_key, provider = config$provider, model = config$model))
+    ) |>
+    httr2::req_body_json(body)
+  perform_request(req, verbose, provider = config$provider, model = config$model)
+}
+
 
 #' @export
 call_llm.xai <- function(config, messages, verbose = FALSE) {

@@ -21,11 +21,16 @@ navbar:
       icon: fab fa-github
       href: https://github.com/asanaei/LLMR
 articles:
-- title: Vignettes
+- title: Getting Started
   contents:
-  - about-schema
   - chat-basics
   - tidy-and-structured
+- title: Structured Output
+  contents:
+  - about-schema
+  - trolley-dilemma-experiment
+- title: Advanced
+  contents:
   - experiments
   - presidential_embeddings
 reference:
@@ -50,7 +55,9 @@ reference:
   - llm_fn_structured
   - llm_mutate_structured
   - llm_mutate_tags
+  - llm_fn_tags
   - call_llm_par_structured
+  - call_llm_par_tags
 - title: Tidy helpers and parallel
   contents:
   - llm_fn
@@ -60,6 +67,10 @@ reference:
   - call_llm_broadcast
   - call_llm_sweep
   - call_llm_compare
+  - expand_llm_config
+  - llm_cross_design
+  - llm_par_resume
+  - llm_judge
   - setup_llm_parallel
   - reset_llm_parallel
 - title: Embeddings
@@ -74,4 +85,3 @@ reference:
 - title: Utilities
   contents:
   - bind_tools
-

@@ -14,7 +14,7 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
   structure(
     list(
       kind     = "env",
-      ref      = as.character(var)[1],
+      ref      = as.character(var),
       required = isTRUE(required),
       default  = if (is.null(default)) NULL else as.character(default)[1]
     ),
@@ -36,6 +36,7 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
     deepseek  = "DEEPSEEK_API_KEY",
     xai       = "XAI_API_KEY",
     ollama    = "OLLAMA_API_KEY",
+    xiaomi    = c("XIAOMI_KEY", "XIAOMI_API_KEY"),
     toupper(paste0(provider, "_API_KEY"))
   )
 }
@@ -58,15 +59,18 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
     )
   }
 
+  if (inherits(secret, "llmr_secret_literal")) return(secret$value)
+
   if (inherits(secret, "llmr_secret_env")) {
-    var <- secret$ref
-    val <- Sys.getenv(var, unset = "")
-    if (nzchar(val)) return(val)
+    for (v in secret$ref) {
+      val <- Sys.getenv(v, unset = "")
+      if (nzchar(val)) return(val)
+    }
     if (!is.null(secret$default) && nzchar(secret$default)) return(secret$default)
     .llmr_error(
       message = sprintf(
         "Missing API key. Set environment variable '%s' for provider '%s'%s.",
-        var, provider %||% "?", if (!is.null(model)) paste0(" (model '", model, "')") else ""
+        paste(secret$ref, collapse = " or "), provider %||% "?", if (!is.null(model)) paste0(" (model '", model, "')") else ""
       ),
       category = "auth"
     )
@@ -74,12 +78,14 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
 
   if (is.null(secret) && !is.null(provider)) {
     var <- .default_api_key_env(provider)
-    val <- Sys.getenv(var, unset = "")
-    if (nzchar(val)) return(val)
+    for (v in var) {
+      val <- Sys.getenv(v, unset = "")
+      if (nzchar(val)) return(val)
+    }
     .llmr_error(
       message = sprintf(
         "Missing API key. Set environment variable '%s' for provider '%s'%s.",
-        var, provider %||% "?", if (!is.null(model)) paste0(" (model '", model, "')") else ""
+        paste(var, collapse=" or "), provider %||% "?", if (!is.null(model)) paste0(" (model '", model, "')") else ""
       ),
       category = "auth"
     )
@@ -92,7 +98,8 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
 #' @keywords internal
 #' @noRd
 .mask_api_key <- function(secret) {
-  if (inherits(secret, "llmr_secret_env")) return(paste0("<llmr_secret: env:", secret$ref, ">"))
+  if (inherits(secret, "llmr_secret_literal")) return("<llmr_secret: literal>")
+  if (inherits(secret, "llmr_secret_env")) return(paste0("<llmr_secret: env:", paste(secret$ref, collapse="|"), ">"))
   if (is.character(secret) && length(secret) == 1L) {
     if (grepl("^env:", secret)) return(paste0("<llmr_secret: ", secret, ">"))
     return("<llmr_secret: string>")

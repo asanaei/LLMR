@@ -23,20 +23,20 @@ This vignette demonstrates:
 
 The workflow is: **design → parallel execution → analysis**
 
-We will compare three configurations on two prompts, once unstructured and once with structured output. In choosing models, note that at the time of writing this vignette, Gemini models are not guaranteeing the schema output and is more likely to run into trouble. 
+We will compare three configurations on two prompts, once unstructured and once with structured output. We use open models via DeepSeek and Groq to ensure fast and low-cost execution.
 
 ```{r}
 library(LLMR)
 library(dplyr)
-cfg_openai <- llm_config("openai",   "gpt-5-nano")
-cfg_cld    <- llm_config("anthropic","claude-sonnet-4-6", max_tokens = 512)
+cfg_ds     <- llm_config("deepseek", "deepseek-chat")
+cfg_groq1  <- llm_config("groq",     "llama-3.1-8b-instant")
 cfg_groq   <- llm_config("groq",     "openai/gpt-oss-20b")
 ```
 
 ## Build a factorial design
 ```{r}
 experiments <- build_factorial_experiments(
-  configs       = list(cfg_openai, cfg_cld, cfg_groq),
+  configs       = list(cfg_ds, cfg_groq1, cfg_groq),
   user_prompts  = c("Summarize in one sentence: The Apollo program.",
                     "List two benefits of green tea."),
   system_prompts = c("Be concise.")

@@ -83,10 +83,14 @@
       if (all_scalar && requireNamespace("vctrs", quietly = TRUE)) {
         nonnull <- vals[!vapply(vals, is.null, logical(1))]
         if (length(nonnull)) {
-          ptype  <- vctrs::vec_ptype_common(!!!nonnull)
-          na_val <- vctrs::vec_cast(NA, ptype)
-          casted <- lapply(vals, function(v) if (is.null(v)) na_val else vctrs::vec_cast(v, ptype))
-          vctrs::vec_c(!!!casted)
+          tryCatch({
+            ptype  <- vctrs::vec_ptype_common(!!!nonnull)
+            na_val <- vctrs::vec_cast(NA, ptype)
+            casted <- lapply(vals, function(v) if (is.null(v)) na_val else vctrs::vec_cast(v, ptype))
+            vctrs::vec_c(!!!casted)
+          }, error = function(e) {
+            vapply(vals, function(v) if (is.null(v)) NA_character_ else as.character(v), character(1))
+          })
         } else {
           rep(NA_character_, length(vals))
         }
@@ -697,7 +701,9 @@ call_llm_par <- function(experiments,
   if (simplify) {
     output_df <- .unnest_config_to_cols(output_df, config_col = "config")
   }
-  if (requireNamespace("tibble", quietly = TRUE)) tibble::as_tibble(output_df) else output_df
+  res <- if (requireNamespace("tibble", quietly = TRUE)) tibble::as_tibble(output_df) else output_df
+  class(res) <- unique(c("llmr_experiment", class(res)))
+  res
 }
 
 #' Build Factorial Experiment Design
@@ -941,3 +947,267 @@ reset_llm_parallel <- function(verbose = FALSE) {
 
   invisible(previous_plan)
 }
+
+#' Expand an LLM Config Grid
+#'
+#' Creates a list of [llm_config] objects from a base configuration and sweeping
+#' parameter vectors. Uses [expand.grid()] internally.
+#'
+#' @param base_config An [llm_config] object to use as the base.
+#' @param ... Named vectors of parameter values to sweep (e.g., `model`, `temperature`).
+#'   Parameters named `provider`, `model`, `api_key`, `embedding`, `troubleshooting`,
+#'   or `no_change` are set as top-level config fields; all others are placed in
+#'   `model_params`.
+#' @return A list of [llm_config] objects.
+#'
+#' @examples
+#' \dontrun{
+#' base <- llm_config("openai", "gpt-4.1-nano")
+#' cfgs <- expand_llm_config(base,
+#'                           temperature = c(0, 0.5, 1),
+#'                           model = c("gpt-4.1-nano", "gpt-4.1-mini"))
+#' length(cfgs)
+#' }
+#'
+#' @seealso [llm_config()], [llm_cross_design()], [call_llm_par()]
+#' @export
+expand_llm_config <- function(base_config, ...) {
+  stopifnot(inherits(base_config, "llm_config"))
+  dots <- list(...)
+  if (length(dots) == 0) return(list(base_config))
+
+  grid <- expand.grid(dots, stringsAsFactors = FALSE)
+  top_level <- c("provider", "model", "api_key", "embedding", "troubleshooting", "no_change")
+  out <- vector("list", nrow(grid))
+  for (i in seq_len(nrow(grid))) {
+    cfg <- base_config
+    mp <- cfg$model_params %||% list()
+    for (nm in names(grid)) {
+      if (nm %in% top_level) {
+        cfg[[nm]] <- grid[[nm]][[i]]
+      } else {
+        mp[[nm]] <- grid[[nm]][[i]]
+      }
+    }
+    cfg$model_params <- mp
+    out[[i]] <- cfg
+  }
+  out
+}
+
+#' Cross a data frame with LLM configs
+#'
+#' Creates an experimental design tibble that crosses every row in `.data` with
+#' every config in `configs`, evaluating glue prompt templates row-by-row.
+#' The result has `config` and `messages` list-columns ready for [call_llm_par()].
+#'
+#' @param .data A data frame containing variables for the glue prompt.
+#' @param configs A list of [llm_config] objects (or a single [llm_config]).
+#' @param prompt A glue string for a single user turn.
+#' @param .messages Optional named character vector of glue templates (roles as names).
+#' @param .system_prompt Optional system prompt template (glue string).
+#' @return A tibble with all original data columns plus `config` and `messages`
+#'   list-columns.
+#'
+#' @examples
+#' \dontrun{
+#' cities <- data.frame(city = c("Cairo", "Lima"))
+#' cfgs <- list(llm_config("openai", "gpt-4.1-nano"), llm_config("openai", "gpt-4.1-mini"))
+#' design <- llm_cross_design(cities, cfgs, prompt = "What country is {city} in?")
+#' results <- call_llm_par(design)
+#' }
+#'
+#' @seealso [expand_llm_config()], [call_llm_par()], [build_factorial_experiments()]
+#' @export
+llm_cross_design <- function(.data, configs, prompt = NULL, .messages = NULL, .system_prompt = NULL) {
+  if (!is.data.frame(.data)) stop(".data must be a data frame.")
+  if (inherits(configs, "llm_config")) configs <- list(configs)
+
+  n_data <- nrow(.data)
+  n_conf <- length(configs)
+
+  idx_data <- rep(seq_len(n_data), each = n_conf)
+  idx_conf <- rep(seq_len(n_conf), times = n_data)
+
+  out <- .data[idx_data, , drop = FALSE]
+  out$config <- configs[idx_conf]
+
+  msgs <- vector("list", nrow(out))
+  for (i in seq_len(nrow(out))) {
+    row_df <- out[i, setdiff(names(out), "config"), drop = FALSE]
+
+    if (!is.null(.messages)) {
+      roles <- names(.messages)
+      if (is.null(roles)) roles <- rep("user", length(.messages))
+      roles[is.na(roles) | roles == ""] <- "user"
+
+      m <- vapply(unname(.messages),
+                  function(s) as.character(glue::glue_data(row_df, s, .na = "")),
+                  character(1))
+      names(m) <- roles
+
+      if (!is.null(.system_prompt) && !"system" %in% names(m)) {
+        sys <- as.character(glue::glue_data(row_df, .system_prompt, .na = ""))
+        m <- c(system = sys, m)
+      }
+      msgs[[i]] <- m
+    } else if (!is.null(prompt)) {
+      m <- as.character(glue::glue_data(row_df, prompt, .na = ""))
+      if (!is.null(.system_prompt)) {
+        sys <- as.character(glue::glue_data(row_df, .system_prompt, .na = ""))
+        msgs[[i]] <- c(system = sys, user = m)
+      } else {
+        msgs[[i]] <- m
+      }
+    } else {
+      stop("Must provide either prompt or .messages.")
+    }
+  }
+  out$messages <- msgs
+  if (requireNamespace("tibble", quietly = TRUE)) tibble::as_tibble(out) else out
+}
+
+#' Resume failed parallel LLM calls
+#'
+#' Finds rows where `success` is `FALSE` or `NA` in the output of [call_llm_par()],
+#' re-runs them, and patches the results back into the original data frame.
+#'
+#' @param results Output from [call_llm_par()] (must contain `config`, `messages`,
+#'   and `success` columns).
+#' @param tries Number of retries per call. Default 3.
+#' @param ... Passed to [call_llm_par()].
+#' @return The patched data frame with re-run results filled in.
+#'
+#' @examples
+#' \dontrun{
+#' results <- call_llm_par(experiments)
+#' results <- llm_par_resume(results, tries = 3)
+#' }
+#'
+#' @seealso [call_llm_par()]
+#' @export
+llm_par_resume <- function(results, tries = 3, ...) {
+  if (!is.data.frame(results) ||
+      !all(c("config", "messages", "success") %in% names(results))) {
+    stop("results must be the output of call_llm_par(), containing 'config', 'messages', and 'success'.")
+  }
+
+  failed_idx <- which(!isTRUE(results$success) | is.na(results$success))
+  if (length(failed_idx) == 0) {
+    message("All runs successful. Nothing to resume.")
+    return(results)
+  }
+
+  message(sprintf("Found %d failed runs. Retrying...", length(failed_idx)))
+
+  failed_experiments <- results[failed_idx, c("config", "messages"), drop = FALSE]
+  resumed <- call_llm_par(failed_experiments, tries = tries, simplify = FALSE, ...)
+
+  for (col in names(resumed)) {
+    if (col %in% names(results)) {
+      results[[col]][failed_idx] <- resumed[[col]]
+    }
+  }
+
+  if (!inherits(results, "llmr_experiment")) {
+    class(results) <- unique(c("llmr_experiment", class(results)))
+  }
+  results
+}
+
+#' LLM-as-a-Judge Evaluation
+#'
+#' Evaluates outputs in a target column against a custom prompt using
+#' [llm_mutate_tags()] for clean tag-based extraction. The target column value
+#' is available in the prompt template as `{.target}`.
+#'
+#' @param .data Data frame of experiment results.
+#' @param .target Bare column name containing the output to evaluate.
+#' @param .config The judge [llm_config].
+#' @param prompt Evaluation prompt template. Use `{.target}` to reference the
+#'   target column value (other data columns are also available).
+#' @param .tags Tags to extract from the judge response. Defaults to
+#'   `c("reasoning", "score")`.
+#' @param ... Passed to [llm_mutate_tags()].
+#' @return `.data` with judge output columns appended.
+#'
+#' @examples
+#' \dontrun{
+#' results |>
+#'   llm_judge(
+#'     .target = response_text,
+#'     .config = judge_cfg,
+#'     prompt = "Rate this answer on a 1-5 scale:\n{.target}",
+#'     .tags = c("reasoning", "score")
+#'   )
+#' }
+#'
+#' @seealso [llm_mutate_tags()], [llm_parse_tags()]
+#' @export
+llm_judge <- function(.data, .target, .config, prompt,
+                      .tags = c("reasoning", "score"), ...) {
+  target_sym <- rlang::ensym(.target)
+  target_name <- rlang::as_name(target_sym)
+
+  if (!target_name %in% names(.data)) stop("Target column not found in .data.")
+
+  eval_data <- .data
+  eval_data[[".target"]] <- eval_data[[target_name]]
+
+  out <- llm_mutate_tags(
+    .data = eval_data,
+    output = judge_res,
+    prompt = prompt,
+    .config = .config,
+    .tags = .tags,
+    ...
+  )
+
+  out[[".target"]] <- NULL
+
+  if (inherits(.data, "llmr_experiment") && !inherits(out, "llmr_experiment")) {
+    class(out) <- unique(c("llmr_experiment", class(out)))
+  }
+  out
+}
+
+#' @export
+summary.llmr_experiment <- function(object, ...) {
+  total <- nrow(object)
+  success <- sum(object$success, na.rm = TRUE)
+  total_sent <- sum(object$sent_tokens, na.rm = TRUE)
+  total_rec <- sum(object$rec_tokens, na.rm = TRUE)
+
+  cat("-- LLMR Experiment Summary --\n")
+  cat(sprintf("Total Runs: %s (%.1f%% successful)\n",
+              format(total, big.mark = ","),
+              (success / max(1, total)) * 100))
+  cat(sprintf("Total Tokens: %s sent | %s received\n\n",
+              format(total_sent, big.mark = ","),
+              format(total_rec, big.mark = ",")))
+
+  if ("model" %in% names(object)) {
+    cat("-- Performance By Model --\n")
+    if (requireNamespace("dplyr", quietly = TRUE)) {
+      agg <- object |>
+        dplyr::group_by(model) |>
+        dplyr::summarize(
+          Success = sprintf("%s%%", round(mean(success, na.rm = TRUE) * 100, 1)),
+          `Avg Latency` = sprintf("%.1fs", mean(duration, na.rm = TRUE)),
+          `Avg Tokens` = format(round(mean(total_tokens, na.rm = TRUE)), big.mark = ","),
+          Truncated = sprintf("%s%%", round(mean(finish_reason == "length", na.rm = TRUE) * 100, 1)),
+          .groups = "drop"
+        )
+      print(as.data.frame(agg), row.names = FALSE)
+    } else {
+      for (m in unique(object$model)) {
+        sub <- object[object$model == m, ]
+        cat(sprintf("%s: %.1f%% success | %.1fs latency\n",
+                    m, mean(sub$success, na.rm = TRUE) * 100,
+                    mean(sub$duration, na.rm = TRUE)))
+      }
+    }
+  }
+  invisible(object)
+}
+

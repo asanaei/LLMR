@@ -172,15 +172,20 @@ call_llm_robust <- function(config, messages,
 
   # Error filter for retry_with_backoff: only retry for specific conditions
   is_retryable_error <- function(e) {
-    err_msg <- conditionMessage(e)
-    # Simple detection of rate-limit-like errors
-    is_rate_error <- grepl("429|rate limit|too many requests|exceeded",
-                           err_msg, ignore.case = TRUE)
-    if (is_rate_error) {
-      log_llm_error(e) # Log the rate error specifically if we are about to retry it
-      return(TRUE) # Retry this error
+    if (inherits(e, "llmr_api_rate_limit_error") || inherits(e, "llmr_api_server_error")) {
+      log_llm_error(e)
+      return(TRUE)
     }
-    return(FALSE) # Do not retry other errors
+    err_msg <- conditionMessage(e)
+    is_transient <- grepl(
+      "429|500|502|503|504|rate limit|too many requests|exceeded|timeout|timed out|resolve host|could not resolve|connection refused|connection reset|peer closed",
+      err_msg, ignore.case = TRUE
+    )
+    if (is_transient) {
+      log_llm_error(e)
+      return(TRUE)
+    }
+    return(FALSE)
   }
 
   # Original error handling logic for non-retryable errors or after all retries fail

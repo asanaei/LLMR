@@ -14,6 +14,9 @@
 #' @param .system_prompt Optional system message (character scalar).
 #' @param ... Passed unchanged to [call_llm_broadcast()] (e.g. `tries`,
 #'   `progress`, `verbose`).
+#' @param .tags Optional character vector of XML-like tag names to request and parse.
+#'   When supplied, delegates to [llm_fn_tags()] for tag-based extraction.
+#' @param .fields Optional field selector for tag extraction (see [llm_fn_tags()]).
 #' @param .return One of \code{c("text","columns","object")}. `"columns"`
 #'   returns a tibble of diagnostic columns; `"text"` returns a character
 #'   vector; `"object"` returns a list of `llmr_response` (or `NA` on failure).
@@ -24,8 +27,8 @@
 #' - `.return = "object"`: list of `llmr_response` (or `NA` on failure)
 #' For embedding mode, always a numeric matrix.
 #'
-#' @seealso [llm_mutate()], [llm_fn_structured()], [setup_llm_parallel()],
-#'   [call_llm_broadcast()], [get_batched_embeddings()]
+#' @seealso [llm_mutate()], [llm_fn_structured()], [llm_fn_tags()],
+#'   [setup_llm_parallel()], [call_llm_broadcast()], [get_batched_embeddings()]
 #'
 #' @examples
 #' \dontrun{
@@ -41,10 +44,22 @@ llm_fn <- function(x,
                    .config,
                    .system_prompt = NULL,
                    ...,
+                   .tags = NULL,
+                   .fields = NULL,
                    .return = c("text","columns","object")) {
 
   stopifnot(inherits(.config, "llm_config"))
   .return <- match.arg(.return)
+
+  if (!is.null(.tags)) {
+    return(llm_fn_tags(x, prompt,
+                       .config = .config,
+                       .system_prompt = .system_prompt,
+                       ...,
+                       .tags = .tags,
+                       .fields = .fields,
+                       .return = .return))
+  }
 
   user_txt <- if (is.data.frame(x)) {
     glue::glue_data(x, prompt, .na = "")
@@ -337,10 +352,6 @@ llm_mutate <- function(.data,
 
   # If .structured = TRUE, delegate to llm_mutate_structured
   if (isTRUE(.structured)) {
-    if (!requireNamespace("LLMR", quietly = TRUE)) {
-      stop("Structured output requires the LLMR package.")
-    }
-
     args <- list(
       .data = .data,
       prompt = prompt,

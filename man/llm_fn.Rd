@@ -10,6 +10,8 @@ llm_fn(
   .config,
   .system_prompt = NULL,
   ...,
+  .tags = NULL,
+  .fields = NULL,
   .return = c("text", "columns", "object")
 )
 }
@@ -25,6 +27,11 @@ columns (\code{{col}}); with a vector the placeholder is \code{{x}}.}
 
 \item{...}{Passed unchanged to \code{\link[=call_llm_broadcast]{call_llm_broadcast()}} (e.g. \code{tries},
 \code{progress}, \code{verbose}).}
+
+\item{.tags}{Optional character vector of XML-like tag names to request and parse.
+When supplied, delegates to \code{\link[=llm_fn_tags]{llm_fn_tags()}} for tag-based extraction.}
+
+\item{.fields}{Optional field selector for tag extraction (see \code{\link[=llm_fn_tags]{llm_fn_tags()}}).}
 
 \item{.return}{One of \code{c("text","columns","object")}. \code{"columns"}
 returns a tibble of diagnostic columns; \code{"text"} returns a character
@@ -53,6 +60,6 @@ llm_fn(df, "Classify '{text}' from {source}.", cfg, .return = "columns")
 }
 }
 \seealso{
-\code{\link[=llm_mutate]{llm_mutate()}}, \code{\link[=llm_fn_structured]{llm_fn_structured()}}, \code{\link[=setup_llm_parallel]{setup_llm_parallel()}},
-\code{\link[=call_llm_broadcast]{call_llm_broadcast()}}, \code{\link[=get_batched_embeddings]{get_batched_embeddings()}}
+\code{\link[=llm_mutate]{llm_mutate()}}, \code{\link[=llm_fn_structured]{llm_fn_structured()}}, \code{\link[=llm_fn_tags]{llm_fn_tags()}},
+\code{\link[=setup_llm_parallel]{setup_llm_parallel()}}, \code{\link[=call_llm_broadcast]{call_llm_broadcast()}}, \code{\link[=get_batched_embeddings]{get_batched_embeddings()}}
 }

@@ -14,67 +14,63 @@ knitr::opts_chunk$set(
 )
 ```
 
-This vignette shows basic chat usage with four providers and model names:
-- OpenAI: gpt-5-nano
-- Anthropic: claude-sonnet-4-6
-- Gemini: gemini-2.5-flash-lite
+This vignette shows basic chat usage with four models across two open providers:
+- DeepSeek: deepseek-chat
+- DeepSeek: deepseek-reasoner
+- Groq: llama-3.1-8b-instant
 - Groq: openai/gpt-oss-20b
 
-You will need API keys in these environment variables: OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, GROQ_API_KEY.
+You will need API keys in these environment variables: DEEPSEEK_API_KEY, GROQ_API_KEY.
 
 To run these examples locally, set a local flag:
 - Sys.setenv(LLMR_RUN_VIGNETTES = "true")
 - or add LLMR_RUN_VIGNETTES=true to ~/.Renviron
 
-## OpenAI: gpt-5-nano
+## DeepSeek: deepseek-chat
 ```{r}
 library(LLMR)
 
-cfg_openai <- llm_config(
-  provider = "openai",
-  model    = "gpt-5-nano",
-  
+cfg_ds <- llm_config(
+  provider = "deepseek",
+  model    = "deepseek-chat"
 )
 
-chat_oai <- chat_session(cfg_openai, system = "Be concise.")
-chat_oai$send("Say a warm hello in one short sentence.")
-chat_oai$send("Now say it in Esperanto.")
+chat_ds <- chat_session(cfg_ds, system = "Be concise.")
+chat_ds$send("Say a warm hello in one short sentence.")
+chat_ds$send("Now say it in Esperanto.")
 ```
 
-## Anthropic: claude-sonnet-4-6
+## DeepSeek: deepseek-reasoner
 ```{r}
-cfg_anthropic <- llm_config(
-  provider = "anthropic",
-  model    = "claude-sonnet-4-6",
-  max_tokens = 512   # avoid warnings; Anthropic requires max_tokens
+cfg_reason <- llm_config(
+  provider = "deepseek",
+  model    = "deepseek-reasoner"
 )
 
-chat_claude <- chat_session(cfg_anthropic, system = "Be concise.")
-chat_claude$send("Name one interesting fact about honey bees.")
+chat_reason <- chat_session(cfg_reason, system = "Be concise.")
+chat_reason$send("Name one interesting fact about honey bees.")
 ```
 
-## Gemini: gemini-2.5-flash-lite
+## Groq: llama-3.1-8b-instant
 ```{r}
-cfg_gemini <- llm_config(
-  provider = "gemini",
-  model    = "gemini-2.5-flash-lite",
-  
+cfg_groq1 <- llm_config(
+  provider = "groq",
+  model    = "llama-3.1-8b-instant"
 )
 
-chat_gem <- chat_session(cfg_gemini, system = "Be concise.")
-chat_gem$send("Give me a single-sentence fun fact about volcanoes.")
+chat_groq1 <- chat_session(cfg_groq1, system = "Be concise.")
+chat_groq1$send("Give me a single-sentence fun fact about volcanoes.")
 ```
 
 ## Groq: openai/gpt-oss-20b
 ```{r}
-cfg_groq <- llm_config(
+cfg_groq2 <- llm_config(
   provider = "groq",
-  model    = "openai/gpt-oss-20b",
-  
+  model    = "openai/gpt-oss-20b"
 )
 
-chat_groq <- chat_session(cfg_groq, system = "Be concise.")
-chat_groq$send("Share a short fun fact about octopuses.")
+chat_groq2 <- chat_session(cfg_groq2, system = "Be concise.")
+chat_groq2$send("Share a short fun fact about octopuses.")
 ```
 
 ## Using the chat history
@@ -82,7 +78,7 @@ chat_groq$send("Share a short fun fact about octopuses.")
 Chat sessions remember context automatically:
 
 ```{r}
-chat_oai$send("What did I ask you to do in my first message?")
+chat_ds$send("What did I ask you to do in my first message?")
 # The model can reference the earlier "Say a warm hello" request
 ```
 
@@ -90,13 +86,13 @@ chat_oai$send("What did I ask you to do in my first message?")
 
 ```{r}
 # View all messages
-as.data.frame(chat_oai)
+as.data.frame(chat_ds)
 
 # Get summary statistics
-summary(chat_oai)
+summary(chat_ds)
 ```
 
-## Structured chat in one call (OpenAI example)
+## Structured chat in one call (DeepSeek example)
 ```{r}
 schema <- list(
   type = "object",
@@ -108,7 +104,7 @@ schema <- list(
   additionalProperties = FALSE
 )
 
-chat_oai$send_structured(
+chat_ds$send_structured(
   "Return an answer and a confidence score (0-1) about: Why is the sky blue?",
   schema
 )

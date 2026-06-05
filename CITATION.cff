@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use this software, please cite the software record below."
 type: software
 title: "LLMR: A unified interface for research with Large Language Models in R"
-version: "0.6.3"
-date-released: 2025-10-11
+version: "0.7.0"
+date-released: 2026-06-04
 url: "https://github.com/asanaei/LLMR"
 repository-code: "https://github.com/asanaei/LLMR"
 authors:
@@ -15,9 +15,10 @@ authors:
 abstract: >-
   LLMR provides a unified, tidyverse-compatible interface for conducting
   experiments with multiple Large Language Model APIs within R. The package
-  supports OpenAI, Anthropic, Groq, Together AI, DeepSeek, Gemini, xAI, Voyage AI,
-  and Ollama. It includes parallel execution, caching, error handling, and
-  structured-output utilities with local validation.
+  supports OpenAI, Anthropic, Gemini, Groq, Together AI, DeepSeek, xAI, Voyage AI,
+  Ollama, Xiaomi MiMo, Qwen, Zhipu, and Moonshot. It includes parallel execution,
+  caching, error handling, structured JSON output, XML-like tag extraction,
+  and local schema validation.
 keywords:
   - "large language models"
   - "R"

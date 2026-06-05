@@ -9,11 +9,13 @@ utils::globalVariables(
     ":=",
     "structured_ok", "structured_data",
     "structured_valid", "structured_error",
-    "tags_ok", "tags_data")
+    "tags_ok", "tags_data",
+    "model", "success", "duration", "total_tokens",
+    "finish_reason", "judge_res")
 )
 #' @importFrom utils head tail modifyList
 #' @importFrom vctrs vec_ptype_common vec_cast vec_c
-#' @importFrom rlang `:=`
+#' @importFrom rlang `:=` `%||%`
 #' @importFrom stats setNames
 #' @importFrom purrr map map2 keep compact detect list_transpose
 #' @noRd

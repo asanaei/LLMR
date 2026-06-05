@@ -1,0 +1,72 @@
+---
+title: "Frictionless Science: The Trolley Dilemma"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Frictionless Science: The Trolley Dilemma}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>",
+  eval = identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true")
+)
+```
+
+Contemporary behavioral research increasingly leverages large language models (LLMs) to simulate human judgments. This vignette illustrates a streamlined methodology for conducting a classical moral philosophy experiment---the Trolley Dilemma---using the `LLMR` package. We bypass the elementary chat functionalities and proceed directly to a vectorised experimental design using `llm_mutate()`. 
+
+For this demonstration, we utilize an open-weights model provided via the Groq API.
+
+```{r setup, message=FALSE, warning=FALSE}
+library(LLMR)
+library(dplyr)
+
+# Configure an open model endpoint
+cfg <- llm_config(
+  provider = "groq",
+  model    = "llama-3.1-8b-instant"
+)
+```
+
+## Designing the Experiment
+
+We construct a fundamental stimulus set representing two standard variants of the Trolley Dilemma.
+
+```{r stimuli}
+dilemmas <- tibble::tibble(
+  condition = c("Switch", "Footbridge"),
+  scenario = c(
+    "A runaway trolley is heading down the tracks toward five workers who will be killed. You are standing next to a switch. If you pull the switch, the trolley will be diverted onto a side track where it will kill one worker. Do you pull the switch?",
+    "A runaway trolley is heading toward five workers. You are standing on a footbridge above the tracks next to a large stranger. If you push the stranger onto the tracks below, his mass will stop the trolley, saving the five workers but killing the stranger. Do you push the stranger?"
+  )
+)
+```
+
+## Vectorised Execution with Soft Structuring
+
+To systematically extract the model's decisions, we deploy `llm_mutate()`. Rather than imposing a rigid JSON schema---which can induce failure modes in some inference endpoints---we instruct the model to use simple XML-like tags. This "soft structuring" approach remains robust across varying provider capabilities.
+
+```{r mutate}
+experiment_results <- dilemmas |>
+  llm_mutate(
+    response = c(
+      system = "You are a participant in a moral psychology experiment. Read the scenario and provide a definitive YES or NO decision, followed by a brief rationale. Enclose your decision in <decision>...</decision> tags and your reasoning in <rationale>...</rationale> tags.",
+      user = "{scenario}"
+    ),
+    .config = cfg,
+    .tags = c("decision", "rationale")
+  )
+```
+
+By specifying the `.tags` argument, `LLMR` automatically parses the response string and appends the extracted content as distinct columns in the original dataset.
+
+```{r inspect}
+experiment_results |>
+  select(condition, decision, rationale) |>
+  print(n = Inf)
+```
+
+## Conclusion
+
+This approach encapsulates the core objective of `LLMR`: frictionless science. Researchers specify the conditions, articulate a robust prompt, and retrieve a structured dataset ready for statistical evaluation, eliminating intermediate parsing logic and cumbersome loop constructs.

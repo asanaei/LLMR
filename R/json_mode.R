@@ -32,8 +32,9 @@
 
 #' Enable Structured Output (Provider-Agnostic)
 #'
-#' Turn on structured output for a model configuration. Supports OpenAI‑compatible
-#' providers (OpenAI, Groq, Together, x.ai, DeepSeek), Anthropic, and Gemini.
+#' Turn on structured output for a model configuration. Supports OpenAI-compatible
+#' providers (OpenAI, Groq, Together, x.ai, DeepSeek, Xiaomi, Qwen, Zhipu,
+#' Moonshot), Anthropic, and Gemini.
 #'
 #' @param config An [llm_config] object.
 #' @param schema A named list representing a JSON Schema.
@@ -63,7 +64,7 @@ enable_structured_output <- function(config,
 
   mp <- config$model_params %||% list()
   prov <- config$provider
-  is_openai_compat <- prov %in% c("openai","groq","together","xai","deepseek")
+  is_openai_compat <- prov %in% c("openai","groq","together","xai","deepseek", "xiaomi", "qwen", "zhipu", "moonshot")
 
   if (is_openai_compat) {
     # Prefer json_mode via response_format for structured output
@@ -693,10 +694,11 @@ call_llm_par_structured <- function(experiments, schema = NULL, .fields = NULL, 
   })
 
   res <- call_llm_par(ex, ...)
-  # Default auto-hoist if user didn't provide fields but gave a schema (hoist all top-level props)
   fields_auto <- if (is.null(.fields) && !is.null(effective_schema)) .auto_fields_from_schema(effective_schema) else .fields
   out <- llm_parse_structured_col(res, structured_col = "response_text", fields = fields_auto, allow_list = TRUE)
-  if (requireNamespace("tibble", quietly = TRUE)) tibble::as_tibble(out) else out
+  out2 <- if (requireNamespace("tibble", quietly = TRUE)) tibble::as_tibble(out) else out
+  class(out2) <- unique(c("llmr_experiment", class(out2)))
+  out2
 }
 
 

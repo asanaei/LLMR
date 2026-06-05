@@ -79,8 +79,8 @@ safe <- function(expr) tryCatch(expr, error = function(e) {message("ERROR: ", e$
 safe({
   library(LLMR)
   cfg <- llm_config(
-    provider = "openai",                # try "groq" or "together" too
-    model    = "gpt-4.1-nano",
+    provider = "deepseek",              
+    model    = "deepseek-chat",
     temperature = 0
   )
 
@@ -123,7 +123,7 @@ safe({
 
   cfg <- llm_config(
     provider = "groq",
-    model    = "openai/gpt-oss-20b",
+    model    = "llama-3.1-8b-instant",
     temperature = 0
   )
   cfg_strict <- enable_structured_output(cfg, schema = schema, strict = TRUE)
@@ -150,7 +150,7 @@ If your key is set, you should see `structured_ok = TRUE`, `structured_valid = T
 
 ---
 
-### 3) Anthropic: force a schema via a tool (may require `max_tokens`)
+### 3) DeepSeek: force a schema
 
 ```{r}
 safe({
@@ -162,11 +162,11 @@ safe({
     additionalProperties=FALSE
   )
 
-  cfg <- llm_config("anthropic", "claude-sonnet-4-6", max_tokens = 512)
+  cfg <- llm_config("deepseek", "deepseek-chat")
   cfg <- enable_structured_output(cfg, schema = schema, name = "llmr_schema")
 
   res <- call_llm(cfg, c(
-    system = "Return only the tool result that matches the schema.",
+    system = "Return only the JSON object that matches the schema.",
     user   = "Answer: capital of Japan; include confidence in [0,1]."
   ))
 
@@ -175,26 +175,22 @@ safe({
 })
 ```
 
-> Anthropic *requires* `max_tokens`; LLMR warns and defaults if you omit it.
-
 ---
 
-### 4) Gemini: JSON response (plus optional response schema on supported models)
+### 4) Groq: another structured output example
 
 ```{r}
 safe({
   library(LLMR)
 
   cfg <- llm_config(
-    "gemini", "gemini-2.5-flash-lite",
-    response_mime_type = "application/json"  # ask for JSON back
-    # Optionally: gemini_enable_response_schema = TRUE, response_schema = <your JSON Schema>
+    "groq", "openai/gpt-oss-20b"
   )
 
-  res <- call_llm(cfg, c(
+  res <- call_llm_structured(cfg, c(
     system = "Reply as JSON only.",
     user   = "Produce fields name and score about 'MNIST'."
-  ))
+  ), schema = list(type="object", properties=list(name=list(type="string"), score=list(type="number")), required=list("name", "score"), additionalProperties=FALSE))
   str(llm_parse_structured(res))
 })
 ```
@@ -233,7 +229,7 @@ For production ETL workflows, combine schema validation with parallelization:
 ```{r, eval=FALSE}
 library(LLMR); library(dplyr)
 
-cfg_with_schema = llm_config('openai','gpt-4.1-nano')
+cfg_with_schema = llm_config('deepseek','deepseek-chat')
   
 setup_llm_parallel(workers = 10)
 

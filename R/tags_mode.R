@@ -32,16 +32,30 @@
   instruction <- .tag_prompt(tags)
 
   if (!is.null(.messages)) {
-    if (is.null(names(.messages))) {
-      names(.messages) <- rep("user", length(.messages))
+    if (is.list(.messages) && length(.messages) > 0 &&
+        is.list(.messages[[1]]) && !is.null(.messages[[1]]$role)) {
+      is_sys <- vapply(.messages, function(x) identical(x$role, "system"), logical(1))
+      if (any(is_sys)) {
+        idx <- which(is_sys)[1]
+        .messages[[idx]]$content <- paste(.messages[[idx]]$content, instruction, sep = "\n\n")
+      } else {
+        .messages <- c(list(list(role = "system", content = instruction)), .messages)
+      }
+      return(list(.messages = .messages, .system_prompt = .system_prompt))
     }
-    sys <- which(names(.messages) == "system")
-    if (length(sys)) {
-      .messages[[sys[[1]]]] <- paste(.messages[[sys[[1]]]], instruction, sep = "\n\n")
-    } else {
-      .messages <- c(system = instruction, .messages)
+
+    if (is.character(.messages)) {
+      if (is.null(names(.messages))) {
+        names(.messages) <- rep("user", length(.messages))
+      }
+      sys <- which(names(.messages) == "system")
+      if (length(sys)) {
+        .messages[[sys[[1]]]] <- paste(.messages[[sys[[1]]]], instruction, sep = "\n\n")
+      } else {
+        .messages <- c(system = instruction, .messages)
+      }
+      return(list(.messages = .messages, .system_prompt = .system_prompt))
     }
-    return(list(.messages = .messages, .system_prompt = .system_prompt))
   }
 
   list(
@@ -275,3 +289,90 @@ llm_mutate_tags <- function(.data,
 
   llm_parse_tags_col(out, tags = tags, tags_col = output_name, fields = .fields)
 }
+
+#' Vectorized LLM with tag extraction
+#'
+#' Tags-first variant of [llm_fn()]. Injects tag instructions, calls the model
+#' via [call_llm_broadcast()], then parses XML-like tags from each response.
+#'
+#' @inheritParams llm_fn
+#' @param .tags Character vector of tag names to request and parse.
+#' @param .fields `NULL` to extract all tags, a character vector of tags, a named
+#'   vector such as `c(person_age = "age")`, or `FALSE` to skip field extraction.
+#' @seealso [llm_fn()], [llm_mutate_tags()], [llm_parse_tags_col()],
+#'   [call_llm_par_tags()]
+#' @export
+llm_fn_tags <- function(x,
+                        prompt,
+                        .config,
+                        .system_prompt = NULL,
+                        ...,
+                        .tags,
+                        .fields = NULL,
+                        .return = c("columns", "text", "object")) {
+
+  tags <- .validate_tags(.tags)
+  .return <- match.arg(.return)
+
+  prompted <- .add_tag_prompt(NULL, .system_prompt, tags)
+
+  out <- llm_fn(x, prompt,
+                .config = .config,
+                .system_prompt = prompted$.system_prompt,
+                ...,
+                .return = "columns")
+
+  out2 <- llm_parse_tags_col(out, tags = tags,
+                             tags_col = "response_text",
+                             fields = .fields)
+
+  if (.return == "text") {
+    return(ifelse(out2$tags_ok,
+                  out2$response_text,
+                  NA_character_))
+  }
+  if (.return == "object") return(out2$tags_data)
+  out2
+}
+
+#' Parallel experiments with tag parsing
+#'
+#' Injects tag instructions into each experiment row, runs [call_llm_par()],
+#' then parses XML-like tags from each response via [llm_parse_tags_col()].
+#'
+#' @param experiments Tibble with `config` and `messages` list-columns.
+#' @param .tags Character vector of tag names to request and parse.
+#' @param .fields `NULL` to extract all tags, a character vector of tags, a named
+#'   vector such as `c(person_age = "age")`, or `FALSE` to skip field extraction.
+#' @param ... Passed to [call_llm_par()].
+#' @seealso [call_llm_par()], [llm_parse_tags_col()], [llm_fn_tags()],
+#'   [llm_mutate_tags()]
+#' @export
+call_llm_par_tags <- function(experiments, .tags, .fields = NULL, ...) {
+  stopifnot(is.data.frame(experiments),
+            all(c("config", "messages") %in% names(experiments)))
+  tags <- .validate_tags(.tags)
+
+  ex <- experiments
+  ex$messages <- lapply(seq_len(nrow(ex)), function(i) {
+    msg <- ex$messages[[i]]
+    rowdf <- ex[i, setdiff(names(ex), c("config", "messages")), drop = FALSE]
+    if (is.character(msg)) {
+      nm <- names(msg)
+      out <- vapply(msg, function(s) as.character(glue::glue_data(rowdf, s, .na = "")), "")
+      if (!is.null(nm)) names(out) <- nm
+      msg <- out
+    }
+    prompted <- .add_tag_prompt(msg, NULL, tags)
+    prompted$.messages %||% msg
+  })
+
+  res <- call_llm_par(ex, ...)
+  out <- llm_parse_tags_col(res, tags = tags,
+                            tags_col = "response_text",
+                            fields = .fields)
+
+  class(out) <- unique(c("llmr_experiment", class(out)))
+  out
+}
+
