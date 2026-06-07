@@ -614,6 +614,11 @@ llm_config <- function(provider, model, api_key = NULL,
 #'         `provider = "gemini", vertex = TRUE, project = ...`.
 #'   \item \strong{Ollama (local):} OpenAI-compatible endpoints on `http://localhost:11434/v1/*`;
 #'         no Authorization header is required. Override with `api_url` as needed.
+#'   \item \strong{Alibaba / Moonshot regions:} Defaults target the
+#'         \emph{international} endpoints (`dashscope-intl.aliyuncs.com` and
+#'         `api.moonshot.ai`). China-region accounts must pass `api_url` for the
+#'         mainland hosts (`dashscope.aliyuncs.com` and `api.moonshot.cn`);
+#'         using the wrong region returns HTTP 401.
 #'   \item \strong{Error handling:} HTTP errors raise structured conditions with
 #'         classes like `llmr_api_param_error`, `llmr_api_rate_limit_error`,
 #'         `llmr_api_server_error`; see the condition fields for status, code,
@@ -1230,7 +1235,9 @@ call_llm.alibaba <- function(config, messages, verbose = FALSE) {
     stop("Embedding models are not currently supported for Alibaba (DashScope)!")
   }
   messages <- .normalize_messages(messages)
-  endpoint <- get_endpoint(config, default_endpoint = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions")
+  # Default to the international DashScope endpoint. China-region accounts should
+  # pass api_url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions".
+  endpoint <- get_endpoint(config, default_endpoint = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions")
 
   body <- .drop_null(list(
     model      = config$model %||% "qwen-plus",
@@ -1300,7 +1307,9 @@ call_llm.moonshot <- function(config, messages, verbose = FALSE) {
     stop("Embedding models are not currently supported for Moonshot!")
   }
   messages <- .normalize_messages(messages)
-  endpoint <- get_endpoint(config, default_endpoint = "https://api.moonshot.cn/v1/chat/completions")
+  # Default to the international Moonshot endpoint. China-platform accounts should
+  # pass api_url = "https://api.moonshot.cn/v1/chat/completions".
+  endpoint <- get_endpoint(config, default_endpoint = "https://api.moonshot.ai/v1/chat/completions")
 
   body <- .drop_null(list(
     model      = config$model %||% "moonshot-v1-8k",

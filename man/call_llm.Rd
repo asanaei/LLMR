@@ -58,6 +58,11 @@ parts use \code{text}/\code{inlineData(mimeType,data)}; responses are set to
 \verb{provider = "gemini", vertex = TRUE, project = ...}.
 \item \strong{Ollama (local):} OpenAI-compatible endpoints on \verb{http://localhost:11434/v1/*};
 no Authorization header is required. Override with \code{api_url} as needed.
+\item \strong{Alibaba / Moonshot regions:} Defaults target the
+\emph{international} endpoints (\code{dashscope-intl.aliyuncs.com} and
+\code{api.moonshot.ai}). China-region accounts must pass \code{api_url} for the
+mainland hosts (\code{dashscope.aliyuncs.com} and \code{api.moonshot.cn});
+using the wrong region returns HTTP 401.
 \item \strong{Error handling:} HTTP errors raise structured conditions with
 classes like \code{llmr_api_param_error}, \code{llmr_api_rate_limit_error},
 \code{llmr_api_server_error}; see the condition fields for status, code,
