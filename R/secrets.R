@@ -22,23 +22,15 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
   )
 }
 
-# Internal: map providers to default environment variables for keys
+# Internal: default environment variables a provider's key may live in.
+# Formulaic: <PROVIDER>_API_KEY then <PROVIDER>_KEY, upper-cased. Both forms
+# are tried in order by .resolve_api_key(). (Gemini-on-Vertex is handled
+# upstream in llm_config(), which selects VERTEX_ACCESS_TOKEN before this.)
 #' @keywords internal
 #' @noRd
 .default_api_key_env <- function(provider) {
-  switch(tolower(provider),
-    openai    = "OPENAI_API_KEY",
-    anthropic = "ANTHROPIC_API_KEY",
-    gemini    = "GEMINI_API_KEY",
-    groq      = "GROQ_API_KEY",
-    together  = "TOGETHER_API_KEY",
-    voyage    = "VOYAGE_API_KEY",
-    deepseek  = "DEEPSEEK_API_KEY",
-    xai       = "XAI_API_KEY",
-    ollama    = "OLLAMA_API_KEY",
-    xiaomi    = c("XIAOMI_KEY", "XIAOMI_API_KEY"),
-    toupper(paste0(provider, "_API_KEY"))
-  )
+  stem <- toupper(provider)
+  c(paste0(stem, "_API_KEY"), paste0(stem, "_KEY"))
 }
 
 # Internal: resolve a secret handle or an env-spec string into a concrete key string

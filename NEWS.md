@@ -5,7 +5,7 @@
 - **Soft structured output via XML-like tags.** `llm_mutate()` gains `.tags`,
   backed by `llm_mutate_tags()`, `llm_fn_tags()`, `llm_parse_tags()`,
   `llm_parse_tags_col()`, and `call_llm_par_tags()`.
-- **Four new providers:** Xiaomi MiMo, Alibaba Qwen, Zhipu (GLM), and Moonshot
+- **Four new providers:** Xiaomi MiMo, Alibaba (Qwen), Zhipu (GLM), and Moonshot
   (Kimi). All use OpenAI-compatible structured output.
 - **Gemini Vertex AI** supported via `llm_config("gemini", ..., vertex = TRUE)`.
 - **Multi-variable API key fallback.** Providers can declare multiple

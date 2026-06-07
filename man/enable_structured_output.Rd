@@ -31,7 +31,7 @@ Modified \code{llm_config}.
 }
 \description{
 Turn on structured output for a model configuration. Supports OpenAI-compatible
-providers (OpenAI, Groq, Together, x.ai, DeepSeek, Xiaomi, Qwen, Zhipu,
+providers (OpenAI, Groq, Together, x.ai, DeepSeek, Xiaomi, Alibaba (Qwen), Zhipu,
 Moonshot), Anthropic, and Gemini.
 }
 \section{When to use tags instead}{

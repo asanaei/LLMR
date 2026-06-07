@@ -400,13 +400,27 @@ get_endpoint <- function(config, default_endpoint) {
 #' `call_llm()` (and friends) understand. You can pass provider-specific
 #' parameters via `...`; LLMR forwards them as-is, with a few safe conveniences.
 #'
-#' @param provider Character scalar. One of:
+#' @param provider Character scalar naming the backend. Known providers:
 #'   `"openai"`, `"anthropic"`, `"gemini"`, `"groq"`, `"together"`,
-#'   `"deepseek"`, `"xiaomi"`, `"qwen"`, `"zhipu"`, `"moonshot"`, `"xai"`, `"ollama"`.
+#'   `"deepseek"`, `"xai"`, `"xiaomi"`, `"alibaba"` (Alibaba Cloud DashScope,
+#'   OpenAI-compatible mode; serves the Qwen models), `"zhipu"`, `"moonshot"`,
+#'   `"voyage"` (embeddings only), and `"ollama"` (local server, usually
+#'   keyless). Other names are accepted and routed through the
+#'   OpenAI-compatible path.
+#'
+#'   When `api_key` is omitted, LLMR reads the key from the environment using a
+#'   formulaic default: it tries `<PROVIDER>_API_KEY` and then `<PROVIDER>_KEY`,
+#'   upper-cased (e.g. `OPENAI_API_KEY`, or `ALIBABA_API_KEY`/`ALIBABA_KEY`). The
+#'   one exception is Gemini with `vertex = TRUE`, which reads `VERTEX_ACCESS_TOKEN`.
 #' @param model Character scalar. Model name understood by the chosen provider.
 #'   (e.g., `"gpt-4.1-nano"`, `"gpt-5-nano"`, `"gemini-2.5-flash-lite"`,
 #'   `"openai/gpt-oss-20b"`, etc.)
-#' @param api_key Character scalar. Provider API key.
+#' @param api_key Provider API key. Preferred form is `llm_api_key_env("VAR")`,
+#'   referencing an environment variable by name (see `provider` for the
+#'   formulaic defaults). A bare environment-variable name or `"env:VAR"`
+#'   string also works. Supplying a literal key string is accepted but
+#'   discouraged and triggers a warning. When omitted, the provider default
+#'   is used.
 #' @param troubleshooting Logical. If `TRUE`, prints the full request payloads
 #'   (including your API key!) for debugging. **Use with extreme caution.**
 #' @param base_url Optional character. Back-compat alias; if supplied it is
@@ -1211,9 +1225,9 @@ call_llm.xiaomi <- function(config, messages, verbose = FALSE) {
 }
 
 #' @export
-call_llm.qwen <- function(config, messages, verbose = FALSE) {
+call_llm.alibaba <- function(config, messages, verbose = FALSE) {
   if (isTRUE(config$embedding)) {
-    stop("Embedding models are not currently supported for Qwen!")
+    stop("Embedding models are not currently supported for Alibaba (DashScope)!")
   }
   messages <- .normalize_messages(messages)
   endpoint <- get_endpoint(config, default_endpoint = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions")

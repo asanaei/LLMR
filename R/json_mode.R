@@ -33,7 +33,7 @@
 #' Enable Structured Output (Provider-Agnostic)
 #'
 #' Turn on structured output for a model configuration. Supports OpenAI-compatible
-#' providers (OpenAI, Groq, Together, x.ai, DeepSeek, Xiaomi, Qwen, Zhipu,
+#' providers (OpenAI, Groq, Together, x.ai, DeepSeek, Xiaomi, Alibaba (Qwen), Zhipu,
 #' Moonshot), Anthropic, and Gemini.
 #'
 #' @param config An [llm_config] object.
@@ -64,7 +64,7 @@ enable_structured_output <- function(config,
 
   mp <- config$model_params %||% list()
   prov <- config$provider
-  is_openai_compat <- prov %in% c("openai","groq","together","xai","deepseek", "xiaomi", "qwen", "zhipu", "moonshot")
+  is_openai_compat <- prov %in% c("openai","groq","together","xai","deepseek", "xiaomi", "alibaba", "zhipu", "moonshot")
 
   if (is_openai_compat) {
     # Prefer json_mode via response_format for structured output

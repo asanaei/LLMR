@@ -11,7 +11,7 @@
 LLMR gives R a single interface to hosted and local language models.
 One `llm_config()` object selects the provider; every other function works the same regardless of which model is behind it.
 
-**Providers:** OpenAI, Anthropic, Gemini (incl. Vertex AI), Groq, Together AI, DeepSeek, xAI, Voyage AI, Ollama, Xiaomi MiMo, Qwen, Zhipu, Moonshot.
+**Providers:** OpenAI, Anthropic, Gemini (incl. Vertex AI), Groq, Together AI, DeepSeek, xAI, Voyage AI, Ollama, Xiaomi MiMo, Alibaba (Qwen), Zhipu, Moonshot.
 
 ## Install
 

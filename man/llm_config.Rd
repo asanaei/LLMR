@@ -16,15 +16,29 @@ llm_config(
 )
 }
 \arguments{
-\item{provider}{Character scalar. One of:
+\item{provider}{Character scalar naming the backend. Known providers:
 \code{"openai"}, \code{"anthropic"}, \code{"gemini"}, \code{"groq"}, \code{"together"},
-\code{"deepseek"}, \code{"xiaomi"}, \code{"qwen"}, \code{"zhipu"}, \code{"moonshot"}, \code{"xai"}, \code{"ollama"}.}
+\code{"deepseek"}, \code{"xai"}, \code{"xiaomi"}, \code{"alibaba"} (Alibaba Cloud DashScope,
+OpenAI-compatible mode; serves the Qwen models), \code{"zhipu"}, \code{"moonshot"},
+\code{"voyage"} (embeddings only), and \code{"ollama"} (local server, usually
+keyless). Other names are accepted and routed through the
+OpenAI-compatible path.
+
+When \code{api_key} is omitted, LLMR reads the key from the environment using a
+formulaic default: it tries \verb{<PROVIDER>_API_KEY} and then \verb{<PROVIDER>_KEY},
+upper-cased (e.g. \code{OPENAI_API_KEY}, or \code{ALIBABA_API_KEY}/\code{ALIBABA_KEY}). The
+one exception is Gemini with \code{vertex = TRUE}, which reads \code{VERTEX_ACCESS_TOKEN}.}
 
 \item{model}{Character scalar. Model name understood by the chosen provider.
 (e.g., \code{"gpt-4.1-nano"}, \code{"gpt-5-nano"}, \code{"gemini-2.5-flash-lite"},
 \code{"openai/gpt-oss-20b"}, etc.)}
 
-\item{api_key}{Character scalar. Provider API key.}
+\item{api_key}{Provider API key. Preferred form is \code{llm_api_key_env("VAR")},
+referencing an environment variable by name (see \code{provider} for the
+formulaic defaults). A bare environment-variable name or \code{"env:VAR"}
+string also works. Supplying a literal key string is accepted but
+discouraged and triggers a warning. When omitted, the provider default
+is used.}
 
 \item{troubleshooting}{Logical. If \code{TRUE}, prints the full request payloads
 (including your API key!) for debugging. \strong{Use with extreme caution.}}
