@@ -254,12 +254,34 @@ llm_mutate_tags <- function(.data,
                             .after = NULL,
                             .tags,
                             .fields = NULL,
+                            .batch_size = 1L,
+                            .batch_payload = c("user", "system"),
+                            .batch_recovery = c("halve_recursive", "halve_once",
+                                                "singletons", "retry_same", "none"),
                             ...) {
   tags <- .validate_tags(.tags)
   output_missing <- missing(output)
   before_missing <- missing(.before)
   after_missing <- missing(.after)
   dots <- rlang::dots_list(...)
+  .batched <- .validate_batch_size(.batch_size)
+  .batch_payload  <- match.arg(.batch_payload)
+  .batch_recovery <- match.arg(.batch_recovery)
+
+  if (.batched) {
+    .assert_batch_not_embedding(.config)
+    return(.llm_mutate_tags_batched(
+      .data = .data,
+      output = if (output_missing) NULL else rlang::ensym(output),
+      prompt = prompt, .messages = .messages, .config = .config,
+      .system_prompt = .system_prompt,
+      .before = if (before_missing) NULL else .before,
+      .after  = if (after_missing) NULL else .after,
+      tags = tags, .fields = .fields,
+      .batch_size = .batch_size, .batch_payload = .batch_payload,
+      .batch_recovery = .batch_recovery, dots = dots))
+  }
+
   prompted <- .add_tag_prompt(.messages, .system_prompt, tags)
 
   args <- list(
@@ -309,10 +331,34 @@ llm_fn_tags <- function(x,
                         ...,
                         .tags,
                         .fields = NULL,
-                        .return = c("columns", "text", "object")) {
+                        .return = c("columns", "text", "object"),
+                        .batch_size = 1L,
+                        .batch_payload = c("user", "system"),
+                        .batch_recovery = c("halve_recursive", "halve_once",
+                                            "singletons", "retry_same", "none")) {
 
   tags <- .validate_tags(.tags)
   .return <- match.arg(.return)
+  .batched <- .validate_batch_size(.batch_size)
+  .batch_payload  <- match.arg(.batch_payload)
+  .batch_recovery <- match.arg(.batch_recovery)
+
+  if (.batched) {
+    .assert_batch_not_embedding(.config)
+    user_txt <- if (is.data.frame(x)) glue::glue_data(x, prompt, .na = "") else
+      glue::glue_data(list(x = x), prompt, .na = "")
+    res <- .run_batched(
+      config = .config, per_row_texts = as.character(user_txt),
+      system_text = .system_prompt, mode = "tags", tags = tags,
+      batch_size = .batch_size, batch_payload = .batch_payload,
+      batch_recovery = .batch_recovery, dots = rlang::dots_list(...))
+    out2 <- llm_parse_tags_col(res, tags = tags, tags_col = "response_text",
+                               fields = .fields)
+    if (.return == "text")
+      return(ifelse(out2$tags_ok, out2$response_text, NA_character_))
+    if (.return == "object") return(out2$tags_data)
+    return(out2)
+  }
 
   prompted <- .add_tag_prompt(NULL, .system_prompt, tags)
 

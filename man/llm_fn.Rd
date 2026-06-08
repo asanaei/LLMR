@@ -12,7 +12,11 @@ llm_fn(
   ...,
   .tags = NULL,
   .fields = NULL,
-  .return = c("text", "columns", "object")
+  .return = c("text", "columns", "object"),
+  .batch_size = 1L,
+  .batch_payload = c("user", "system"),
+  .batch_recovery = c("halve_recursive", "halve_once", "singletons", "retry_same",
+    "none")
 )
 }
 \arguments{
@@ -36,19 +40,65 @@ When supplied, delegates to \code{\link[=llm_fn_tags]{llm_fn_tags()}} for tag-ba
 \item{.return}{One of \code{c("text","columns","object")}. \code{"columns"}
 returns a tibble of diagnostic columns; \code{"text"} returns a character
 vector; \code{"object"} returns a list of \code{llmr_response} (or \code{NA} on failure).}
+
+\item{.batch_size}{Integer scalar, or \code{Inf}. Number of input elements packed
+into a single generative request. The default, \code{1}, sends one request per
+element (the historical behaviour). When greater than \code{1}, elements are
+grouped and transmitted in one call wrapped in numbered
+\verb{<row_1>...</row_1>} tags (see \emph{Row batching} below); \code{Inf} sends all
+elements in a single call. Ignored for embedding configurations, which use
+\code{\link[=get_batched_embeddings]{get_batched_embeddings()}} instead.}
+
+\item{.batch_payload}{One of \code{c("user","system")}. Channel to which the
+\verb{<row_i>} data block is appended when batching. The imperative instruction
+is always placed in the system message; this argument controls only where
+the data goes. The default, \code{"user"}, keeps a static system prompt
+cacheable.}
+
+\item{.batch_recovery}{How to handle rows that a batched call leaves
+unresolved (dropped, malformed, or truncated). One of:
+\describe{
+\item{\code{"halve_recursive"}}{(default) re-issue the unresolved rows at half
+the batch size, recursing down to single rows.}
+\item{\code{"halve_once"}}{re-issue at half the batch size exactly once, then
+give up on any still-unresolved rows.}
+\item{\code{"singletons"}}{re-issue each unresolved row on its own.}
+\item{\code{"retry_same"}}{re-issue the failed batch once at the same size.}
+\item{\code{"none"}}{do not recover; unresolved rows are returned as \code{NA}.}
+}
+Recovery is bounded by an internal call budget so it always terminates.}
 }
 \value{
 For generative mode:
 \itemize{
 \item \code{.return = "text"}: character vector
 \item \code{.return = "columns"}: tibble with diagnostics
-\item \code{.return = "object"}: list of \code{llmr_response} (or \code{NA} on failure)
+\item \code{.return = "object"}: list of \code{llmr_response} (or \code{NA} on failure;
+unavailable when \code{.batch_size > 1})
 For embedding mode, always a numeric matrix.
 }
 }
 \description{
 Apply an LLM prompt over vectors/data frames
 }
+\section{Row batching}{
+
+With \code{.batch_size > 1}, several input elements travel in one generative
+request: LLMR wraps each element's prompt in a numbered tag,
+\verb{<row_1>...</row_1>}, \verb{<row_2>...</row_2>}, and so on, appends that block to
+the message (see \code{.batch_payload}), and instructs the model to answer each
+item inside a matching numbered tag. The reply is split back into the
+original elements by those numbers. Batching trades a smaller number of
+(larger) requests for some dependence on the model following the protocol; it
+is most useful with capable models at \code{temperature = 0}, and it is a net loss
+when the model ignores the wrapping. Results are deterministic given the
+model's outputs: partitioning and parsing add no randomness. Rows the model
+drops, reorders, duplicates, or truncates are detected and re-issued
+according to \code{.batch_recovery}. Because a batch shares one underlying call,
+token counts are reported once per batch (on its first resolved row, \code{NA}
+elsewhere) so that summing token columns is correct.
+}
+
 \examples{
 \dontrun{
 words <- c("excellent", "awful")
@@ -61,5 +111,6 @@ llm_fn(df, "Classify '{text}' from {source}.", cfg, .return = "columns")
 }
 \seealso{
 \code{\link[=llm_mutate]{llm_mutate()}}, \code{\link[=llm_fn_structured]{llm_fn_structured()}}, \code{\link[=llm_fn_tags]{llm_fn_tags()}},
-\code{\link[=setup_llm_parallel]{setup_llm_parallel()}}, \code{\link[=call_llm_broadcast]{call_llm_broadcast()}}, \code{\link[=get_batched_embeddings]{get_batched_embeddings()}}
+\code{\link[=llm_parse_batch_tags]{llm_parse_batch_tags()}}, \code{\link[=setup_llm_parallel]{setup_llm_parallel()}}, \code{\link[=call_llm_broadcast]{call_llm_broadcast()}},
+\code{\link[=get_batched_embeddings]{get_batched_embeddings()}}
 }

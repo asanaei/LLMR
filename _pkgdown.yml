@@ -51,6 +51,7 @@ reference:
   - llm_parse_structured_col
   - llm_parse_tags
   - llm_parse_tags_col
+  - llm_parse_batch_tags
   - llm_validate_structured_col
   - llm_fn_structured
   - llm_mutate_structured

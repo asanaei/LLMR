@@ -529,7 +529,25 @@ llm_fn_structured <- function(x,
                         .schema = NULL,
                         .fields = NULL,
                               .local_only = FALSE,
-                              .validate_local = TRUE) {
+                              .validate_local = TRUE,
+                              .batch_size = 1L,
+                              .batch_payload = c("user", "system"),
+                              .batch_recovery = c("halve_recursive", "halve_once",
+                                                  "singletons", "retry_same", "none")) {
+  .batched <- .validate_batch_size(.batch_size)
+  .batch_payload  <- match.arg(.batch_payload)
+  .batch_recovery <- match.arg(.batch_recovery)
+
+  if (.batched) {
+    out2 <- .llm_structured_batched(
+      x = x, prompt = prompt, .config = .config, .system_prompt = .system_prompt,
+      .schema = .schema, .fields = .fields, .validate_local = .validate_local,
+      .batch_size = .batch_size, .batch_payload = .batch_payload,
+      .batch_recovery = .batch_recovery, dots = rlang::dots_list(...))
+    if (requireNamespace("tibble", quietly = TRUE)) return(tibble::as_tibble(out2))
+    return(out2)
+  }
+
   cfg <- if (isTRUE(.local_only) || is.null(.schema)) .config
          else enable_structured_output(.config, schema = .schema)
 
@@ -584,6 +602,10 @@ llm_mutate_structured <- function(.data,
                             .after  = NULL,
                             .schema = NULL,
                             .fields = NULL,
+                            .batch_size = 1L,
+                            .batch_payload = c("user", "system"),
+                            .batch_recovery = c("halve_recursive", "halve_once",
+                                                "singletons", "retry_same", "none"),
                             ...) {
   # Capture whether output was actually provided
   output_missing <- missing(output)
@@ -592,7 +614,26 @@ llm_mutate_structured <- function(.data,
   after_missing  <- missing(.after)
   # Capture dots for safe forwarding
   dots <- rlang::dots_list(...)
-  
+  .batched <- .validate_batch_size(.batch_size)
+  .batch_payload  <- match.arg(.batch_payload)
+  .batch_recovery <- match.arg(.batch_recovery)
+
+  if (.batched) {
+    if (!is.null(.messages))
+      stop("Structured batched mode supports `prompt`, not `.messages`, yet. ",
+           "Use .batch_size = 1, or pass a single `prompt`.", call. = FALSE)
+    out2 <- .llm_structured_batched(
+      prompt = prompt, .config = .config, .system_prompt = .system_prompt,
+      .schema = .schema, .fields = .fields, .validate_local = TRUE,
+      .batch_size = .batch_size, .batch_payload = .batch_payload,
+      .batch_recovery = .batch_recovery, dots = dots,
+      data_df = .data,
+      output = if (output_missing) NULL else rlang::ensym(output),
+      .before = if (before_missing) NULL else .before,
+      .after  = if (after_missing) NULL else .after)
+    return(out2)
+  }
+
   # Build the config with structured output enabled
   cfg_structured <- if (is.null(.schema)) .config else enable_structured_output(.config, schema = .schema)
   

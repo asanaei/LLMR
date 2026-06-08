@@ -12,7 +12,11 @@ llm_fn_tags(
   ...,
   .tags,
   .fields = NULL,
-  .return = c("columns", "text", "object")
+  .return = c("columns", "text", "object"),
+  .batch_size = 1L,
+  .batch_payload = c("user", "system"),
+  .batch_recovery = c("halve_recursive", "halve_once", "singletons", "retry_same",
+    "none")
 )
 }
 \arguments{
@@ -36,6 +40,33 @@ vector such as \code{c(person_age = "age")}, or \code{FALSE} to skip field extra
 \item{.return}{One of \code{c("text","columns","object")}. \code{"columns"}
 returns a tibble of diagnostic columns; \code{"text"} returns a character
 vector; \code{"object"} returns a list of \code{llmr_response} (or \code{NA} on failure).}
+
+\item{.batch_size}{Integer scalar, or \code{Inf}. Number of input elements packed
+into a single generative request. The default, \code{1}, sends one request per
+element (the historical behaviour). When greater than \code{1}, elements are
+grouped and transmitted in one call wrapped in numbered
+\verb{<row_1>...</row_1>} tags (see \emph{Row batching} below); \code{Inf} sends all
+elements in a single call. Ignored for embedding configurations, which use
+\code{\link[=get_batched_embeddings]{get_batched_embeddings()}} instead.}
+
+\item{.batch_payload}{One of \code{c("user","system")}. Channel to which the
+\verb{<row_i>} data block is appended when batching. The imperative instruction
+is always placed in the system message; this argument controls only where
+the data goes. The default, \code{"user"}, keeps a static system prompt
+cacheable.}
+
+\item{.batch_recovery}{How to handle rows that a batched call leaves
+unresolved (dropped, malformed, or truncated). One of:
+\describe{
+\item{\code{"halve_recursive"}}{(default) re-issue the unresolved rows at half
+the batch size, recursing down to single rows.}
+\item{\code{"halve_once"}}{re-issue at half the batch size exactly once, then
+give up on any still-unresolved rows.}
+\item{\code{"singletons"}}{re-issue each unresolved row on its own.}
+\item{\code{"retry_same"}}{re-issue the failed batch once at the same size.}
+\item{\code{"none"}}{do not recover; unresolved rows are returned as \code{NA}.}
+}
+Recovery is bounded by an internal call budget so it always terminates.}
 }
 \description{
 Tags-first variant of \code{\link[=llm_fn]{llm_fn()}}. Injects tag instructions, calls the model

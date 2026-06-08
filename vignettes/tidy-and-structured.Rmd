@@ -147,7 +147,9 @@ This is equivalent to calling `llm_mutate_structured()` and supports all the sam
 ## Soft structured output with tags
 
 When a strict JSON schema is unnecessary, request simple XML-like tags and let
-LLMR parse them into columns. Tags should not be nested.
+LLMR parse them into columns. In the ordinary one-row-per-call mode below, tags
+should be flat (not nested); the row-batching mode further down deliberately
+introduces one level of nesting and is documented there.
 
 ```{r}
 cities <- tibble::tibble(city = c("Cairo", "Lima", "Seoul"))
@@ -166,6 +168,52 @@ cities |>
 
 The result includes `tags_ok`, `tags_data`, and one column per requested tag.
 Use `llm_parse_tags_col()` to parse an existing response column.
+
+## Row batching: many rows per call
+
+By default LLMR sends one request per row. With `.batch_size > 1`, several rows
+are packed into a single request: each row's prompt is wrapped in a numbered tag
+(`<row_1>...</row_1>`, `<row_2>...</row_2>`, ...), the block is appended to the
+message, and the model is asked to answer each item inside a matching numbered
+tag. LLMR splits the reply back into the original rows. `.batch_size = Inf` sends
+the whole frame in one call.
+
+```{r}
+cities |>
+  llm_mutate(
+    geo = "Where is {city}? Give country and continent in their own tags.",
+    .config = cfg_groq1,
+    .tags = c("country", "continent"),
+    .batch_size = 3
+  )
+```
+
+A few points worth keeping in mind:
+
+- **Two notions of "batch".** This generative row batching is unrelated to
+  `get_batched_embeddings()`, which splits many texts across several *embedding*
+  calls. The `.batch_size` argument applies only to generative calls.
+- **One level of nesting in tag mode.** Inside each `<row_i>` block the model
+  emits the requested field tags, so batched tag output is intentionally nested
+  one level. This is the opposite of the flat-tag guidance for single-row calls;
+  LLMR adjusts the instruction automatically.
+- **Structured output.** `.structured = TRUE` together with `.batch_size > 1`
+  asks for a single JSON object `{"results":[{"row":i, ...}]}` and maps each
+  element back by its integer `row`. It emits a one-time warning, because it
+  relies on the model following the protocol and replaces strict provider-side
+  schema validation with local parsing.
+- **Fault tolerance.** Rows that the model drops, reorders, duplicates, or
+  truncates are detected and re-issued according to `.batch_recovery` (by default
+  the unresolved rows are retried at half the batch size, recursively, down to
+  single rows). Unrecoverable rows are returned as `NA` with a diagnostic finish
+  reason.
+- **Cost.** Batching reduces the number of requests and the repeated system-prompt
+  overhead, but it only pays off when the model reliably follows the wrapping
+  protocol. Prefer capable models at `temperature = 0`, and modest batch sizes.
+- **Diagnostics.** When batching actually groups rows, `llm_mutate()` adds
+  `<col>_batch`, `<col>_bn`, and `<col>_bi` columns identifying the batch, its
+  size, and the row's position within it. Token counts are attributed once per
+  batch (on its first resolved row) so that summing token columns is correct.
 
 ## llm_mutate_structured: structured with shorthand (Groq)
 ```{r}

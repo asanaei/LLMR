@@ -15,6 +15,10 @@ llm_mutate_structured(
   .after = NULL,
   .schema = NULL,
   .fields = NULL,
+  .batch_size = 1L,
+  .batch_payload = c("user", "system"),
+  .batch_recovery = c("halve_recursive", "halve_once", "singletons", "retry_same",
+    "none"),
   ...
 )
 }
@@ -57,6 +61,22 @@ Supports:
 \item \code{NULL} (default): auto-extracts all top-level properties from \code{.schema}
 \item \code{FALSE}: skip field extraction (keep only \code{structured_data} list-column)
 }}
+
+\item{.batch_size}{Integer scalar, or \code{Inf}. Number of rows packed into a
+single generative request. The default, \code{1}, sends one request per row (the
+historical behaviour). When greater than \code{1}, rows are grouped and sent in
+one call wrapped in numbered \verb{<row_1>...</row_1>} tags (see \emph{Row batching}
+below); \code{Inf} sends all rows at once. Works in generative, tag, and
+structured modes; not applicable to embedding configurations.}
+
+\item{.batch_payload}{One of \code{c("user","system")}. Channel to which the
+\verb{<row_i>} data block is appended when batching. The default \code{"user"} keeps a
+static system prompt cacheable; the imperative instruction is always placed
+in the system message.}
+
+\item{.batch_recovery}{How to handle rows a batched call leaves unresolved.
+One of \code{"halve_recursive"} (default), \code{"halve_once"}, \code{"singletons"},
+\code{"retry_same"}, or \code{"none"}; see \code{\link[=llm_fn]{llm_fn()}} for the precise meaning of each.}
 
 \item{...}{Passed to the underlying calls: \code{\link[=call_llm_broadcast]{call_llm_broadcast()}} in
 generative mode, \code{\link[=get_batched_embeddings]{get_batched_embeddings()}} in embedding mode.}

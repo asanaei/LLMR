@@ -1,3 +1,19 @@
+# LLMR 0.7.1
+
+## New features
+
+- **Row batching for generative calls.** `llm_fn()` and `llm_mutate()` (and the
+  `_tags` / `_structured` variants) gain `.batch_size`, `.batch_payload`, and
+  `.batch_recovery`. With `.batch_size > 1`, several rows are packed into one
+  request wrapped in numbered `<row_1>...</row_1>` tags and de-multiplexed back
+  into rows, with fault-tolerant recovery (split-and-retry down to single rows)
+  for dropped, reordered, or truncated rows. Composes with `.tags` (one level of
+  required nesting) and with structured/JSON output (`{"results":[{"row":i,
+  ...}]}`). The default `.batch_size = 1` reproduces the previous one-call-per-row
+  behaviour exactly. New exported helper `llm_parse_batch_tags()`.
+
+---
+
 # LLMR 0.7.0
 
 ## New features

@@ -18,6 +18,10 @@ llm_mutate(
   .schema = NULL,
   .fields = NULL,
   .tags = NULL,
+  .batch_size = 1L,
+  .batch_payload = c("user", "system"),
+  .batch_recovery = c("halve_recursive", "halve_once", "singletons", "retry_same",
+    "none"),
   ...
 )
 }
@@ -70,6 +74,22 @@ such as \code{c("age", "job")}. When supplied, \code{\link[=llm_mutate]{llm_muta
 \code{\link[=llm_mutate_tags]{llm_mutate_tags()}} and adds \code{tags_ok}, \code{tags_data}, and one column per tag
 unless \code{.fields = FALSE}.}
 
+\item{.batch_size}{Integer scalar, or \code{Inf}. Number of rows packed into a
+single generative request. The default, \code{1}, sends one request per row (the
+historical behaviour). When greater than \code{1}, rows are grouped and sent in
+one call wrapped in numbered \verb{<row_1>...</row_1>} tags (see \emph{Row batching}
+below); \code{Inf} sends all rows at once. Works in generative, tag, and
+structured modes; not applicable to embedding configurations.}
+
+\item{.batch_payload}{One of \code{c("user","system")}. Channel to which the
+\verb{<row_i>} data block is appended when batching. The default \code{"user"} keeps a
+static system prompt cacheable; the imperative instruction is always placed
+in the system message.}
+
+\item{.batch_recovery}{How to handle rows a batched call leaves unresolved.
+One of \code{"halve_recursive"} (default), \code{"halve_once"}, \code{"singletons"},
+\code{"retry_same"}, or \code{"none"}; see \code{\link[=llm_fn]{llm_fn()}} for the precise meaning of each.}
+
 \item{...}{Passed to the underlying calls: \code{\link[=call_llm_broadcast]{call_llm_broadcast()}} in
 generative mode, \code{\link[=get_batched_embeddings]{get_batched_embeddings()}} in embedding mode.}
 }
@@ -93,8 +113,30 @@ count explicitly.
 Result expands to numeric columns named \verb{paste0(<output>, 1:N)}. If all rows
 fail to embed, a single \verb{<output>1} column of \code{NA} is returned.
 \item Diagnostic columns use suffixes: \verb{_finish}, \verb{_sent}, \verb{_rec}, \verb{_tot}, \verb{_reason}, \verb{_ok}, \verb{_err}, \verb{_id}, \verb{_status}, \verb{_ecode}, \verb{_param}, \verb{_t}.
+\item \strong{Row batching:} with \code{.batch_size > 1}, three further columns are added
+(\verb{_batch}, \verb{_bn}, \verb{_bi}: the batch identifier, the size of the resolving
+call, and the within-call position). They appear only when batching
+actually groups rows, so the default schema is unchanged at \code{.batch_size = 1}.
 }
 }
+\section{Row batching}{
+
+With \code{.batch_size > 1}, several rows travel in one generative request. LLMR
+wraps each row's prompt in a numbered tag, \verb{<row_1>...</row_1>},
+\verb{<row_2>...</row_2>}, and so on, appends that block to the message (see
+\code{.batch_payload}), and instructs the model to answer each item inside a
+matching numbered tag; the reply is split back into rows by those numbers.
+This also composes with \code{.tags} (each \verb{<row_i>} then wraps the requested field
+tags) and with \code{.structured = TRUE} (rows are returned as one JSON object
+\verb{\{"results":[\{"row":i, ...\}]\}}, de-multiplexed by the integer \code{row} field; a
+one-time warning notes that this relies on the model honouring the protocol
+and that strict provider-side schema validation is replaced by local parsing).
+Batching is most useful with capable models at \code{temperature = 0} and is a net
+loss when the model ignores the wrapping. Dropped, reordered, duplicated, or
+truncated rows are detected and re-issued per \code{.batch_recovery}; token counts
+are reported once per batch so that summing token columns stays correct.
+}
+
 \section{Shorthand}{
 
 You can supply the output column and prompt in one argument:
@@ -229,5 +271,5 @@ cities |>
 \seealso{
 \code{\link[=llm_fn]{llm_fn()}}, \code{\link[=llm_mutate_structured]{llm_mutate_structured()}}, \code{\link[=llm_mutate_tags]{llm_mutate_tags()}},
 \code{\link[=llm_parse_structured_col]{llm_parse_structured_col()}}, \code{\link[=llm_parse_tags_col]{llm_parse_tags_col()}},
-\code{\link[=call_llm_broadcast]{call_llm_broadcast()}}, \code{\link[=setup_llm_parallel]{setup_llm_parallel()}}
+\code{\link[=llm_parse_batch_tags]{llm_parse_batch_tags()}}, \code{\link[=call_llm_broadcast]{call_llm_broadcast()}}, \code{\link[=setup_llm_parallel]{setup_llm_parallel()}}
 }
