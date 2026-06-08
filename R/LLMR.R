@@ -1739,7 +1739,15 @@ get_batched_embeddings <- function(texts,
       resp <- call_llm_robust(embed_config, batch_texts, verbose = FALSE)
       emb_chunk <- parse_embeddings(resp)
 
-      if (is.null(first_emb_dim)) {
+      # A degenerate chunk (provider returned empty data, or fewer rows than
+      # requested) must not lock in a wrong dimension; route it to the NA path.
+      if (is.null(emb_chunk) || ncol(emb_chunk) == 0L || nrow(emb_chunk) < length(idx)) {
+        stop("degenerate embedding chunk for this batch")
+      }
+
+      # Capture the embedding dimension only from a genuine, non-empty chunk, so
+      # a later real batch can still establish it if early batches degenerate.
+      if (is.null(first_emb_dim) && ncol(emb_chunk) > 0L && !all(is.na(emb_chunk))) {
         first_emb_dim <- ncol(emb_chunk)
       }
 

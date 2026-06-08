@@ -405,7 +405,8 @@ call_llm_par_tags <- function(experiments, .tags, .fields = NULL, ...) {
     rowdf <- ex[i, setdiff(names(ex), c("config", "messages")), drop = FALSE]
     if (is.character(msg)) {
       nm <- names(msg)
-      out <- vapply(msg, function(s) as.character(glue::glue_data(rowdf, s, .na = "")), "")
+      out <- vapply(msg, function(s) as.character(glue::glue_data(rowdf, s, .na = "")),
+                    character(1), USE.NAMES = FALSE)
       if (!is.null(nm)) names(out) <- nm
       msg <- out
     }

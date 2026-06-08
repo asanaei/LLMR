@@ -160,12 +160,17 @@ print.llmr_response <- function(x, ...) {
   # Minimal, actionable status line
   u  <- x$usage
   fr <- x$finish_reason %||% "other"
+  if (length(fr) != 1L || is.na(fr)) fr <- "other"
+  # The trailing unnamed "" is the default: without it, a non-standard finish
+  # reason makes switch() return NULL, sprintf() collapse to character(0), and
+  # the whole status line silently vanish.
   hint <- switch(fr,
                  length = "Hit token limit; raise max_tokens.",
                  filter = "Content filtered; adjust prompt/safety.",
                  tool   = "Tool call; supply tool handler.",
-                 "stop" = "",
-                 "other"= "")
+                 stop   = "",
+                 other  = "",
+                 "")
   cat(sprintf("[model=%s | finish=%s | sent=%s rec=%s tot=%s | t=%.3fs] %s\n",
               x$model %||% "?", fr,
               u$sent %||% NA_integer_, u$rec %||% NA_integer_, u$total %||% NA_integer_,

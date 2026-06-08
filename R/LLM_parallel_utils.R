@@ -1092,7 +1092,9 @@ llm_par_resume <- function(results, tries = 3, ...) {
     stop("results must be the output of call_llm_par(), containing 'config', 'messages', and 'success'.")
   }
 
-  failed_idx <- which(!isTRUE(results$success) | is.na(results$success))
+  # Element-wise: flag rows whose success is FALSE or NA. (isTRUE() collapses a
+  # whole vector to one scalar, which would mark every row as failed.)
+  failed_idx <- which(!(results$success %in% TRUE))
   if (length(failed_idx) == 0) {
     message("All runs successful. Nothing to resume.")
     return(results)

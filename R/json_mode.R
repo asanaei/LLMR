@@ -159,7 +159,7 @@ disable_structured_output <- function(config) {
   s
 }
 
-.largest_balanced_segment <- function(s, pattern = c("[{}]", "[\\[\\]]")) {
+.largest_balanced_segment <- function(s, pattern = c("[{}]", "[][]")) {
   # returns substring for the larger of the two bracket types if available
   best <- NULL
   best_len <- -1L
@@ -227,7 +227,7 @@ llm_parse_structured <- function(x, strict_only = FALSE, simplify = FALSE) {
   if (!is.null(out) && !is.list(out)) out <- NULL
   if (!is.null(out) || isTRUE(strict_only)) return(.coerce_int_to_double(out))
 
-  seg <- .largest_balanced_segment(s0, pattern = c("[{}]", "[\\[\\]]"))
+  seg <- .largest_balanced_segment(s0, pattern = c("[{}]", "[][]"))
   if (is.null(seg)) return(NULL)
   out <- tryCatch(jsonlite::fromJSON(seg, simplifyVector = simplify), error = function(e) NULL)
   # Enforce list-or-NULL on recovery path too
@@ -728,7 +728,8 @@ call_llm_par_structured <- function(experiments, schema = NULL, .fields = NULL, 
     rowdf <- ex[i, setdiff(names(ex), c("config", "messages")), drop = FALSE]
     if (is.character(msg)) {
       nm  <- names(msg)
-      out <- vapply(msg, function(s) as.character(glue::glue_data(rowdf, s, .na = "")), "")
+      out <- vapply(msg, function(s) as.character(glue::glue_data(rowdf, s, .na = "")),
+                    character(1), USE.NAMES = FALSE)
       if (!is.null(nm)) names(out) <- nm
       out
     } else msg

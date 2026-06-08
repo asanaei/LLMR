@@ -19,8 +19,15 @@
   }
   if (!is.null(j$usageMetadata)) {
     m <- j$usageMetadata
-    if (!is.null(m$promptTokenCount) && !is.null(m$candidatesTokenCount))
-      return(list(sent = m$promptTokenCount, rec = m$candidatesTokenCount))
+    # Gemini omits zero-valued integer fields, so candidatesTokenCount can be
+    # absent (e.g. thinking models that produce no visible output). Keep the
+    # prompt count rather than discarding the whole usage record.
+    if (!is.null(m$promptTokenCount) || !is.null(m$candidatesTokenCount)) {
+      sent <- m$promptTokenCount %||% 0L
+      rec  <- m$candidatesTokenCount %||%
+        (if (!is.null(m$totalTokenCount)) max(0L, m$totalTokenCount - sent) else 0L)
+      return(list(sent = sent, rec = rec))
+    }
   }
   list(sent = 0, rec = 0)
 }

@@ -48,10 +48,15 @@
     "llmr_api_error", "error", "condition"
   )
 
-  # Use cli if available; fall back to rlang otherwise
+  # Use cli if available; fall back to rlang otherwise.
+  # cli::cli_abort() treats `message` as a glue/inline-markup template, so any
+  # literal "{...}" in a provider error string (e.g. echoed JSON fragments) would
+  # be evaluated as R code, throwing cli's own error and dropping our typed class
+  # and fields. Escape braces so the provider text is shown verbatim.
   if (requireNamespace("cli", quietly = TRUE)) {
+    safe_message <- gsub("}", "}}", gsub("{", "{{", message, fixed = TRUE), fixed = TRUE)
     cli::cli_abort(
-      message = message,
+      message = safe_message,
       class   = cls,
       # attach fields for tryCatch handlers
       status_code = status_code,
@@ -91,6 +96,7 @@ retry_with_backoff <- function(func,
                                backoff_factor = 5,
                                error_filter_func = NULL,
                                ...) {
+  last_error <- NULL
   for (attempt in seq_len(tries)) {
     wait_time <- initial_wait * (backoff_factor ^ (attempt - 1L))
     result <- tryCatch(
@@ -99,8 +105,9 @@ retry_with_backoff <- function(func,
         if (!is.null(error_filter_func) && !error_filter_func(e)) {
           stop(e)
         }
+        last_error <<- e
         message(sprintf("Error on attempt %d: %s", attempt, conditionMessage(e)))
-        message(sprintf("Waiting %d seconds before retry...", wait_time))
+        message(sprintf("Waiting %s seconds before retry...", format(round(wait_time, 1))))
         Sys.sleep(wait_time)
         return(NULL)
       }
@@ -109,7 +116,9 @@ retry_with_backoff <- function(func,
       return(result)
     }
   }
-  stop("All attempts failed.")
+  # Re-raise the last real error so its typed class, status_code, and provider
+  # message survive for downstream handlers, instead of a generic message.
+  if (!is.null(last_error)) stop(last_error) else stop("All attempts failed.")
 }
 
 # -------------------------------------------------------------------
