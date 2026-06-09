@@ -27,15 +27,17 @@ install.packages("LLMR")                   # CRAN
 
 ## 2. Set an API key
 
-LLMR reads your key from an environment variable; the key never appears in your
-code. Each provider has a standard variable name: `OPENAI_API_KEY`,
-`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `DEEPSEEK_API_KEY`, and so
-on (the pattern is `<PROVIDER>_API_KEY`).
+You can hand `llm_config()` your key directly as a string, but the safer habit
+is to keep it out of your code and let LLMR read it from an environment
+variable. For each provider LLMR knows a default variable to look in: it tries
+`<PROVIDER>_API_KEY` first, then `<PROVIDER>_KEY` (upper-cased), so Groq reads
+`GROQ_API_KEY`, OpenAI reads `OPENAI_API_KEY`, and so on. If you set that
+variable, you never pass a key in code at all.
 
-Add the key to your `~/.Renviron` file, one per line:
+Put the key in your `~/.Renviron` file, one per line:
 
 ```
-OPENAI_API_KEY=sk-...
+GROQ_API_KEY=...
 ```
 
 The easiest way to open that file is:
@@ -44,16 +46,15 @@ The easiest way to open that file is:
 usethis::edit_r_environ()
 ```
 
-Save it, **restart R**, then confirm the key is visible (this prints `TRUE`
-without revealing the key):
+Save it and **restart R**. You can check that R sees the key without printing it:
 
 ```r
-nzchar(Sys.getenv("OPENAI_API_KEY"))
+nzchar(Sys.getenv("GROQ_API_KEY"))   # TRUE once it is set
 ```
 
-If that prints `FALSE`, R cannot see the key yet: check the spelling and that
-you restarted the session. A missing key surfaces as an authentication error on
-your first call, not before.
+If this is `FALSE`, R cannot see the key yet: check the spelling and that you
+restarted the session. A missing key shows up as an authentication error on your
+first call, not before.
 
 ## 3. Your first call
 
@@ -140,7 +141,35 @@ position within it; the rows always come back in their original order. Prefer
 modest batch sizes and `temperature = 0`: batching only pays off when the model
 reliably follows the wrapping protocol.
 
-## 7. Look before you spend, summarize after
+## 7. Embeddings
+
+Embeddings turn text into numeric vectors you can compare. They use a different
+kind of model, so you make a config with `embedding = TRUE`; here we use Voyage,
+which specializes in embeddings (set `VOYAGE_API_KEY`). `get_batched_embeddings()`
+takes a character vector and returns a matrix with one row per text.
+
+```{r}
+emb_cfg <- llm_config("voyage", "voyage-3.5-lite", embedding = TRUE)
+
+texts <- c("I love this restaurant.",
+           "The food was delicious.",
+           "My car broke down today.")
+
+m <- get_batched_embeddings(texts, emb_cfg)
+dim(m)   # 3 texts x embedding dimension
+```
+
+Closeness in this space tracks meaning. Cosine similarity is high for the two
+sentences about food and low for the unrelated one:
+
+```{r}
+cosine <- function(a, b) sum(a * b) / sqrt(sum(a * a) * sum(b * b))
+
+cosine(m[1, ], m[2, ])   # food vs food: high
+cosine(m[1, ], m[3, ])   # food vs car:  low
+```
+
+## 8. Look before you spend, summarize after
 
 `llm_preview()` shows exactly what would be sent, with no API call, so you can
 catch a templating or role mistake before paying for it:
@@ -167,6 +196,8 @@ llm_failures(out)
 - **Tidy pipelines and structured output** -- `llm_fn()`, `.tags`, JSON schemas,
   and row batching.
 - **Schema-validated output** -- enforcing a JSON shape across providers.
+- **Presidential speech analysis** -- a fuller embeddings example with
+  clustering.
 - **Small experiment** -- factorial designs and parallel execution with
   `call_llm_par()`.
 - **Chat sessions** -- stateful multi-turn conversations.
