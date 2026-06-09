@@ -38,6 +38,7 @@ reference:
 - title: Core
   contents:
   - llm_config
+  - llm_api_key_env
   - call_llm
   - llmr_response
   - finish_reason
