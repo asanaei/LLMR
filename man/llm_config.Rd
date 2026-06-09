@@ -40,8 +40,8 @@ string also works. Supplying a literal key string is accepted but
 discouraged and triggers a warning. When omitted, the provider default
 is used.}
 
-\item{troubleshooting}{Logical. If \code{TRUE}, prints the full request payloads
-(including your API key!) for debugging. \strong{Use with extreme caution.}}
+\item{troubleshooting}{Logical. If \code{TRUE}, prints the messages and the config
+for debugging. The API key is masked in this output, not shown.}
 
 \item{base_url}{Optional character. Back-compat alias; if supplied it is
 stored as \code{api_url} in \code{model_params} and overrides the default endpoint.}

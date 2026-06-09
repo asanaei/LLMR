@@ -58,12 +58,13 @@ your first call, not before.
 ## 3. Your first call
 
 `llm_config()` selects the model; `call_llm()` sends one message and returns a
-response object that prints the text plus a short status line.
+response object that prints the text plus a short status line. We use Groq's
+open-weight `gpt-oss-20b` here because it is cheap and available to everyone.
 
 ```{r}
 library(LLMR)
 
-cfg <- llm_config("openai", "gpt-4.1-nano", temperature = 0.2)
+cfg <- llm_config("groq", "openai/gpt-oss-20b", temperature = 0.2)
 
 r <- call_llm(cfg, c(system = "Be concise.", user = "Capital of Mongolia?"))
 r                 # prints the text and a [model | finish | tokens | t] line
@@ -98,7 +99,48 @@ Alongside the `sentiment` column you also get diagnostic columns
 (`sentiment_ok`, `sentiment_finish`, `sentiment_sent`, `sentiment_rec`, ...) so
 you can see what succeeded and how many tokens each row used.
 
-## 5. Look before you spend, summarize after
+## 5. Generative calls over a vector
+
+`llm_fn()` is the lighter-weight sibling of `llm_mutate()`: give it a vector and
+a `glue` prompt where `{x}` is each element, and it returns a character vector.
+
+```{r}
+countries <- c("Mongolia", "Bolivia", "Chad")
+
+llm_fn(countries,
+       prompt  = "Capital city of {x}. Reply with only the city name.",
+       .config = cfg)
+```
+
+Switching to a different provider or model is a one-line change to
+`llm_config()`; nothing else in your code changes.
+
+## 6. Tagged fields and row batching
+
+When you want several fields per row, ask the model to wrap each in a named tag
+and pass `.tags`; LLMR parses them into columns. Add `.batch_size` to pack
+multiple rows into one request (sent as numbered `<row_i>` blocks and split back
+apart), which cuts the number of calls and the repeated instruction overhead.
+
+```{r}
+films <- tibble(title = c("Blade Runner", "Amelie", "Parasite", "Spirited Away"))
+
+films |>
+  llm_mutate(
+    info       = "For the film {title}, give its director and release year.",
+    .config    = cfg,
+    .tags      = c("director", "year"),
+    .batch_size = 2
+  )
+```
+
+The four films were resolved in two calls (`info_bn = 2`). The `info_batch`,
+`info_bn`, and `info_bi` columns record which call each row landed in and its
+position within it; the rows always come back in their original order. Prefer
+modest batch sizes and `temperature = 0`: batching only pays off when the model
+reliably follows the wrapping protocol.
+
+## 7. Look before you spend, summarize after
 
 `llm_preview()` shows exactly what would be sent, with no API call, so you can
 catch a templating or role mistake before paying for it:

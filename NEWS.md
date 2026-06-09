@@ -42,15 +42,33 @@
   `call_llm_par()` collision-renamed its output columns (because the input frame
   already had a column named `success`, etc.): the summaries follow the renamed
   columns, and `llm_par_resume()` raises a clear, actionable error.
+- **Bare environment-variable API keys.** `api_key = "OPENAI_API_KEY"` is now
+  always treated as an environment-variable reference, even when that variable is
+  not yet set (it then fails with a clear "missing env var" message at call time
+  instead of silently sending the literal name as the key), matching the
+  documented behavior.
+- **`llm_api_key_env(required = FALSE)`** is now honored: a missing variable
+  yields an empty key instead of an authentication error.
+- **`llm_parse_structured_col()`** now returns a tibble on every path, including
+  when the structured column is absent.
+- **`llm_usage()`** gains an `n_unknown_tokens` count so an all-`NA` token column
+  (a provider that reports no usage) is no longer indistinguishable from a true
+  zero. The token sums still use `na.rm = TRUE`, which is correct for batching.
 
 ## Documentation
 
 - `llm_api_key_env()` is now exported and documented. The help also notes that
   the simplest approach is to set the standard `<PROVIDER>_API_KEY` variable and
   pass no key at all.
-- New **"LLMR in 5 minutes"** quickstart vignette: install, set a key, first
-  call, first `llm_mutate()`. The structured-output articles now lead with a
-  concrete example before the provider-by-provider details.
+- New **"LLMR in 5 minutes"** quickstart vignette: install, set a key, a first
+  `call_llm()`, a generative `llm_fn()` over a vector, a data-frame `llm_mutate()`,
+  and tagged + batched extraction, all on the open-weight `gpt-oss-20b` so the
+  examples are runnable for everyone. The structured-output articles now lead
+  with a concrete example before the provider-by-provider details.
+- The troubleshooting help no longer claims the API key is printed (it is
+  masked). The embeddings vignette can now be enabled with
+  `LLMR_RUN_VIGNETTES=true` (its run flag was previously hard-coded off), and its
+  stale prebuilt HTML was removed.
 - Fixed a vignette that referenced a non-existent function and assorted stale
   version labels; removed non-ASCII look-alike punctuation from R sources.
 

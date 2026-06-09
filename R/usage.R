@@ -138,8 +138,10 @@
 #'
 #' @return A one-row tibble: `n`, `n_ok`, `n_failed`, `ok_rate`, `n_truncated`
 #'   (finish `"length"`), `n_filtered` (finish `"filter"`), `sent_tokens`,
-#'   `rec_tokens`, `total_tokens`, `reasoning_tokens`, `duration_s`, and (when a
-#'   batch id column is present) `batch_calls` and `rows_per_batch_call`.
+#'   `rec_tokens`, `total_tokens`, `reasoning_tokens`, `n_unknown_tokens`
+#'   (successful rows for which the provider reported no token usage, so the
+#'   token sums above understate the truth), `duration_s`, and (when a batch id
+#'   column is present) `batch_calls` and `rows_per_batch_call`.
 #'
 #' @seealso [llm_failures()], [llm_preview()], [llm_par_resume()].
 #'
@@ -174,6 +176,14 @@ llm_usage <- function(x, prefix = NULL) {
 
   has_batch <- !all(is.na(batch))
   uniq_batches <- if (has_batch) length(unique(stats::na.omit(batch))) else NA_integer_
+  batch_i <- .llm_get_col(x, m[["batch_i"]], NA_integer_)
+
+  # Rows with genuinely unknown usage: succeeded but no total-token count, and
+  # not a batch follow-on position (where NA tokens are by design, attributed to
+  # the batch's first row). This disambiguates "0 tokens" from "tokens unknown",
+  # since the token sums below use na.rm = TRUE (correct for batching).
+  batch_follow_on <- !is.na(batch_i) & batch_i > 1L
+  n_unknown_tokens <- sum((ok %in% TRUE) & is.na(total) & !batch_follow_on)
 
   tibble::tibble(
     n                = n,
@@ -186,6 +196,7 @@ llm_usage <- function(x, prefix = NULL) {
     rec_tokens       = sum(rec,       na.rm = TRUE),
     total_tokens     = sum(total,     na.rm = TRUE),
     reasoning_tokens = sum(reasoning, na.rm = TRUE),
+    n_unknown_tokens = n_unknown_tokens,
     duration_s       = sum(duration,  na.rm = TRUE),
     batch_calls         = if (has_batch) uniq_batches else NA_integer_,
     rows_per_batch_call = if (has_batch) n / uniq_batches else NA_real_

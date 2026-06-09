@@ -426,8 +426,8 @@ get_endpoint <- function(config, default_endpoint) {
 #'   string also works. Supplying a literal key string is accepted but
 #'   discouraged and triggers a warning. When omitted, the provider default
 #'   is used.
-#' @param troubleshooting Logical. If `TRUE`, prints the full request payloads
-#'   (including your API key!) for debugging. **Use with extreme caution.**
+#' @param troubleshooting Logical. If `TRUE`, prints the messages and the config
+#'   for debugging. The API key is masked in this output, not shown.
 #' @param base_url Optional character. Back-compat alias; if supplied it is
 #'   stored as `api_url` in `model_params` and overrides the default endpoint.
 #' @param embedding `NULL` (default), `TRUE`, or `FALSE`. If `TRUE`, the call
@@ -542,7 +542,13 @@ llm_config <- function(provider, model, api_key = NULL,
   } else if (is.character(api_key) && length(api_key) == 1L) {
     if (grepl("^env:", api_key)) {
       api_key_handle <- llm_api_key_env(sub("^env:", "", api_key))
-    } else if (grepl("^[A-Z][A-Z0-9_]*$", api_key) && nzchar(Sys.getenv(api_key, unset = ""))) {
+    } else if (grepl("^[A-Z][A-Z0-9_]*$", api_key)) {
+      # A bare ENV-NAME-shaped string is treated as an environment-variable
+      # reference whether or not it is currently set, matching the documented
+      # contract. If it is unset, resolution fails cleanly at call time with a
+      # "missing env var" error rather than silently sending the literal name as
+      # the key. Real API keys contain lowercase/digits/hyphens and so do not
+      # match this pattern; use the "env:" prefix to force env semantics anyway.
       api_key_handle <- llm_api_key_env(api_key)
     } else {
       api_key_handle <- structure(

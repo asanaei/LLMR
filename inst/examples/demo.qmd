@@ -16,7 +16,7 @@ format:
         \fvset{breaklines,breakanywhere,commandchars=\\\{\}}
 ---
 
-LLMR is an R package for reproducible, provider‑agnostic resear ch with (and about) large language models (LLMs). It offers:
+LLMR is an R package for reproducible, provider-agnostic research with (and about) large language models (LLMs). It offers:
 
 - A single configuration object across providers.
 - A standard response object with finish reasons and token usage.

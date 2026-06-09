@@ -16,8 +16,10 @@ single diagnostic block is present; required when several are.}
 \value{
 A one-row tibble: \code{n}, \code{n_ok}, \code{n_failed}, \code{ok_rate}, \code{n_truncated}
 (finish \code{"length"}), \code{n_filtered} (finish \code{"filter"}), \code{sent_tokens},
-\code{rec_tokens}, \code{total_tokens}, \code{reasoning_tokens}, \code{duration_s}, and (when a
-batch id column is present) \code{batch_calls} and \code{rows_per_batch_call}.
+\code{rec_tokens}, \code{total_tokens}, \code{reasoning_tokens}, \code{n_unknown_tokens}
+(successful rows for which the provider reported no token usage, so the
+token sums above understate the truth), \code{duration_s}, and (when a batch id
+column is present) \code{batch_calls} and \code{rows_per_batch_call}.
 }
 \description{
 Reads the diagnostic columns produced by \code{\link[=call_llm_par]{call_llm_par()}} (and

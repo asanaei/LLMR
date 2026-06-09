@@ -331,7 +331,8 @@ llm_parse_structured_col <- function(.data, fields, structured_col = "response_t
       dest <- if (is.null(names(fields))) fields else names(fields)
       for (f in dest) out[[paste0(prefix, f)]] <- rep(NA_character_, n)
     }
-    return(out)
+    # Honor the always-tibble contract on this early-return path too.
+    return(if (requireNamespace("tibble", quietly = TRUE)) tibble::as_tibble(out) else out)
   }
 
   src <- .data[[structured_col]]

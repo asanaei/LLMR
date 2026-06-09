@@ -71,6 +71,10 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
       if (nzchar(val)) return(val)
     }
     if (!is.null(secret$default) && nzchar(secret$default)) return(secret$default)
+    # required = FALSE: a missing variable is acceptable (e.g. a provider that
+    # does not need a key, or optional auth). Return an empty string instead of
+    # raising an authentication error.
+    if (isFALSE(secret$required)) return("")
     .llmr_error(
       message = sprintf(
         "Missing API key. Set environment variable '%s' for provider '%s'%s.",
