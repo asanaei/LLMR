@@ -1,5 +1,5 @@
 ---
-title: "LLMR Demo (version 0.6.4)"
+title: "LLMR Demo"
 format:
   pdf:
     fontsize: 10pt
@@ -33,7 +33,7 @@ knitr::opts_chunk$set(
   comment  = "#>",
   message  = FALSE,
   warning  = FALSE,
-  cahce = TRUE,
+  cache    = TRUE,
   eval     = identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true")
 )
 options(width = 80)

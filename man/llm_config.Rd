@@ -52,7 +52,7 @@ If \code{NULL}, LLMR infers embeddings when \code{model} contains \code{"embeddi
 
 \item{no_change}{Logical. If \code{TRUE}, LLMR \strong{never} auto-renames/adjusts
 provider parameters. If \code{FALSE} (default), well-known compatibility shims
-may apply (e.g., renaming OpenAI's \code{max_tokens} → \code{max_completion_tokens}
+may apply (e.g., renaming OpenAI's \code{max_tokens} -> \code{max_completion_tokens}
 after a server hint; see \code{call_llm()} notes).}
 
 \item{...}{Additional provider-specific parameters (e.g., \code{temperature},

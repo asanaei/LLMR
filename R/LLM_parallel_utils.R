@@ -407,14 +407,14 @@ call_llm_compare <- function(configs_list,
 #'
 #' @return A tibble containing all original columns plus:
 #' \itemize{
-#'   \item \code{response_text} – assistant text (or \code{NA} on failure)
-#'   \item \code{raw_response_json} – raw JSON string
+#'   \item \code{response_text} - assistant text (or \code{NA} on failure)
+#'   \item \code{raw_response_json} - raw JSON string
 #'   \item \code{success}, \code{error_message}
-#'   \item \code{finish_reason} – e.g. "stop", "length", "filter", "tool", or "error:`category`"
+#'   \item \code{finish_reason} - e.g. "stop", "length", "filter", "tool", or "error:`category`"
 #'   \item \code{sent_tokens}, \code{rec_tokens}, \code{total_tokens}, \code{reasoning_tokens}
 #'   \item \code{response_id}
-#'   \item \code{duration} – seconds
-#'   \item \code{response} – the full \code{llmr_response} object (or \code{NA} on failure)
+#'   \item \code{duration} - seconds
+#'   \item \code{response} - the full \code{llmr_response} object (or \code{NA} on failure)
 #' }
 #'
 #' The `response` column holds `llmr_response` objects on success, or `NULL` on failure.
@@ -714,7 +714,7 @@ call_llm_par <- function(experiments,
 #' @param configs List of llm_config objects to test.
 #' @param repetitions Integer. Number of repetitions per combination. Default is 1.
 #' @param config_labels Character vector of labels for configs. If NULL, uses "provider_model".
-#' @param user_prompts Character vector (or list) of user‑turn prompts.
+#' @param user_prompts Character vector (or list) of user-turn prompts.
 #' @param user_prompt_labels Optional labels for the user prompts.
 #' @param system_prompts Optional character vector of system messages (recycled against user prompts). Missing/NA values are ignored; messages are user-only.
 #' @param system_prompt_labels Optional labels for the system prompts.
@@ -780,7 +780,7 @@ build_factorial_experiments <- function(configs,
     stop("config_labels must have the same length as configs")
   }
 
-  # Create user‑prompt labels if not provided
+  # Create user-prompt labels if not provided
   if (is.null(user_prompt_labels)) {
     user_prompt_labels <- paste0("user_", seq_along(user_prompts))
   } else if (length(user_prompt_labels) != length(user_prompts)) {
@@ -1087,6 +1087,14 @@ llm_cross_design <- function(.data, configs, prompt = NULL, .messages = NULL, .s
 #' @seealso [call_llm_par()]
 #' @export
 llm_par_resume <- function(results, tries = 3, ...) {
+  if (is.data.frame(results) &&
+      any(grepl("^success\\.[0-9]+$", names(results)))) {
+    stop("This result has a collision-renamed 'success' column (e.g. ",
+         "'success.1'), which happens when the input frame already had a column ",
+         "named 'success'. Rename that input column before calling ",
+         "call_llm_par() so the diagnostic columns keep their canonical names.",
+         call. = FALSE)
+  }
   if (!is.data.frame(results) ||
       !all(c("config", "messages", "success") %in% names(results))) {
     stop("results must be the output of call_llm_par(), containing 'config', 'messages', and 'success'.")

@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use this software, please cite the software record below."
 type: software
 title: "LLMR: A unified interface for research with Large Language Models in R"
-version: "0.7.2"
-date-released: 2026-06-08
+version: "0.8.0"
+date-released: 2026-06-09
 url: "https://github.com/asanaei/LLMR"
 repository-code: "https://github.com/asanaei/LLMR"
 authors:

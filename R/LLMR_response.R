@@ -13,7 +13,7 @@
 #' - `model`: character. Model id.
 #' - `finish_reason`: one of `"stop"`, `"length"`, `"filter"`, `"tool"`, `"other"`.
 #' - `usage`: list with integers `sent`, `rec`, `total`, `reasoning` (if available).
-#' - `response_id`: provider’s response identifier if present.
+#' - `response_id`: provider's response identifier if present.
 #' - `duration_s`: numeric seconds from request to parse.
 #' - `raw`: parsed provider JSON (list).
 #' - `raw_json`: raw JSON string.

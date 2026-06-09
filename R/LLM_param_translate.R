@@ -1,7 +1,7 @@
 # LLM_param_translate.R  -------------------------------------------------------------
 # Canonical-to-provider parameter translation (inspired by LangChain)
-#   – canonical names follow the OpenAI spelling
-#   – unknown keys are forwarded untouched for maximal future-proofing
+#   - canonical names follow the OpenAI spelling
+#   - unknown keys are forwarded untouched for maximal future-proofing
 #
 # Supported canonical names:
 #   temperature, max_tokens, top_p, top_k,

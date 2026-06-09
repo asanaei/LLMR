@@ -23,12 +23,13 @@ navbar:
 articles:
 - title: Getting Started
   contents:
+  - quickstart
   - chat-basics
   - tidy-and-structured
 - title: Structured Output
   contents:
-  - about-schema
   - trolley-dilemma-experiment
+  - about-schema
 - title: Advanced
   contents:
   - experiments
@@ -59,6 +60,12 @@ reference:
   - llm_fn_tags
   - call_llm_par_structured
   - call_llm_par_tags
+- title: Inspecting and summarizing runs
+  contents:
+  - llm_preview
+  - llm_render_messages
+  - llm_usage
+  - llm_failures
 - title: Tidy helpers and parallel
   contents:
   - llm_fn

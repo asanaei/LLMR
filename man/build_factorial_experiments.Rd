@@ -17,7 +17,7 @@ build_factorial_experiments(
 \arguments{
 \item{configs}{List of llm_config objects to test.}
 
-\item{user_prompts}{Character vector (or list) of user‑turn prompts.}
+\item{user_prompts}{Character vector (or list) of user-turn prompts.}
 
 \item{system_prompts}{Optional character vector of system messages (recycled against user prompts). Missing/NA values are ignored; messages are user-only.}
 

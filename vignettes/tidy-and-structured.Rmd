@@ -92,7 +92,7 @@ df_u <- df |>
 df_u
 ```
 
-## llm_mutate: shorthand syntax (NEW in v0.6.2)
+## llm_mutate: shorthand syntax
 
 The shorthand lets you combine output column and prompt in one argument:
 
@@ -118,7 +118,7 @@ df |>
   )
 ```
 
-## llm_mutate with .structured flag (NEW in v0.6.2)
+## llm_mutate with .structured flag
 
 You can now enable structured output directly in `llm_mutate()` using `.structured = TRUE`:
 
@@ -215,6 +215,36 @@ A few points worth keeping in mind:
   size, and the row's position within it. Token counts are attributed once per
   batch (on its first resolved row) so that summing token columns is correct.
 
+## Preview before you spend, summarize after
+
+`llm_preview()` renders exactly what `llm_fn()` / `llm_mutate()` would send,
+without any API call and without reading or encoding files. It flags problems
+up front: missing files, a `"file"` role combined with `.batch_size > 1`, an
+embedding config with row batching, and so on. The batch plan columns show how
+rows would be grouped into calls.
+
+```{r}
+df <- data.frame(text = c("good", "bad", "fine"), stringsAsFactors = FALSE)
+LLMR::llm_preview(df, prompt = "Sentiment of: {text}", .batch_size = 2)
+```
+
+After a run, `llm_usage()` summarizes outcomes and token totals, and
+`llm_failures()` lists the rows that failed or were truncated. Both read the
+diagnostic columns that `llm_mutate()` and `call_llm_par()` already produce.
+`llm_usage()` reports tokens, not dollars: multiply by your provider's current
+per-token prices yourself.
+
+```{r eval=FALSE}
+out <- df |>
+  llm_mutate(sentiment = "One-word sentiment for: {text}", .config = cfg_groq)
+
+llm_usage(out)       # counts + sent/received/total/reasoning tokens
+llm_failures(out)    # which rows failed or were truncated, and why
+```
+
+For a `call_llm_par()` result you can re-run only the failures with
+`llm_par_resume()`.
+
 ## llm_mutate_structured: structured with shorthand (Groq)
 ```{r}
 schema2 <- list(
@@ -240,7 +270,7 @@ df_s <- df |>
 
 df_s
 
-# Or use shorthand (NEW in v0.6.2)
+# Or use shorthand
 df |>
   llm_mutate_structured(
     annot = "Extract category and rationale for: {text}",

@@ -14,8 +14,8 @@ call_llm(config, messages, verbose = FALSE)
 
 \item{messages}{One of:
 \itemize{
-\item Plain character vector — each element becomes a \code{"user"} message.
-\item Named character vector — names are roles (\code{"system"}, \code{"user"},
+\item Plain character vector - each element becomes a \code{"user"} message.
+\item Named character vector - names are roles (\code{"system"}, \code{"user"},
 \code{"assistant"}). \strong{Multimodal shortcut:} include one or more
 elements named \code{"file"} whose values are local paths; consecutive
 \code{{user | file}} entries are combined into one user turn and files

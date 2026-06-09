@@ -47,14 +47,14 @@ between 0 and \code{start_jitter} seconds.}
 \value{
 A tibble containing all original columns plus:
 \itemize{
-\item \code{response_text} – assistant text (or \code{NA} on failure)
-\item \code{raw_response_json} – raw JSON string
+\item \code{response_text} - assistant text (or \code{NA} on failure)
+\item \code{raw_response_json} - raw JSON string
 \item \code{success}, \code{error_message}
-\item \code{finish_reason} – e.g. "stop", "length", "filter", "tool", or "error:\code{category}"
+\item \code{finish_reason} - e.g. "stop", "length", "filter", "tool", or "error:\code{category}"
 \item \code{sent_tokens}, \code{rec_tokens}, \code{total_tokens}, \code{reasoning_tokens}
 \item \code{response_id}
-\item \code{duration} – seconds
-\item \code{response} – the full \code{llmr_response} object (or \code{NA} on failure)
+\item \code{duration} - seconds
+\item \code{response} - the full \code{llmr_response} object (or \code{NA} on failure)
 }
 
 The \code{response} column holds \code{llmr_response} objects on success, or \code{NULL} on failure.

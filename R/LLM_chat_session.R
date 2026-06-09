@@ -29,7 +29,11 @@
       return(list(sent = sent, rec = rec))
     }
   }
-  list(sent = 0, rec = 0)
+  # No usage metadata at all: unknown, not zero. Report NA so callers do not
+  # mistake "the provider told us nothing" for "this response was free". The
+  # running totals in chat_session() add NA as 0 (see $send()) so one unknown
+  # response cannot poison the cumulative count.
+  list(sent = NA_integer_, rec = NA_integer_)
 }
 
 # ---------------------------------------------------------------------------#
@@ -161,8 +165,11 @@ chat_session <- function(config, system = NULL, ...) {
 
     if (is.null(txt)) txt <- "Error: Failed to get a response."
 
-    e$sent     <- e$sent     + as.integer(tc$sent %||% 0L)
-    e$received <- e$received + as.integer(tc$rec  %||% 0L)
+    # NA-safe accumulation: an unknown usage value (NA) contributes nothing to
+    # the running total rather than poisoning it to NA.
+    .add0 <- function(x) { v <- as.integer(x %||% 0L); if (is.na(v)) 0L else v }
+    e$sent     <- e$sent     + .add0(tc$sent)
+    e$received <- e$received + .add0(tc$rec)
     e$raw      <- append(e$raw, list(if (inherits(resp, "llmr_response")) resp else raw))
 
     e$messages <- append(e$messages, list(.msg("assistant", txt)))

@@ -321,6 +321,11 @@ llm_mutate_tags <- function(.data,
 #' @param .tags Character vector of tag names to request and parse.
 #' @param .fields `NULL` to extract all tags, a character vector of tags, a named
 #'   vector such as `c(person_age = "age")`, or `FALSE` to skip field extraction.
+#' @param .return One of `c("columns","text","object")`. `"columns"` returns a
+#'   tibble with the parsed tag columns and diagnostics; `"text"` returns the
+#'   raw response text. Unlike [llm_fn()], `"object"` here returns the parsed tag
+#'   data (a list, one element per row), not `llmr_response` objects; this form
+#'   is also supported together with `.batch_size > 1`.
 #' @seealso [llm_fn()], [llm_mutate_tags()], [llm_parse_tags_col()],
 #'   [call_llm_par_tags()]
 #' @export

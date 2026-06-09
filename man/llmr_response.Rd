@@ -50,7 +50,7 @@ Convenience check for truncation due to token limits.
 \item \code{model}: character. Model id.
 \item \code{finish_reason}: one of \code{"stop"}, \code{"length"}, \code{"filter"}, \code{"tool"}, \code{"other"}.
 \item \code{usage}: list with integers \code{sent}, \code{rec}, \code{total}, \code{reasoning} (if available).
-\item \code{response_id}: provider’s response identifier if present.
+\item \code{response_id}: provider's response identifier if present.
 \item \code{duration_s}: numeric seconds from request to parse.
 \item \code{raw}: parsed provider JSON (list).
 \item \code{raw_json}: raw JSON string.

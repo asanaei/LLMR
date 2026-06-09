@@ -318,7 +318,10 @@ llm_parse_structured_col <- function(.data, fields, structured_col = "response_t
     .data <- as.data.frame(.data, stringsAsFactors = FALSE)
   }
   n <- nrow(.data)
-  if (!length(fields)) fields <- character(0)
+  # `.fields = FALSE` means "no field extraction; keep only structured_data".
+  # length(FALSE) is 1L, so normalize it to an empty spec up front rather than
+  # letting the logical FALSE be treated as a one-element field name.
+  if (identical(fields, FALSE) || !length(fields)) fields <- character(0)
 
   out <- .data
   if (!structured_col %in% names(.data)) {
@@ -359,8 +362,11 @@ llm_parse_structured_col <- function(.data, fields, structured_col = "response_t
   out$structured_ok   <- ok
   out$structured_data <- parsed
 
-  # Field extraction and typing
-  if (length(fields)) {
+  # Field extraction and typing. `.fields = FALSE` means "keep only the
+  # structured_data list-column"; without this guard, length(FALSE) == 1L would
+  # make us treat the logical FALSE as a one-element field spec. Mirrors the
+  # guard in tag mode (R/tags_mode.R).
+  if (!identical(fields, FALSE) && length(fields)) {
     src_paths <- unname(if (is.null(names(fields))) fields else fields)
     dest_names <- if (is.null(names(fields))) fields else names(fields)
 

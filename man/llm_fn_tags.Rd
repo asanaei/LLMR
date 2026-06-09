@@ -37,9 +37,11 @@ columns (\code{{col}}); with a vector the placeholder is \code{{x}}.}
 \item{.fields}{\code{NULL} to extract all tags, a character vector of tags, a named
 vector such as \code{c(person_age = "age")}, or \code{FALSE} to skip field extraction.}
 
-\item{.return}{One of \code{c("text","columns","object")}. \code{"columns"}
-returns a tibble of diagnostic columns; \code{"text"} returns a character
-vector; \code{"object"} returns a list of \code{llmr_response} (or \code{NA} on failure).}
+\item{.return}{One of \code{c("columns","text","object")}. \code{"columns"} returns a
+tibble with the parsed tag columns and diagnostics; \code{"text"} returns the
+raw response text. Unlike \code{\link[=llm_fn]{llm_fn()}}, \code{"object"} here returns the parsed tag
+data (a list, one element per row), not \code{llmr_response} objects; this form
+is also supported together with \code{.batch_size > 1}.}
 
 \item{.batch_size}{Integer scalar, or \code{Inf}. Number of input elements packed
 into a single generative request. The default, \code{1}, sends one request per

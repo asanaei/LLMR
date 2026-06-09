@@ -1,0 +1,131 @@
+---
+title: "LLMR in 5 minutes"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{LLMR in 5 minutes}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>",
+  eval = identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true")
+)
+```
+
+LLMR gives R one interface to many language-model providers. You pick the
+provider and model once with `llm_config()`; every other function behaves the
+same regardless of which model is behind it.
+
+## 1. Install
+
+```r
+install.packages("LLMR")                   # CRAN
+# remotes::install_github("asanaei/LLMR")  # development version
+```
+
+## 2. Set an API key
+
+LLMR reads your key from an environment variable; the key never appears in your
+code. Each provider has a standard variable name: `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `DEEPSEEK_API_KEY`, and so
+on (the pattern is `<PROVIDER>_API_KEY`).
+
+Add the key to your `~/.Renviron` file, one per line:
+
+```
+OPENAI_API_KEY=sk-...
+```
+
+The easiest way to open that file is:
+
+```r
+usethis::edit_r_environ()
+```
+
+Save it, **restart R**, then confirm the key is visible (this prints `TRUE`
+without revealing the key):
+
+```r
+nzchar(Sys.getenv("OPENAI_API_KEY"))
+```
+
+If that prints `FALSE`, R cannot see the key yet: check the spelling and that
+you restarted the session. A missing key surfaces as an authentication error on
+your first call, not before.
+
+## 3. Your first call
+
+`llm_config()` selects the model; `call_llm()` sends one message and returns a
+response object that prints the text plus a short status line.
+
+```{r}
+library(LLMR)
+
+cfg <- llm_config("openai", "gpt-4.1-nano", temperature = 0.2)
+
+r <- call_llm(cfg, c(system = "Be concise.", user = "Capital of Mongolia?"))
+r                 # prints the text and a [model | finish | tokens | t] line
+as.character(r)   # just the text
+tokens(r)         # token counts as a list
+```
+
+A message is a named character vector; the names are roles (`system`, `user`,
+`assistant`). A bare string is treated as a single user turn.
+
+## 4. Apply a model to a data frame
+
+`llm_mutate()` adds model-generated columns to a tibble. The shorthand puts the
+new column name and a `glue` prompt template in one argument; `{column}` is
+filled from each row.
+
+```{r}
+library(tibble)
+
+reviews <- tibble(text = c("The food was cold.",
+                           "Absolutely loved it!",
+                           "It was fine, nothing special."))
+
+reviews |>
+  llm_mutate(
+    sentiment = "Reply with one word (positive/negative/neutral): {text}",
+    .config   = cfg
+  )
+```
+
+Alongside the `sentiment` column you also get diagnostic columns
+(`sentiment_ok`, `sentiment_finish`, `sentiment_sent`, `sentiment_rec`, ...) so
+you can see what succeeded and how many tokens each row used.
+
+## 5. Look before you spend, summarize after
+
+`llm_preview()` shows exactly what would be sent, with no API call, so you can
+catch a templating or role mistake before paying for it:
+
+```{r}
+llm_preview(reviews,
+            prompt  = "Reply with one word: {text}",
+            .config = cfg)
+```
+
+After a run, `llm_usage()` summarizes token totals and outcomes, and
+`llm_failures()` lists any rows that failed or were truncated:
+
+```{r}
+out <- reviews |>
+  llm_mutate(sentiment = "One word for: {text}", .config = cfg)
+
+llm_usage(out)
+llm_failures(out)
+```
+
+## Where to go next
+
+- **Tidy pipelines and structured output** -- `llm_fn()`, `.tags`, JSON schemas,
+  and row batching.
+- **Schema-validated output** -- enforcing a JSON shape across providers.
+- **Small experiment** -- factorial designs and parallel execution with
+  `call_llm_par()`.
+- **Chat sessions** -- stateful multi-turn conversations.
+```

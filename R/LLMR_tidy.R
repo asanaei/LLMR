@@ -155,9 +155,13 @@ llm_fn <- function(x,
       "batch_id","batch_size","batch_row"), names(res))]))
   }
 
-  msgs <- lapply(as.character(user_txt), function(txt) {
-    if (is.null(.system_prompt)) txt else c(system = .system_prompt, user = txt)
-  })
+  # Build messages through the shared renderer (R/render_messages.R) so llm_fn(),
+  # llm_mutate(), and llm_preview() never diverge. For a bare-vector `x`, glue
+  # against a one-column data.frame `x`; this is byte-identical to the previous
+  # inline lapply() and is locked by golden tests (test-render-messages.R).
+  row_df <- if (is.data.frame(x)) x else data.frame(x = x, stringsAsFactors = FALSE)
+  msgs <- .llm_build_messages_df(row_df, prompt = prompt,
+                                 .system_prompt = .system_prompt)
 
   res <- call_llm_broadcast(
     config   = .config,
@@ -517,58 +521,15 @@ llm_mutate <- function(.data,
   }
 
   # -- helpers (local) -------------------------------------------------------
-  eval_messages_one_row <- function(row_df, tpl_vec) {
-    roles <- names(tpl_vec)
-    if (is.null(roles)) roles <- rep("user", length(tpl_vec))
-    roles[is.na(roles) | roles == ""] <- "user"
-
-    out <- vapply(
-      unname(tpl_vec),
-      function(s) as.character(glue::glue_data(row_df, s, .na = "")),
-      FUN.VALUE = character(1)
-    )
-    names(out) <- roles
-    out
-  }
+  # The per-row rendering lives in .llm_build_messages_df()/.llm_eval_messages_one_row()
+  # (R/render_messages.R) so that llm_fn(), llm_mutate(), and llm_preview() share
+  # one source of truth and can never drift. These thin locals preserve the call
+  # sites below (the embedding branch still calls eval_messages_one_row()).
+  eval_messages_one_row <- .llm_eval_messages_one_row
 
   build_generative_messages <- function(df, prompt, .messages, .system_prompt) {
-
-    n <- nrow(df)
-    if (is.null(n) || is.na(n)) stop("Internal: `.data` has no rows; ensure you pass a data.frame/tibble.")
-
-    msgs <- vector("list", n)
-
-    if (!is.null(.messages)) {
-      stopifnot(is.character(.messages), length(.messages) > 0)
-      if (is.null(names(.messages))) {
-        names(.messages) <- rep("user", length(.messages))
-      }
-      bad <- setdiff(unique(names(.messages)), roles_allowed)
-      if (length(bad)) {
-        stop(sprintf("Unsupported roles in .messages: %s",
-                     paste(bad, collapse = ", ")))
-      }
-      for (i in seq_len(n)) {
-        row_msg <- eval_messages_one_row(df[i, , drop = FALSE], .messages)
-        # Add system if not present
-        if (!is.null(.system_prompt) && !"system" %in% names(row_msg)) {
-          row_msg <- c(system = .system_prompt, row_msg)
-        }
-        msgs[[i]] <- row_msg
-      }
-    } else {
-      if (is.null(prompt)) stop("Either 'prompt' or '.messages' must be provided.")
-      user_txt <- glue::glue_data(df, prompt, .na = "")
-      for (i in seq_len(n)) {
-        if (is.null(.system_prompt)) {
-          msgs[[i]] <- as.character(user_txt[i])
-        } else {
-          msgs[[i]] <- c(system = .system_prompt, user = as.character(user_txt[i]))
-        }
-      }
-    }
-
-    msgs
+    .llm_build_messages_df(df, prompt, .messages, .system_prompt,
+                           roles_allowed = roles_allowed)
   }
 
   pick_embed_text <- function(named_vec) {

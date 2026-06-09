@@ -1,15 +1,27 @@
 #' Declare an API key sourced from an environment variable
 #'
-#' Use this when creating an LLM config to avoid placing secrets
-#' inside R objects. Store your key in your shell or in `~/.Renviron`
-#' and reference it here by name.
+#' Reference an API key by the name of the environment variable that holds it,
+#' so the secret never appears in your R code or saved objects. Store the key in
+#' your shell profile or in `~/.Renviron` (e.g. `OPENAI_API_KEY=sk-...`).
+#'
+#' Best practice is to not pass a key explicitly at all: [llm_config()] already
+#' looks up the standard variable for each provider (`<PROVIDER>_API_KEY`, then
+#' `<PROVIDER>_KEY`). Use `llm_api_key_env()` only when your variable has a
+#' non-standard name.
 #'
 #' @param var Name of the environment variable (e.g., "OPENAI_API_KEY").
-#' @param required If TRUE, missing variables cause an authentication error at call time.
-#' @param default Optional default if the environment variable is not set.
-#' @return An internal secret handle to be used as `api_key = llm_api_key_env("VARNAME")`.
-#' @keywords internal
-#' @noRd
+#' @param required If TRUE, a missing variable raises an authentication error at
+#'   call time.
+#' @param default Optional default used if the environment variable is not set.
+#' @return A secret handle to pass as `api_key = llm_api_key_env("VARNAME")` in
+#'   [llm_config()].
+#' @seealso [llm_config()]
+#' @examples
+#' cfg <- llm_config(
+#'   "openai", "gpt-4o-mini",
+#'   api_key = llm_api_key_env("MY_OPENAI_KEY")
+#' )
+#' @export
 llm_api_key_env <- function(var, required = TRUE, default = NULL) {
   structure(
     list(

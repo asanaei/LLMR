@@ -43,19 +43,19 @@
 #'
 #' Called once in `call_llm()` (not in embedding mode).
 #' Rules, in order:
-#'   1. Already‑well‑formed list → returned untouched.
-#'   2. Plain character vector   → each element becomes a `"user"` turn.
-#'   3. Named char vector **without** "file" → names are roles (legacy path).
-#'   4. Named char vector **with**  "file"  → multimodal shortcut:
+#'   1. Already-well-formed list -> returned untouched.
+#'   2. Plain character vector   -> each element becomes a `"user"` turn.
+#'   3. Named char vector **without** "file" -> names are roles (legacy path).
+#'   4. Named char vector **with**  "file"  -> multimodal shortcut:
 #'        - any `system` entries become separate system turns
 #'        - consecutive {user | file} entries combine into one user turn
-#'        - every `file` path is tilde‑expanded
+#'        - every `file` path is tilde-expanded
 #'
 #' @keywords internal
 #' @noRd
 .normalize_messages <- function(messages) {
 
-  ## ── 1 · leave proper message objects unchanged ───────────────────────
+  ## -- 1 - leave proper message objects unchanged -----------------------
   if (is.list(messages) &&
       length(messages)        > 0L &&
       is.list(messages[[1]])  &&
@@ -64,23 +64,23 @@
     return(messages)
   }
 
-  ## ── 2 · character vectors --------------------------------------------
+  ## -- 2 - character vectors --------------------------------------------
   if (is.character(messages)) {
     msg_names <- names(messages)
 
-    ### 2a · *unnamed* → each element a user turn
+    ### 2a - *unnamed* -> each element a user turn
     if (is.null(msg_names)) {
       return(lapply(messages,
                     function(txt) list(role = "user", content = txt)))
     }
 
-    ### 2b · *named* but no "file" → legacy path
+    ### 2b - *named* but no "file" -> legacy path
     if (!"file" %in% msg_names) {
       return(unname(purrr::imap(messages,
                                 \(txt, role) list(role = role, content = txt))))
     }
 
-    ### 2c · multimodal shortcut ----------------------------------------
+    ### 2c - multimodal shortcut ----------------------------------------
     # ensure names are never NA (happens after `c()` with empty strings)
     msg_names[is.na(msg_names) | msg_names == ""] <- "user"
 
@@ -235,9 +235,14 @@ perform_request <- function(req, verbose, provider = NULL, model = NULL, config 
   # Support Responses API fallback for total tokens
   direct_total <- if (!is.null(content$usage) && !is.null(content$usage$total_tokens)) content$usage$total_tokens else NULL
 
-  usage <- list(sent = as.integer(tc$sent %||% NA_integer_),
-                rec  = as.integer(tc$rec  %||% NA_integer_),
-                total = as.integer(direct_total %||% ((tc$sent %||% 0L) + (tc$rec %||% 0L))),
+  sent_i <- as.integer(tc$sent %||% NA_integer_)
+  rec_i  <- as.integer(tc$rec  %||% NA_integer_)
+  # total: prefer a provider-reported total; otherwise sum sent+rec, but only if
+  # at least one part is known (NA + NA stays NA = "unknown", not a false 0).
+  total_i <- if (!is.null(direct_total)) as.integer(direct_total)
+             else if (is.na(sent_i) && is.na(rec_i)) NA_integer_
+             else as.integer(sum(c(sent_i, rec_i), na.rm = TRUE))
+  usage <- list(sent = sent_i, rec = rec_i, total = total_i,
                 reasoning = as.integer(rt %||% NA_integer_))
 
   out <- new_llmr_response(
@@ -430,7 +435,7 @@ get_endpoint <- function(config, default_endpoint) {
 #'   If `NULL`, LLMR infers embeddings when `model` contains `"embedding"`.
 #' @param no_change Logical. If `TRUE`, LLMR **never** auto-renames/adjusts
 #'   provider parameters. If `FALSE` (default), well-known compatibility shims
-#'   may apply (e.g., renaming OpenAI's `max_tokens` → `max_completion_tokens`
+#'   may apply (e.g., renaming OpenAI's `max_tokens` -> `max_completion_tokens`
 #'   after a server hint; see `call_llm()` notes).
 #' @param ... Additional provider-specific parameters (e.g., `temperature`,
 #'   `top_p`, `max_tokens`, `top_k`, `repetition_penalty`, `reasoning_effort`,
@@ -579,8 +584,8 @@ llm_config <- function(provider, model, api_key = NULL,
 #' @param config An \code{\link{llm_config}} object.
 #' @param messages One of:
 #'   \itemize{
-#'     \item Plain character vector — each element becomes a `"user"` message.
-#'     \item Named character vector — names are roles (`"system"`, `"user"`,
+#'     \item Plain character vector - each element becomes a `"user"` message.
+#'     \item Named character vector - names are roles (`"system"`, `"user"`,
 #'           `"assistant"`). **Multimodal shortcut:** include one or more
 #'           elements named `"file"` whose values are local paths; consecutive
 #'           `{user | file}` entries are combined into one user turn and files
@@ -1550,7 +1555,7 @@ call_llm.gemini_embedding <- function(config, messages,
     list(embedding = dat$embedding$values)
   })
 
-  # LLMR‑style return ---------------------------------------------------------
+  # LLMR-style return ---------------------------------------------------------
   list(data = out)
 }
 

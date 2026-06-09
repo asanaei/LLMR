@@ -187,10 +187,19 @@ safe({
     "groq", "openai/gpt-oss-20b"
   )
 
-  res <- call_llm_structured(cfg, c(
+  schema <- list(
+    type = "object",
+    properties = list(name = list(type = "string"),
+                      score = list(type = "number")),
+    required = list("name", "score"),
+    additionalProperties = FALSE
+  )
+  cfg_json <- enable_structured_output(cfg, schema = schema)
+
+  res <- call_llm(cfg_json, c(
     system = "Reply as JSON only.",
     user   = "Produce fields name and score about 'MNIST'."
-  ), schema = list(type="object", properties=list(name=list(type="string"), score=list(type="number")), required=list("name", "score"), additionalProperties=FALSE))
+  ))
   str(llm_parse_structured(res))
 })
 ```
