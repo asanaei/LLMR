@@ -9,10 +9,12 @@ llm_batch_submit(config, messages, state_path = NULL)
 \arguments{
 \item{config}{An \link{llm_config} for a generative model.}
 
-\item{messages}{A character vector (each element becomes one request's user
-message, or a named vector like \code{c(system = ..., user = ...)}), or a list
-of message specs as accepted by \code{\link[=call_llm]{call_llm()}}. Multimodal file parts are
-not supported in batch jobs.}
+\item{messages}{An unnamed character vector (each element becomes one
+request's user message); a named character vector like
+\code{c(system = ..., user = ...)} (a single multi-role request); or a list
+with one element per request, where each element is any messages form
+accepted by \code{\link[=call_llm]{call_llm()}}. Multimodal file parts are not supported in
+batch jobs.}
 
 \item{state_path}{Optional file path; when given, the job object is also
 saved there as RDS (and the path is remembered for convenience).}

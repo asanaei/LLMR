@@ -118,6 +118,16 @@
 
 ## Bug fixes
 
+- **`llm_batch_submit()`**: a named character vector like
+  `c(system = "...", user = "...")` is treated as a single multi-role request
+  rather than being split into separate batch requests; unnamed character
+  vectors still expand one element per request.
+- **`llm_batch_fetch()` / `call_llm_stream()`**: total token count is `NA`
+  when both sent and received counts are unknown, consistent with the
+  `call_llm()` path, instead of a false 0.
+- **`chat_session()`**: rejects embedding configs inferred from model names
+  (e.g. `"gemini-embedding-001"`) in addition to those with `embedding = TRUE`
+  set explicitly.
 - **`expand_llm_config()`**: sweeping `provider` now updates the S3 class, so
   the swept config dispatches to the right API (previously every swept
   provider was called through the original provider's path).

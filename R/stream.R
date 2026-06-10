@@ -91,9 +91,12 @@ call_llm_stream <- function(config, messages,
     usage         = list(
       sent      = out$sent %||% NA_integer_,
       rec       = out$rec %||% NA_integer_,
-      total     = if (!is.null(out$sent) || !is.null(out$rec)) {
-        as.integer(sum(c(out$sent, out$rec), na.rm = TRUE))
-      } else NA_integer_,
+      total     = {
+        s <- out$sent; r <- out$rec
+        if (is.null(s) && is.null(r)) NA_integer_
+        else if (is.na(s %||% NA_integer_) && is.na(r %||% NA_integer_)) NA_integer_
+        else as.integer(sum(c(s, r), na.rm = TRUE))
+      },
       reasoning = out$reasoning_tokens %||% NA_integer_,
       cached    = out$cached %||% NA_integer_
     ),

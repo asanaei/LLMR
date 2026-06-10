@@ -201,4 +201,3 @@ llm_failures(out)
 - **Small experiment** -- factorial designs and parallel execution with
   `call_llm_par()`.
 - **Chat sessions** -- stateful multi-turn conversations.
-```

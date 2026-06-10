@@ -13,7 +13,8 @@ Encoding: UTF-8
 Imports: httr2 (>= 1.0.0), curl, purrr, dplyr, tidyr, rlang, memoise, future, future.apply,
         tibble, base64enc, mime,  glue (>= 1.6.0),  cli (>= 3.6.0), jsonlite, vctrs
 Suggests: testthat (>= 3.0.0), roxygen2 (>= 7.1.2), httptest2,
-       progressr, knitr, rmarkdown, ggplot2, R.rsp, jsonvalidate
+       progressr, knitr, rmarkdown, ggplot2, R.rsp, jsonvalidate,
+       stringi, kableExtra
 RoxygenNote: 7.3.3
 Roxygen: list(markdown = TRUE)
 Config/testthat/edition: 3

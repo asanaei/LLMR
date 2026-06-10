@@ -156,7 +156,7 @@ NULL
 chat_session <- function(config, system = NULL, quiet = FALSE, ...) {
 
   stopifnot(inherits(config, "llm_config"))
-  if (isTRUE(config$embedding))
+  if (.is_embedding_config(config))
     stop("chat_session requires a generative model (embedding = FALSE).")
   quiet <- isTRUE(quiet)
 

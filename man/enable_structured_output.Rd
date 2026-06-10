@@ -24,7 +24,12 @@ to JSON mime type; Anthropic only injects a tool when a schema is supplied.}
 \item{method}{One of c("auto","json_mode","tool_call"). "auto" chooses the best
 per provider. You rarely need to change this.}
 
-\item{strict}{Logical. Request strict validation when supported (OpenAI-compatible).}
+\item{strict}{Logical. Request strict validation when supported
+(OpenAI-compatible). Strict mode has formal requirements of its own:
+every object must set \code{additionalProperties: false} and list all its
+properties as required. LLMR fills those in automatically where your
+schema leaves them unspecified (your explicit settings are never
+overridden); pass \code{strict = FALSE} to send the schema verbatim.}
 }
 \value{
 Modified \code{llm_config}.

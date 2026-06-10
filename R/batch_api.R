@@ -88,10 +88,14 @@ print.llmr_batch_job <- function(x, ...) {
   resp
 }
 
-# normalize the per-row inputs: a character vector (each element one user
-# prompt, or a named multimodal-free vector) or a list of message specs
+# normalize the per-row inputs into a list where each element is one request's
+# worth of messages (a named character vector, a message list, or a plain string).
+# An *unnamed* character vector becomes one element per string.
+# A *named* character vector is treated as a single multi-role request.
 .batch_inputs <- function(messages) {
-  if (is.character(messages)) messages <- as.list(messages)
+  if (is.character(messages)) {
+    messages <- if (is.null(names(messages))) as.list(messages) else list(messages)
+  }
   if (!is.list(messages) || !length(messages)) {
     stop("`messages` must be a character vector or a non-empty list of message specs.",
          call. = FALSE)
@@ -107,8 +111,10 @@ print.llmr_batch_job <- function(x, ...) {
     finish_reason    = tryCatch(.std_finish_reason(content), error = function(e) NA_character_),
     sent_tokens      = as.integer(tc$sent %||% NA_integer_),
     rec_tokens       = as.integer(tc$rec %||% NA_integer_),
-    total_tokens     = as.integer(content$usage$total_tokens %||%
-                                    sum(c(tc$sent, tc$rec), na.rm = TRUE)),
+    total_tokens     = as.integer(
+                         content$usage$total_tokens %||%
+                         if (is.null(tc$sent) && is.null(tc$rec)) NA_integer_
+                         else sum(c(tc$sent, tc$rec), na.rm = TRUE)),
     reasoning_tokens = as.integer(.reasoning_tokens_from(content) %||% NA_integer_),
     cached_tokens    = as.integer(.cached_tokens_from(content) %||% NA_integer_),
     response_id      = .response_id_from(content),
@@ -167,10 +173,12 @@ print.llmr_batch_job <- function(x, ...) {
 #' environment variables set. Pass `state_path` to save it automatically.
 #'
 #' @param config An [llm_config] for a generative model.
-#' @param messages A character vector (each element becomes one request's user
-#'   message, or a named vector like `c(system = ..., user = ...)`), or a list
-#'   of message specs as accepted by [call_llm()]. Multimodal file parts are
-#'   not supported in batch jobs.
+#' @param messages An unnamed character vector (each element becomes one
+#'   request's user message); a named character vector like
+#'   `c(system = ..., user = ...)` (a single multi-role request); or a list
+#'   with one element per request, where each element is any messages form
+#'   accepted by [call_llm()]. Multimodal file parts are not supported in
+#'   batch jobs.
 #' @param state_path Optional file path; when given, the job object is also
 #'   saved there as RDS (and the path is remembered for convenience).
 #' @return An `llmr_batch_job` object.
