@@ -38,6 +38,8 @@ settings, the output, and identifiers that allow an exact lookup later.
 The audit log records precisely that:
 \itemize{
 \item \code{ts}: ISO-8601 timestamp with timezone.
+\item \code{schema_version}: the version of this record layout (currently \code{"1.0"}),
+so downstream tools that parse the log can rely on a stable contract.
 \item \code{provider}, \code{model}: as configured; \code{model_version}: the identifier the
 server reports having served (when echoed), which catches silent model
 updates.

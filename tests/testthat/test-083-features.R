@@ -158,6 +158,7 @@ test_that("the audit log writes one JSON record per event", {
   expect_length(lines, 1L)
   rec <- jsonlite::fromJSON(lines[[1]])
   expect_identical(rec$kind, "call")
+  expect_identical(rec$schema_version, "1.0")
   expect_identical(rec$text, "hello")
   expect_identical(rec$model_version, "m-v2")
   expect_equal(rec$usage$total, 5)

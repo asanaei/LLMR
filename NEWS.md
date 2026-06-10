@@ -8,7 +8,9 @@
   roughly half the live rate. Jobs are plain R objects without secrets (keys
   stay environment references), so a job can be saved with `state_path=`,
   the session closed, and results fetched later or from another machine.
-- **Audit log for reproducible research.** `llm_log_enable(path)` appends one
+- **Audit log for reproducible research.** Each record carries a
+  `schema_version` field (currently `"1.0"`) so downstream tools can parse
+  the log against a stable contract. `llm_log_enable(path)` appends one
   JSON record per API call (timestamp, provider, model, the served
   `model_version`, full request parameters and messages, reply text, token
   usage including cached tokens, request id, status, timing) to a JSONL file;

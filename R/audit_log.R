@@ -23,6 +23,8 @@
 #' The audit log records precisely that:
 #'
 #' - `ts`: ISO-8601 timestamp with timezone.
+#' - `schema_version`: the version of this record layout (currently `"1.0"`),
+#'   so downstream tools that parse the log can rely on a stable contract.
 #' - `provider`, `model`: as configured; `model_version`: the identifier the
 #'   server reports having served (when echoed), which catches silent model
 #'   updates.
@@ -118,9 +120,10 @@ llm_log_status <- function() {
   ok <- try({
     include_msgs <- isTRUE(getOption("llmr.log_messages", TRUE))
     rec <- list(
-      ts           = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
-      llmr_version = as.character(utils::packageVersion("LLMR")),
-      kind         = kind,
+      ts             = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+      schema_version = "1.0",
+      llmr_version   = as.character(utils::packageVersion("LLMR")),
+      kind           = kind,
       provider     = provider,
       model        = model,
       status       = status
