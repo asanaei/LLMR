@@ -422,3 +422,93 @@ test_that("strict mode hardens schemas as the providers require", {
   expect_true(isTRUE(h2$additionalProperties))
   expect_length(h2$required, 0L)
 })
+
+# ---- fixes from the cross-review --------------------------------------------
+
+test_that("gemini requests label assistant turns as 'model'", {
+  cfg <- llm_config("gemini", "gemini-2.5-flash-lite")
+  req <- LLMR:::.gemini_chat_request(cfg, list(
+    list(role = "user", content = "a"),
+    list(role = "assistant", content = "b"),
+    list(role = "user", content = "c")
+  ))
+  roles <- vapply(req$body$data$contents, `[[`, "", "role")
+  expect_identical(roles, c("user", "model", "user"))
+})
+
+test_that("extract_text concatenates all anthropic text blocks", {
+  content <- list(content = list(
+    list(type = "text", text = "First."),
+    list(type = "thinking", thinking = "internal reasoning"),
+    list(type = "text", text = "Second.")
+  ))
+  expect_identical(extract_text(content), "First.\nSecond.")
+})
+
+test_that("anthropic stop_sequence maps to finish reason 'stop'", {
+  expect_identical(LLMR:::.std_finish_reason(list(stop_reason = "stop_sequence")),
+                   "stop")
+})
+
+test_that("partially named .messages templates default empty names to user", {
+  msgs <- LLMR:::.llm_build_messages_df(
+    data.frame(x = "w"), .messages = c(system = "be terse", "{x}?"))
+  expect_identical(names(msgs[[1]]), c("system", "user"))
+  expect_identical(unname(msgs[[1]]["user"]), "w?")
+})
+
+test_that("schema = NULL still enables JSON-object mode in tidy structured verbs", {
+  cfg <- enable_structured_output(llm_config("openai", "gpt-4o"), schema = NULL)
+  expect_identical(cfg$model_params$response_format$type, "json_object")
+})
+
+test_that("an empty broadcast returns the full diagnostic schema", {
+  cfg <- llm_config("groq", "m")
+  expect_warning(res <- call_llm_broadcast(cfg, list()), "No experiments")
+  expect_true(all(c("response_text", "success", "finish_reason", "sent_tokens",
+                    "cached_tokens", "duration", "response") %in% names(res)))
+  expect_identical(nrow(res), 0L)
+})
+
+test_that("call_llm_tools aggregates loop spend and enforces max_tool_calls", {
+  mk_resp <- function(text, sent, rec, tool_call = FALSE) {
+    raw <- if (tool_call) {
+      list(choices = list(list(message = list(
+        role = "assistant", content = NULL,
+        tool_calls = list(list(id = "c1", type = "function",
+                               `function` = list(name = "dbl",
+                                                 arguments = '{"x": 2}')))))))
+    } else {
+      list(choices = list(list(message = list(role = "assistant", content = text))))
+    }
+    structure(list(
+      text = text, provider = "openai", model = "m", finish_reason = "stop",
+      usage = list(sent = sent, rec = rec, total = sent + rec,
+                   reasoning = NA_integer_, cached = NA_integer_),
+      response_id = "r", duration_s = 0.01, raw = raw, raw_json = "{}"
+    ), class = "llmr_response")
+  }
+  dbl <- llm_tool(function(x) as.character(as.numeric(x) * 2),
+                  name = "dbl", description = "doubles",
+                  parameters = list(x = list(type = "number")))
+  n <- 0L
+  testthat::local_mocked_bindings(
+    call_llm_robust = function(...) {
+      n <<- n + 1L
+      if (n == 1L) mk_resp("", 10L, 2L, tool_call = TRUE) else mk_resp("4", 5L, 1L)
+    },
+    .package = "LLMR"
+  )
+  cfg <- llm_config("openai", "m")
+  r <- call_llm_tools(cfg, "double 2", tools = dbl)
+  loop <- attr(r, "tool_loop")
+  expect_identical(loop$model_calls, 2L)
+  expect_identical(loop$sent, 15L)
+  expect_identical(loop$rec, 3L)
+  expect_identical(loop$tool_calls, 1L)
+  expect_identical(nrow(attr(r, "tool_history")), 1L)
+
+  n <- 0L
+  expect_error(call_llm_tools(cfg, "double 2", tools = dbl, max_tool_calls = 0),
+               class = "llmr_tool_limit")
+})

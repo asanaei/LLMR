@@ -232,7 +232,7 @@ print.llmr_response <- function(x, ...) {
 
   fr <- tolower(as.character(fr %||% ""))
   if (!nzchar(fr)) return("other")
-  if (fr %in% c("stop","end_turn","completed","done")) return("stop")
+  if (fr %in% c("stop","end_turn","stop_sequence","completed","done")) return("stop")
   if (fr %in% c("length","max_tokens","max_token","maxoutputtokens","max_completion_tokens","incomplete")) return("length")
   if (fr %in% c("content_filter","safety","blocked","refusal","recitation",
                 "prohibited_content","blocklist","spii","image_safety")) return("filter")

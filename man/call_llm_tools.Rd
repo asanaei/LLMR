@@ -9,6 +9,7 @@ call_llm_tools(
   messages,
   tools,
   max_rounds = 8L,
+  max_tool_calls = Inf,
   verbose = FALSE,
   tries = 3L,
   wait_seconds = 2
@@ -24,15 +25,24 @@ call_llm_tools(
 \item{max_rounds}{Maximum model turns (a turn may contain several tool
 calls). When reached, the last response is returned as-is with a warning.}
 
+\item{max_tool_calls}{Maximum tool executions across the whole loop.
+Exceeding it raises a condition of class \code{llmr_tool_limit} rather than
+continuing to spend; the default is unlimited. Callers enforcing spend
+ceilings (e.g. agent frameworks) can catch that class.}
+
 \item{verbose}{Print each tool invocation as it happens.}
 
 \item{tries, wait_seconds}{Retry controls passed to \code{\link[=call_llm_robust]{call_llm_robust()}}.}
 }
 \value{
 The final \link{llmr_response}. The full conversation (including tool
-results) is attached as \code{attr(x, "messages")}, and a tibble of executed
+results) is attached as \code{attr(x, "messages")}; a tibble of executed
 calls as \code{attr(x, "tool_history")} with columns \code{round}, \code{name},
-\code{arguments} (JSON), \code{result}.
+\code{arguments} (JSON), \code{result}; and aggregate spend across the whole loop
+as \code{attr(x, "tool_loop")}, a list with \code{model_calls}, \code{sent}, \code{rec}
+(token totals over every internal model call, \code{NA} when the provider
+reported none), and \code{tool_calls}. Note that \code{tokens(x)} alone covers
+only the final model call.
 }
 \description{
 Sends \code{messages} together with native tool definitions, executes every tool

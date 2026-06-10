@@ -641,7 +641,7 @@ llm_fn_structured <- function(x,
     return(out2)
   }
 
-  cfg <- if (isTRUE(.local_only) || is.null(.schema)) .config
+  cfg <- if (isTRUE(.local_only)) .config
          else enable_structured_output(.config, schema = .schema)
 
   out  <- llm_fn(x, prompt, .config = cfg, .system_prompt = .system_prompt, ..., .return = "columns")
@@ -732,8 +732,9 @@ llm_mutate_structured <- function(.data,
     return(out2)
   }
 
-  # Build the config with structured output enabled
-  cfg_structured <- if (is.null(.schema)) .config else enable_structured_output(.config, schema = .schema)
+  # Build the config with structured output enabled (schema = NULL still
+  # requests JSON-object mode, as documented)
+  cfg_structured <- enable_structured_output(.config, schema = .schema)
   
   # Call llm_mutate with or without output depending on whether shorthand is used
   if (output_missing) {

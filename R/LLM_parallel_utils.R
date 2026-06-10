@@ -293,20 +293,8 @@ call_llm_broadcast <- function(config,
     stop("The 'tibble' package is required. Please install it with: install.packages('tibble')")
   }
 
-  if (length(messages) == 0) {
-    warning("No messages provided. Returning empty tibble.")
-    return(tibble::tibble(
-      message_index = integer(0),
-      provider = character(0),
-      model = character(0),
-      response_text = character(0),
-      raw_response_json = character(0),
-      success = logical(0),
-      error_message = character(0)
-    ))
-  }
-
-  # Build experiments tibble
+  # Build experiments tibble; zero messages fall through to call_llm_par(),
+  # whose empty return carries the full diagnostic column schema.
   experiments <- tibble::tibble(
     message_index = seq_along(messages),
     config = rep(list(config), length(messages)),

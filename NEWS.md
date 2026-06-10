@@ -118,6 +118,33 @@
 
 ## Bug fixes
 
+- **Gemini multi-turn roles**: assistant turns are now sent as Gemini's
+  `"model"` role. Previously every turn was sent as `"user"`, so the model
+  saw its own prior replies as user messages, corrupting chat sessions and
+  any multi-turn agent memory on Gemini.
+- **`extract_text()` (Anthropic)**: responses with several text blocks
+  (typical around tool use) now concatenate all of them; previously only the
+  last block was returned and earlier content was silently dropped.
+- **`llm_fn_structured()` / `llm_mutate_structured()`**: with `.schema =
+  NULL` these now request JSON-object mode as documented; previously the
+  config was sent unchanged and the model could return arbitrary prose.
+- **`call_llm_tools()`**: the return value now carries
+  `attr(x, "tool_loop")` with `model_calls`, aggregate `sent`/`rec` token
+  totals across every internal round, and `tool_calls` -- `tokens(x)` alone
+  covers only the final call, which undercounted multi-round loops. A new
+  `max_tool_calls` argument caps tool executions across the loop, raising a
+  typed `llmr_tool_limit` condition instead of continuing to spend.
+- **`call_llm.openai()`**: `top_k` and `repetition_penalty` are now dropped
+  (with the usual one-time note) instead of being forwarded to an endpoint
+  that rejects them; the streaming and batch paths already did this.
+- **Anthropic `stop_sequence`** now maps to finish reason `"stop"` rather
+  than `"other"`.
+- **Templated `.messages` with partially named vectors** (e.g.
+  `c(system = ..., "{x}")`) now default unnamed elements to the user role,
+  as documented, instead of erroring.
+- **`call_llm_broadcast()` with zero messages** returns the full diagnostic
+  column schema (finish reasons, token columns, `response`), matching
+  non-empty results.
 - **`llm_batch_submit()`**: a named character vector like
   `c(system = "...", user = "...")` is treated as a single multi-role request
   rather than being split into separate batch requests; unnamed character

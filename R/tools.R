@@ -185,12 +185,20 @@ tool_calls <- function(x) {
 #' @param tools One [llm_tool()] or a list of them.
 #' @param max_rounds Maximum model turns (a turn may contain several tool
 #'   calls). When reached, the last response is returned as-is with a warning.
+#' @param max_tool_calls Maximum tool executions across the whole loop.
+#'   Exceeding it raises a condition of class `llmr_tool_limit` rather than
+#'   continuing to spend; the default is unlimited. Callers enforcing spend
+#'   ceilings (e.g. agent frameworks) can catch that class.
 #' @param verbose Print each tool invocation as it happens.
 #' @param tries,wait_seconds Retry controls passed to [call_llm_robust()].
 #' @return The final [llmr_response]. The full conversation (including tool
-#'   results) is attached as `attr(x, "messages")`, and a tibble of executed
+#'   results) is attached as `attr(x, "messages")`; a tibble of executed
 #'   calls as `attr(x, "tool_history")` with columns `round`, `name`,
-#'   `arguments` (JSON), `result`.
+#'   `arguments` (JSON), `result`; and aggregate spend across the whole loop
+#'   as `attr(x, "tool_loop")`, a list with `model_calls`, `sent`, `rec`
+#'   (token totals over every internal model call, `NA` when the provider
+#'   reported none), and `tool_calls`. Note that `tokens(x)` alone covers
+#'   only the final model call.
 #' @examples
 #' \dontrun{
 #' weather <- llm_tool(
@@ -208,6 +216,7 @@ tool_calls <- function(x) {
 #' @export
 call_llm_tools <- function(config, messages, tools,
                            max_rounds = 8L,
+                           max_tool_calls = Inf,
                            verbose = FALSE,
                            tries = 3L,
                            wait_seconds = 2) {
@@ -228,13 +237,43 @@ call_llm_tools <- function(config, messages, tools,
   convo <- .normalize_messages(messages)
   history <- list()
 
+  # aggregate spend across the whole loop (tokens(resp) covers only the last
+  # call, which silently undercounts multi-round loops)
+  n_model_calls <- 0L
+  agg_sent <- 0L; agg_rec <- 0L; saw_usage <- FALSE
+  executed <- 0L
+  account_call <- function(resp) {
+    n_model_calls <<- n_model_calls + 1L
+    u <- tokens(resp)
+    s <- suppressWarnings(as.integer(u$sent)); r <- suppressWarnings(as.integer(u$rec))
+    if (length(s) == 1L && !is.na(s)) { agg_sent <<- agg_sent + s; saw_usage <<- TRUE }
+    if (length(r) == 1L && !is.na(r)) { agg_rec  <<- agg_rec + r;  saw_usage <<- TRUE }
+  }
+  loop_attr <- function() list(
+    model_calls = n_model_calls,
+    sent = if (saw_usage) agg_sent else NA_integer_,
+    rec  = if (saw_usage) agg_rec  else NA_integer_,
+    tool_calls = executed
+  )
+  assert_tool_limit <- function() {
+    if (executed + 1L > max_tool_calls) {
+      stop(structure(
+        class = c("llmr_tool_limit", "error", "condition"),
+        list(message = sprintf(
+          "call_llm_tools() would exceed max_tool_calls = %s; stopping rather than continuing to spend.",
+          format(max_tool_calls)), call = NULL)))
+    }
+  }
+
   for (round in seq_len(max_rounds)) {
     resp <- call_llm_robust(cfg, convo, tries = tries,
                             wait_seconds = wait_seconds, verbose = FALSE)
+    account_call(resp)
     calls <- tool_calls(resp)
     if (!length(calls)) {
       attr(resp, "messages") <- convo
       attr(resp, "tool_history") <- .llmr_tool_history(history)
+      attr(resp, "tool_loop") <- loop_attr()
       return(resp)
     }
 
@@ -244,6 +283,8 @@ call_llm_tools <- function(config, messages, tools,
                                        content = resp$raw$content)))
       result_blocks <- list()
       for (cl in calls) {
+        assert_tool_limit()
+        executed <- executed + 1L
         tool <- tool_index[[cl$name]]
         result <- if (is.null(tool)) {
           paste0("ERROR: unknown tool '", cl$name, "'")
@@ -267,6 +308,8 @@ call_llm_tools <- function(config, messages, tools,
       amsg$content <- amsg$content %||% ""
       convo <- append(convo, list(amsg))
       for (cl in calls) {
+        assert_tool_limit()
+        executed <- executed + 1L
         tool <- tool_index[[cl$name]]
         result <- if (is.null(tool)) {
           paste0("ERROR: unknown tool '", cl$name, "'")
@@ -290,6 +333,7 @@ call_llm_tools <- function(config, messages, tools,
           call. = FALSE)
   attr(resp, "messages") <- convo
   attr(resp, "tool_history") <- .llmr_tool_history(history)
+  attr(resp, "tool_loop") <- loop_attr()
   resp
 }
 

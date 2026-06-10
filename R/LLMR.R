@@ -355,7 +355,10 @@ extract_text <- function(content) {
       }
     }
     text_blocks <- Filter(function(b) !is.null(b$text) && is.character(b$text) && nzchar(b$text[1]), cc)
-    if (length(text_blocks) > 0) return(text_blocks[[length(text_blocks)]]$text)
+    if (length(text_blocks) > 0) {
+      return(paste(vapply(text_blocks, function(b) b$text[1], character(1)),
+                   collapse = "\n"))
+    }
     return(NA_character_)
   }
 
@@ -518,8 +521,13 @@ get_endpoint <- function(config, default_endpoint) {
 #'           prefixes automatically; cached token counts are reported in
 #'           `tokens(x)$cached` either way.
 #'     \item Anything else (e.g., `reasoning_effort`, `api_url`,
-#'           provider-specific flags) is forwarded verbatim, so new provider
-#'           features work without waiting for an LLMR release.
+#'           provider-specific flags) is forwarded verbatim on the
+#'           OpenAI-compatible providers, so new provider features work
+#'           without waiting for an LLMR release. Anthropic and Gemini have
+#'           stricter request shapes: their builders send recognized fields
+#'           only, and quietly note (once per session) anything they drop.
+#'           The `req_builder` / `request_modifier` hooks remain the escape
+#'           hatch for arbitrary fields on those providers.
 #'   }
 #'
 #' @section Advanced hooks:
@@ -872,6 +880,14 @@ call_llm.openai <- function(config, messages, verbose = FALSE) {
   }
   messages <- .normalize_messages(messages)
   mp <- config$model_params %||% list()
+  if (!isTRUE(config$no_change)) {
+    bad <- intersect(names(mp), c("top_k", "repetition_penalty"))
+    if (length(bad)) {
+      .llmr_param_note(sprintf("Dropped unsupported parameters for %s: %s",
+                               config$provider, paste(bad, collapse = ", ")))
+      mp <- mp[setdiff(names(mp), bad)]
+    }
+  }
   api_url_param <- mp$api_url %||% ""
 
   # Auto-detect the Responses API for models that are only served there
@@ -1285,7 +1301,8 @@ call_llm.gemini <- function(config, messages, verbose = FALSE) {
     } else {
       list(list(text = as.character(msg$content)))
     }
-    list(role = "user", parts = parts)
+    list(role = if (identical(msg$role, "assistant")) "model" else "user",
+         parts = parts)
   })
 
   resp_mime <- params$responseMimeType %||% config$model_params$response_mime_type

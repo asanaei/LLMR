@@ -61,9 +61,10 @@
 
   if (!is.null(.messages)) {
     stopifnot(is.character(.messages), length(.messages) > 0)
-    if (is.null(names(.messages))) {
-      names(.messages) <- rep("user", length(.messages))
-    }
+    roles <- names(.messages)
+    if (is.null(roles)) roles <- rep("user", length(.messages))
+    roles[is.na(roles) | roles == ""] <- "user"
+    names(.messages) <- roles
     bad <- setdiff(unique(names(.messages)), roles_allowed)
     if (length(bad)) {
       stop(sprintf("Unsupported roles in .messages: %s",

@@ -90,8 +90,13 @@ DeepSeek, and several compatible providers cache long prompt
 prefixes automatically; cached token counts are reported in
 \code{tokens(x)$cached} either way.
 \item Anything else (e.g., \code{reasoning_effort}, \code{api_url},
-provider-specific flags) is forwarded verbatim, so new provider
-features work without waiting for an LLMR release.
+provider-specific flags) is forwarded verbatim on the
+OpenAI-compatible providers, so new provider features work
+without waiting for an LLMR release. Anthropic and Gemini have
+stricter request shapes: their builders send recognized fields
+only, and quietly note (once per session) anything they drop.
+The \code{req_builder} / \code{request_modifier} hooks remain the escape
+hatch for arbitrary fields on those providers.
 }}
 }
 \value{
