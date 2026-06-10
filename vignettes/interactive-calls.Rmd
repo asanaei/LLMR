@@ -1,0 +1,179 @@
+---
+title: "Interactive calls: tools, streaming, and logprobs"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Interactive calls: tools, streaming, and logprobs}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>",
+  eval = identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true")
+)
+```
+
+Three capabilities make a model call more than a question and an answer:
+**tools** let the model consult your R session while it reasons; **streaming**
+shows the reply as it is generated; **logprobs** report how confident the
+model was in each token it chose. This vignette covers all three. (For
+data-frame pipelines see `vignette("tidy-and-structured")`; for enforced JSON
+shapes, `vignette("about-schema")`; for logging, replication, caching, and
+batch jobs, `vignette("reproducibility-and-cost")`.)
+
+One caveat up front: provider support varies. Tool calling works on the
+OpenAI-compatible providers and Anthropic; streaming works across the major
+providers; logprobs are the patchiest -- OpenAI and DeepSeek expose them,
+Anthropic does not, and several hosts reject the flag model by model. The
+chunks below use models that were tested when this vignette was written.
+
+```{r setup}
+library(LLMR)
+```
+
+## Tools: the model consults your R session
+
+A tool is an R function the model may call. The division of labor matters:
+the model *proposes* a call with arguments; LLMR executes the registered
+function and feeds the result back; the model continues with real data it
+had no way of knowing. The classic use in research code is grounding: a
+classifier or assistant that must quote your data rather than guess.
+
+`llm_tool()` wraps a function with the JSON-Schema description the model
+sees. Keep tools small, deterministic, and free of side effects -- the model
+decides when and how often to call them.
+
+```{r tool-def}
+survey <- data.frame(
+  group   = rep(c("treatment", "control"), each = 4),
+  support = c(6, 7, 5, 7, 4, 3, 5, 4)
+)
+
+group_stats <- llm_tool(
+  function(group) {
+    rows <- survey[survey$group == group, ]
+    if (!nrow(rows)) return(paste0("No group called ", group))
+    sprintf("n = %d, mean support = %.2f", nrow(rows), mean(rows$support))
+  },
+  name        = "group_stats",
+  description = "Sample size and mean support (1-7 scale) for one experimental group.",
+  parameters  = list(group = list(type = "string",
+                                  description = "Group name: treatment or control"))
+)
+```
+
+`call_llm_tools()` runs the whole loop: it sends the tool definitions,
+executes whatever the model calls, returns the results to the model, and
+repeats until the model answers in plain text.
+
+```{r tool-loop}
+cfg <- llm_config("groq", "openai/gpt-oss-20b", temperature = 0)
+
+r <- call_llm_tools(
+  cfg,
+  "Which group reports higher support, and by how much? Use the tool.",
+  tools = group_stats
+)
+r
+```
+
+The answer quotes numbers the model could only have obtained by calling the
+function. Every execution is on the record:
+
+```{r tool-history}
+attr(r, "tool_history")
+```
+
+Two accounting details deserve attention. First, a tool loop is *several*
+model calls, so `tokens(r)` -- which describes the final call only -- would
+undercount it. The aggregate is attached to the response:
+
+```{r tool-loop-spend}
+attr(r, "tool_loop")
+```
+
+Second, a loop can run away: a confused model may call tools again and
+again. `max_tool_calls` caps total executions; exceeding it raises a typed
+condition (`llmr_tool_limit`) instead of spending further. Together with
+`max_rounds` this bounds the worst case. Note that `finish_reason(x)` equal
+to `"tool"` marks an *intermediate* state -- a response asking for tools, not
+a final answer; `call_llm_tools()` handles those for you, and you only meet
+them if you drive the loop yourself with `tool_calls()`.
+
+A privacy note: `tool_history` (and the audit log, if enabled) records tool
+arguments and results verbatim. If tools touch sensitive data, treat those
+records with the same care as the data.
+
+## Streaming: watch the reply arrive
+
+`call_llm_stream()` is `call_llm()` over a different transport: the same
+request shaping (messages, parameters, hooks), but the reply arrives in
+chunks. For long generations this keeps sessions responsive and avoids HTTP
+timeouts. By default each chunk is printed as it arrives:
+
+```{r stream-basic}
+r <- call_llm_stream(cfg, "In two sentences: why do surveys weight responses?")
+tokens(r)
+```
+
+A custom `callback` receives each chunk; keep it fast, since it runs inside
+the receive loop. Collecting chunks is one line:
+
+```{r stream-callback}
+seen <- character(0)
+r <- call_llm_stream(cfg, "Count from one to five, words only.",
+                     callback = function(chunk) seen <<- c(seen, chunk))
+length(seen)        # the reply arrived in this many pieces
+as.character(r)     # and assembled into the usual llmr_response
+```
+
+## Logprobs: the model's confidence as data
+
+When a provider exposes log-probabilities, each generated token comes with
+the probability the model assigned to it, and optionally the `top_logprobs`
+most likely alternatives at that position. For measurement work this turns a
+classification into a graded judgment: the probability of the answer token
+is a soft label you can threshold, calibrate, or carry into a downstream
+model.
+
+Request them at config time; extract them tidily with `llm_logprobs()`. The
+demo uses `deepseek-chat`, which supports them.
+
+```{r logprobs}
+cfg_lp <- llm_config("deepseek", "deepseek-chat", temperature = 0,
+                     logprobs = TRUE, top_logprobs = 5, max_tokens = 4)
+
+r <- call_llm(cfg_lp, c(
+  system = "Classify the sentiment of the review. Reply with exactly one word: positive or negative.",
+  user   = "The plot was predictable, but I cried at the end."))
+
+lp <- llm_logprobs(r)
+data.frame(token = lp$token, p = exp(lp$logprob))
+```
+
+The alternatives at the first position show what probability mass, if any,
+went to the competing label:
+
+```{r logprobs-alts}
+alts <- lp$top_logprobs[[1]]
+transform(alts, p = exp(logprob))[, c("token", "p")]
+```
+
+Two cautions keep this honest. Logprobs are *token-level*, not semantic:
+the figure is the probability of that token in that position, which tracks
+"confidence in the label" only when the prompt constrains the answer to a
+single label token -- hence the one-word instruction above. For multi-token
+labels, multiply the per-token probabilities (or redesign the labels). And a
+high probability means the model was sure, not that it was right; on
+well-posed items the interesting observations are precisely the low-`p`
+cases, which are natural candidates for human review.
+
+## Where the other machinery lives
+
+These three features compose with everything else: a tool loop streams its
+final answer no differently, a logprobs request travels through
+`call_llm_par()` like any config, and all of it lands in the audit log when
+`llm_log_enable()` is on. For that log, replication helpers, cost
+accounting, prompt caching, and the half-price batch APIs, continue with
+`vignette("reproducibility-and-cost")`.

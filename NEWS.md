@@ -207,6 +207,10 @@
 
 ## Documentation
 
+- New vignette "Interactive calls: tools, streaming, and logprobs": the tool
+  loop end to end (definitions, history, aggregate spend, `max_tool_calls`),
+  streaming with custom callbacks, and log-probabilities as graded
+  measurements, with honest notes on provider support.
 - `llm_config()` now documents the full canonical parameter set (including
   `seed`, `logprobs`, `thinking_budget`, `timeout`, `cache`) and the three
   request hooks. The Anthropic thinking example is valid

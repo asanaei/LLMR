@@ -24,7 +24,9 @@
 #'   logprobs. For a result frame: a list of such tibbles, one per row.
 #' @examples
 #' \dontrun{
-#' cfg <- llm_config("groq", "openai/gpt-oss-20b",
+#' # Provider support varies; deepseek-chat and OpenAI expose logprobs,
+#' # Anthropic does not, and several hosts reject the flag model by model.
+#' cfg <- llm_config("deepseek", "deepseek-chat",
 #'                   logprobs = TRUE, top_logprobs = 3, temperature = 0)
 #' r <- call_llm(cfg, "Answer with one word: is water wet?")
 #' llm_logprobs(r)
