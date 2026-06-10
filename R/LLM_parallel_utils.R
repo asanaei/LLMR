@@ -167,8 +167,11 @@
 #' @param messages A character vector or a list of message objects (same for all calls).
 #' @param ... Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).
 #'
-#' @return A tibble with columns: swept_param_name, the varied parameter column, provider, model,
-#'   all other model parameters, response_text, raw_response_json, success, error_message.
+#' @return A tibble with columns: swept_param_name, the varied parameter column,
+#'   the `config` list-column (so [llm_par_resume()] can re-run failures),
+#'   provider, model, all other model parameters, response_text,
+#'   raw_response_json, success, error_message, and the other diagnostics
+#'   documented in [call_llm_par()].
 #' @section Parallel Workflow:
 #' Recommended workflow:
 #' 1. Call `setup_llm_parallel()` once at the start of your script.
@@ -229,9 +232,9 @@ call_llm_sweep <- function(base_config,
     messages = rep(list(messages), length(param_values))
   )
 
-  # Run parallel processing
+  # Run parallel processing. The config list-column is kept so that
+  # llm_par_resume() can re-run failed rows.
   results_final <- call_llm_par(experiments, ...)
-  results_final$config <- NULL
   return(results_final)
 }
 
@@ -246,8 +249,10 @@ call_llm_sweep <- function(base_config,
 #'   a list where each element is a pre-formatted message list.
 #' @param ... Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).
 #'
-#' @return A tibble with columns: message_index (metadata), provider, model,
-#'   all model parameters, response_text, raw_response_json, success, error_message.
+#' @return A tibble with columns: message_index (metadata), the `config`
+#'   list-column (so [llm_par_resume()] can re-run failures), provider, model,
+#'   all model parameters, response_text, raw_response_json, success,
+#'   error_message, and the other diagnostics documented in [call_llm_par()].
 #' @section Parallel Workflow:
 #' Recommended workflow:
 #' 1. Call `setup_llm_parallel()` once at the start of your script.
@@ -308,9 +313,9 @@ call_llm_broadcast <- function(config,
     messages = messages
   )
 
-  # Run parallel processing
+  # Run parallel processing. The config list-column is kept so that
+  # llm_par_resume() can re-run failed rows.
   results_final <- call_llm_par(experiments, ...)
-  results_final$config <- NULL
   return(results_final)
 }
 
@@ -324,8 +329,10 @@ call_llm_broadcast <- function(config,
 #' @param messages A character vector or a list of message objects (same for all configs).
 #' @param ... Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).
 #'
-#' @return A tibble with columns: config_index (metadata), provider, model,
-#'   all varying model parameters, response_text, raw_response_json, success, error_message.
+#' @return A tibble with columns: config_index (metadata), the `config`
+#'   list-column (so [llm_par_resume()] can re-run failures), provider, model,
+#'   all varying model parameters, response_text, raw_response_json, success,
+#'   error_message, and the other diagnostics documented in [call_llm_par()].
 #' @section Parallel Workflow:
 #' Recommended workflow:
 #' 1. Call `setup_llm_parallel()` once at the start of your script.
@@ -378,9 +385,9 @@ call_llm_compare <- function(configs_list,
     messages = rep(list(messages), length(configs_list))
   )
 
-  # Run parallel processing
+  # Run parallel processing. The config list-column is kept so that
+  # llm_par_resume() can re-run failed rows.
   results_final <- call_llm_par(experiments, ...)
-  results_final$config <- NULL
   return(results_final)
 }
 
@@ -392,29 +399,39 @@ call_llm_compare <- function(configs_list,
 #'
 #' @param experiments A tibble/data.frame with required list-columns 'config' (llm_config objects)
 #'   and 'messages' (character vector OR message list).
-#' @param simplify Whether to cbind 'experiments' to the output data frame or not.
-#' @param tries Integer. Number of retries for each call. Default is 10.
+#' @param simplify If TRUE (default), provider, model, and the model parameters
+#'   stored in each row's config are unnested into regular columns for easy
+#'   filtering and grouping.
+#' @param tries Integer. Total number of attempts per call (first call plus
+#'   retries). Default is 10.
 #' @param wait_seconds Numeric. Initial wait time (seconds) before retry. Default is 2.
 #' @param backoff_factor Numeric. Multiplier for wait time after each failure. Default is 3.
 #' @param verbose Logical. If TRUE, prints progress and debug information.
 #' @param memoize Logical. If TRUE, enables caching for identical requests.
+#'   Note that under a multisession plan each worker process keeps its own
+#'   cache, so deduplication is per worker, not global.
 #' @param max_workers Integer. Maximum number of parallel workers. If NULL, auto-detects.
 #' @param progress Logical. If TRUE, shows progress bar.
 #' @param json_output Deprecated. Raw JSON string is always included as raw_response_json.
 #'                  This parameter is kept for backward compatibility but has no effect.
-#' @param start_jitter Calls are made after a uniformly distributed delay
-#'                  between 0 and \code{start_jitter} seconds.
+#' @param start_jitter Each call starts after a uniformly distributed delay
+#'   between 0 and \code{start_jitter} seconds. The default is 0 (no delay);
+#'   set a few seconds when launching very large runs against a provider with
+#'   strict burst limits.
 #'
 #' @return A tibble containing all original columns plus:
 #' \itemize{
 #'   \item \code{response_text} - assistant text (or \code{NA} on failure)
-#'   \item \code{raw_response_json} - raw JSON string
+#'   \item \code{raw_response_json} - raw JSON string (on failure: the
+#'         provider's error body when available)
 #'   \item \code{success}, \code{error_message}
 #'   \item \code{finish_reason} - e.g. "stop", "length", "filter", "tool", or "error:`category`"
 #'   \item \code{sent_tokens}, \code{rec_tokens}, \code{total_tokens}, \code{reasoning_tokens}
 #'   \item \code{response_id}
 #'   \item \code{duration} - seconds
-#'   \item \code{response} - the full \code{llmr_response} object (or \code{NA} on failure)
+#'   \item \code{status_code}, \code{error_code}, \code{bad_param} - error
+#'         diagnostics (NA on success)
+#'   \item \code{response} - the full \code{llmr_response} object (or \code{NULL} on failure)
 #' }
 #'
 #' The `response` column holds `llmr_response` objects on success, or `NULL` on failure.
@@ -462,7 +479,7 @@ call_llm_par <- function(experiments,
                          max_workers = NULL,
                          progress = FALSE,
                          json_output = NULL,
-                         start_jitter = 5) {
+                         start_jitter = 0) {
 
   if (!is.null(json_output) && verbose) {
     message("Note: The 'json_output' parameter is deprecated. Raw JSON is always included as 'raw_response_json'.")
@@ -503,6 +520,7 @@ call_llm_par <- function(experiments,
       rec_tokens        = integer(0),
       total_tokens      = integer(0),
       reasoning_tokens  = integer(0),
+      cached_tokens     = integer(0),
       response_id       = character(0),
       duration          = numeric(0),
       response          = list(),
@@ -569,7 +587,7 @@ call_llm_par <- function(experiments,
 
       is_obj <- inherits(result_content, "llmr_response")
       fr  <- if (is_obj) finish_reason(result_content) else NA_character_
-      u   <- if (is_obj) tokens(result_content)        else list(sent=NA, rec=NA, total=NA, reasoning=NA)
+      u   <- if (is_obj) tokens(result_content)        else list(sent=NA, rec=NA, total=NA, reasoning=NA, cached=NA)
       rid <- if (is_obj) result_content$response_id    else NA_character_
       dur <- if (is_obj) result_content$duration_s     else as.numeric(difftime(Sys.time(), start_time, units = "secs"))
 
@@ -584,6 +602,7 @@ call_llm_par <- function(experiments,
         rec_tokens        = as_int_or_na(u$rec),
         total_tokens      = as_int_or_na(u$total),
         reasoning_tokens  = as_int_or_na(u$reasoning),
+        cached_tokens     = as_int_or_na(u$cached),
         response_id       = as_char_or_na(rid),
         duration          = dur,
         status_code       = NA_integer_,      # <-- force integer
@@ -598,11 +617,18 @@ call_llm_par <- function(experiments,
       rid0 <- tryCatch(e$request_id,  error = function(...) NA)
       prm0 <- tryCatch(e$param,       error = function(...) NA)
       cod0 <- tryCatch(e$code,        error = function(...) NA)
+      # the provider's raw error body, when the typed condition carries one,
+      # is preserved in raw_response_json so failures stay inspectable
+      bod0 <- tryCatch(e$body, error = function(...) NULL)
+      raw_err_json <- if (!is.null(bod0)) {
+        tryCatch(as.character(jsonlite::toJSON(bod0, auto_unbox = TRUE, null = "null")),
+                 error = function(...) raw_json_str)
+      } else raw_json_str
 
       list(
         row_index         = i_val,
         response_text     = NA_character_,
-        raw_response_json = raw_json_str,
+        raw_response_json = raw_err_json,
         success           = FALSE,
         error_message     = conditionMessage(e),
         finish_reason     = paste0("error:", {
@@ -614,6 +640,7 @@ call_llm_par <- function(experiments,
         rec_tokens        = NA_integer_,
         total_tokens      = NA_integer_,
         reasoning_tokens  = NA_integer_,
+        cached_tokens     = NA_integer_,
         response_id       = as_char_or_na(rid0),   # character
         duration          = as.numeric(difftime(Sys.time(), start_time, units = "secs")),
         status_code       = as_int_or_na(sc0),     # integer
@@ -660,6 +687,7 @@ call_llm_par <- function(experiments,
     rec_tokens        = NA_integer_,
     total_tokens      = NA_integer_,
     reasoning_tokens  = NA_integer_,
+    cached_tokens     = NA_integer_,
     response_id       = NA_character_,
     duration          = NA_real_,
     status_code       = NA_integer_,
@@ -676,7 +704,7 @@ call_llm_par <- function(experiments,
       final_name <- paste0(col_name, ".", suffix)
       suffix <- suffix + 1
     }
-    if (final_name != col_name && verbose) {
+    if (final_name != col_name) {
       warning(sprintf("Input data already has a column named '%s'. Results will be in '%s'.", col_name, final_name))
     }
     output_df[[final_name]] <- new_cols_spec[[col_name]]
@@ -716,7 +744,9 @@ call_llm_par <- function(experiments,
 #' @param config_labels Character vector of labels for configs. If NULL, uses "provider_model".
 #' @param user_prompts Character vector (or list) of user-turn prompts.
 #' @param user_prompt_labels Optional labels for the user prompts.
-#' @param system_prompts Optional character vector of system messages (recycled against user prompts). Missing/NA values are ignored; messages are user-only.
+#' @param system_prompts Optional character vector of system messages. These are
+#'   fully crossed with the user prompts (every combination appears), like the
+#'   other factors. Missing/NA values are ignored; those messages are user-only.
 #' @param system_prompt_labels Optional labels for the system prompts.
 #'
 #' @return A tibble with columns: config (list-column), messages (list-column),
@@ -990,6 +1020,9 @@ expand_llm_config <- function(base_config, ...) {
       }
     }
     cfg$model_params <- mp
+    # The provider determines S3 dispatch in call_llm(); a swept provider must
+    # be reflected in the class or the call would go to the wrong API.
+    class(cfg) <- c("llm_config", cfg$provider)
     out[[i]] <- cfg
   }
   out
@@ -1119,6 +1152,24 @@ llm_par_resume <- function(results, tries = 3, ...) {
     }
   }
 
+  # Refresh the structured-parsing diagnostics for the re-run rows so they
+  # reflect the new responses rather than the failed ones.
+  if (all(c("structured_ok", "structured_data") %in% names(results))) {
+    sub <- results[failed_idx, "response_text", drop = FALSE]
+    reparsed <- llm_parse_structured_col(sub, fields = character(0),
+                                         structured_col = "response_text")
+    results$structured_ok[failed_idx]   <- reparsed$structured_ok
+    results$structured_data[failed_idx] <- reparsed$structured_data
+    warning("Hoisted structured field columns are not re-extracted for resumed ",
+            "rows; run llm_parse_structured_col() on the result if you need ",
+            "them refreshed.", call. = FALSE)
+  }
+  if (all(c("tags_ok", "tags_data") %in% names(results))) {
+    warning("Tag columns (tags_ok/tags_data and extracted tags) are not ",
+            "re-parsed for resumed rows; run llm_parse_tags_col() on the ",
+            "result to refresh them.", call. = FALSE)
+  }
+
   if (!inherits(results, "llmr_experiment")) {
     class(results) <- unique(c("llmr_experiment", class(results)))
   }
@@ -1138,6 +1189,8 @@ llm_par_resume <- function(results, tries = 3, ...) {
 #'   target column value (other data columns are also available).
 #' @param .tags Tags to extract from the judge response. Defaults to
 #'   `c("reasoning", "score")`.
+#' @param .output Name of the column that receives the judge's raw response.
+#'   Default `"judge_res"`.
 #' @param ... Passed to [llm_mutate_tags()].
 #' @return `.data` with judge output columns appended.
 #'
@@ -1155,23 +1208,31 @@ llm_par_resume <- function(results, tries = 3, ...) {
 #' @seealso [llm_mutate_tags()], [llm_parse_tags()]
 #' @export
 llm_judge <- function(.data, .target, .config, prompt,
-                      .tags = c("reasoning", "score"), ...) {
+                      .tags = c("reasoning", "score"),
+                      .output = "judge_res", ...) {
   target_sym <- rlang::ensym(.target)
   target_name <- rlang::as_name(target_sym)
 
   if (!target_name %in% names(.data)) stop("Target column not found in .data.")
+  if (".target" %in% names(.data)) {
+    stop("`.data` already contains a column named '.target', which llm_judge() ",
+         "uses internally for the prompt template. Rename that column first.")
+  }
+  stopifnot(is.character(.output), length(.output) == 1L, nzchar(.output))
 
   eval_data <- .data
   eval_data[[".target"]] <- eval_data[[target_name]]
 
-  out <- llm_mutate_tags(
-    .data = eval_data,
-    output = judge_res,
-    prompt = prompt,
-    .config = .config,
-    .tags = .tags,
-    ...
-  )
+  out <- do.call(llm_mutate_tags, c(
+    list(
+      .data = eval_data,
+      output = rlang::sym(.output),
+      prompt = prompt,
+      .config = .config,
+      .tags = .tags
+    ),
+    list(...)
+  ))
 
   out[[".target"]] <- NULL
 
@@ -1181,12 +1242,28 @@ llm_judge <- function(.data, .target, .config, prompt,
   out
 }
 
+# Internal: resolve a diagnostic column that may have been collision-renamed
+# (the engine appends ".1", ".2", ... when the input frame already had a column
+# of that name; its own column is always the LAST matching one in column order).
+.llmr_diag_col <- function(object, base) {
+  cands <- grep(paste0("^", base, "(\\.[0-9]+)?$"), names(object), value = TRUE)
+  if (!length(cands)) return(NA_character_)
+  cands[length(cands)]
+}
+
 #' @export
 summary.llmr_experiment <- function(object, ...) {
+  sc <- .llmr_diag_col(object, "success")
+  st <- .llmr_diag_col(object, "sent_tokens")
+  rt <- .llmr_diag_col(object, "rec_tokens")
+  du <- .llmr_diag_col(object, "duration")
+  tt <- .llmr_diag_col(object, "total_tokens")
+  fr <- .llmr_diag_col(object, "finish_reason")
+
   total <- nrow(object)
-  success <- sum(object$success, na.rm = TRUE)
-  total_sent <- sum(object$sent_tokens, na.rm = TRUE)
-  total_rec <- sum(object$rec_tokens, na.rm = TRUE)
+  success <- if (!is.na(sc)) sum(object[[sc]], na.rm = TRUE) else NA_integer_
+  total_sent <- if (!is.na(st)) sum(object[[st]], na.rm = TRUE) else NA_integer_
+  total_rec  <- if (!is.na(rt)) sum(object[[rt]], na.rm = TRUE) else NA_integer_
 
   cat("-- LLMR Experiment Summary --\n")
   cat(sprintf("Total Runs: %s (%.1f%% successful)\n",
@@ -1196,16 +1273,16 @@ summary.llmr_experiment <- function(object, ...) {
               format(total_sent, big.mark = ","),
               format(total_rec, big.mark = ",")))
 
-  if ("model" %in% names(object)) {
+  if ("model" %in% names(object) && !anyNA(c(sc, du, tt, fr))) {
     cat("-- Performance By Model --\n")
     if (requireNamespace("dplyr", quietly = TRUE)) {
       agg <- object |>
         dplyr::group_by(model) |>
         dplyr::summarize(
-          Success = sprintf("%s%%", round(mean(success, na.rm = TRUE) * 100, 1)),
-          `Avg Latency` = sprintf("%.1fs", mean(duration, na.rm = TRUE)),
-          `Avg Tokens` = format(round(mean(total_tokens, na.rm = TRUE)), big.mark = ","),
-          Truncated = sprintf("%s%%", round(mean(finish_reason == "length", na.rm = TRUE) * 100, 1)),
+          Success = sprintf("%s%%", round(mean(.data[[sc]], na.rm = TRUE) * 100, 1)),
+          `Avg Latency` = sprintf("%.1fs", mean(.data[[du]], na.rm = TRUE)),
+          `Avg Tokens` = format(round(mean(.data[[tt]], na.rm = TRUE)), big.mark = ","),
+          Truncated = sprintf("%s%%", round(mean(.data[[fr]] == "length", na.rm = TRUE) * 100, 1)),
           .groups = "drop"
         )
       print(as.data.frame(agg), row.names = FALSE)
@@ -1213,8 +1290,8 @@ summary.llmr_experiment <- function(object, ...) {
       for (m in unique(object$model)) {
         sub <- object[object$model == m, ]
         cat(sprintf("%s: %.1f%% success | %.1fs latency\n",
-                    m, mean(sub$success, na.rm = TRUE) * 100,
-                    mean(sub$duration, na.rm = TRUE)))
+                    m, mean(sub[[sc]], na.rm = TRUE) * 100,
+                    mean(sub[[du]], na.rm = TRUE)))
       }
     }
   }

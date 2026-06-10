@@ -70,8 +70,10 @@ roles, character counts, file presence and existence, the batch plan, and a
 list-column of \code{issues}. Problems that would only surface mid-run (a missing
 file, a \code{"file"} role combined with \code{.batch_size > 1}, an embedding config
 with row batching, \code{.return = "object"} with batching, a schema supplied
-without \code{.structured}) are collected per row so you see all of them at once
-rather than hitting the first error.
+without \code{.structured}, a template that references \code{NA} values or renders an
+empty prompt, a file part with no accompanying user text, or a tag name that
+collides with the batched \verb{<row_N>} protocol) are collected per row so you
+see all of them at once rather than hitting the first error.
 }
 \details{
 Batched data travels inside numbered \verb{<row_i>...</row_i>} tags; the

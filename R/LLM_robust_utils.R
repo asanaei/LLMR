@@ -40,7 +40,9 @@
                         model = NA_character_,
                         param = NA_character_,
                         code = NA_character_,
-                        request_id = NA_character_) {
+                        request_id = NA_character_,
+                        retry_after = NA_real_,
+                        body = NULL) {
 
   category <- match.arg(category)
   cls <- c(
@@ -64,7 +66,9 @@
       model       = model,
       param       = param,
       code        = code,
-      request_id  = request_id
+      request_id  = request_id,
+      retry_after = retry_after,
+      body        = body
     )
   } else {
     rlang::abort(
@@ -75,7 +79,9 @@
       model       = model,
       param       = param,
       code        = code,
-      request_id  = request_id
+      request_id  = request_id,
+      retry_after = retry_after,
+      body        = body
     )
   }
 }
@@ -87,8 +93,12 @@
 # 1. Exponential Backoff (Internal)
 # -------------------------------------------------------------------
 
-# A generic utility that calls a function repeatedly with exponentially
-# increasing wait time after each failure. Not exported, no roxygen docs.
+# A generic utility that calls a function repeatedly, waiting between failed
+# attempts. The wait honors a provider-supplied Retry-After when the error
+# carries one; otherwise it grows exponentially with multiplicative jitter so
+# parallel workers do not retry in lockstep. There is no sleep after the final
+# attempt: once the budget is spent the last error is re-raised immediately.
+# Not exported, no roxygen docs.
 
 retry_with_backoff <- function(func,
                                tries = 5,
@@ -98,23 +108,30 @@ retry_with_backoff <- function(func,
                                ...) {
   last_error <- NULL
   for (attempt in seq_len(tries)) {
-    wait_time <- initial_wait * (backoff_factor ^ (attempt - 1L))
     result <- tryCatch(
-      func(...),
+      # Box the value so that a legitimate NULL return is not mistaken for a
+      # failed attempt.
+      list(value = func(...)),
       error = function(e) {
         if (!is.null(error_filter_func) && !error_filter_func(e)) {
           stop(e)
         }
         last_error <<- e
-        message(sprintf("Error on attempt %d: %s", attempt, conditionMessage(e)))
-        message(sprintf("Waiting %s seconds before retry...", format(round(wait_time, 1))))
-        Sys.sleep(wait_time)
-        return(NULL)
+        NULL
       }
     )
-    if (!is.null(result)) {
-      return(result)
+    if (!is.null(result)) return(result$value)
+    if (attempt == tries) break
+    ra <- suppressWarnings(as.numeric(last_error$retry_after %||% NA_real_))
+    wait_time <- if (length(ra) == 1L && is.finite(ra) && ra > 0) {
+      ra
+    } else {
+      initial_wait * (backoff_factor ^ (attempt - 1L)) * stats::runif(1, 0.8, 1.2)
     }
+    message(sprintf("Attempt %d of %d failed: %s", attempt, tries,
+                    conditionMessage(last_error)))
+    message(sprintf("Waiting %s seconds before retry...", format(round(wait_time, 1))))
+    Sys.sleep(wait_time)
   }
   # Re-raise the last real error so its typed class, status_code, and provider
   # message survive for downstream handlers, instead of a generic message.
@@ -127,16 +144,23 @@ retry_with_backoff <- function(func,
 
 #' Robustly Call LLM API (Simple Retry)
 #'
-#' Wraps \code{\link{call_llm}} to handle rate-limit errors (HTTP 429 or related
-#' "Too Many Requests" messages). It retries the call a specified number of times,
-#' using exponential backoff. You can also choose to cache responses if you do
-#' not need fresh results each time.
+#' Wraps \code{\link{call_llm}} so that transient failures are retried while
+#' permanent ones fail fast. Retried conditions are rate limits (HTTP 429),
+#' server errors (HTTP 5xx and 408), and network-level interruptions
+#' (timeouts, connection resets, DNS failures). Errors that retrying cannot
+#' fix, such as an invalid parameter (400), a missing key (401/403), or a
+#' prompt that exceeds the context window, are raised immediately.
+#'
+#' When the provider supplies a \code{Retry-After} header with a 429, the wait
+#' honors it; otherwise waits grow exponentially with a little jitter so that
+#' parallel workers do not retry in lockstep.
 #'
 #' @param config An \code{llm_config} object from \code{\link{llm_config}}.
 #' @param messages A list of message objects (or character vector for embeddings).
-#' @param tries Integer. Number of retries before giving up. Default is 5.
-#' @param wait_seconds Numeric. Initial wait time (seconds) before the first retry. Default is 10.
-#' @param backoff_factor Numeric. Multiplier for wait time after each failure. Default is 5.
+#' @param tries Integer. Total number of attempts (the first call plus retries)
+#'   before giving up. Default is 5.
+#' @param wait_seconds Numeric. Initial wait time (seconds) before the first retry. Default is 2.
+#' @param backoff_factor Numeric. Multiplier for wait time after each failure. Default is 3.
 #' @param verbose Logical. If TRUE, prints the full API response.
 #' @param memoize Logical. If TRUE, calls are cached to avoid repeated identical requests. Default is FALSE.
 #'
@@ -151,10 +175,10 @@ retry_with_backoff <- function(func,
 #' @examples
 #' \dontrun{
 #' robust_resp <- call_llm_robust(
-#' config = llm_config("openai", "gpt-5-nano"),
+#' config = llm_config("groq", "openai/gpt-oss-20b"),
 #' messages = list(list(role = "user", content = "Hello, LLM!")),
 #' tries = 5,
-#' wait_seconds = 10,
+#' wait_seconds = 2,
 #' memoize = FALSE
 #' )
 #' print(robust_resp)
@@ -162,8 +186,8 @@ retry_with_backoff <- function(func,
 #' }
 call_llm_robust <- function(config, messages,
                             tries = 5,
-                            wait_seconds = 10,
-                            backoff_factor = 5,
+                            wait_seconds = 2,
+                            backoff_factor = 3,
                             verbose = FALSE,
                             memoize = FALSE) {
 
@@ -179,25 +203,25 @@ call_llm_robust <- function(config, messages,
     }
   }
 
-  # Error filter for retry_with_backoff: only retry for specific conditions
+  # Error filter for retry_with_backoff: only retry conditions that can change
+  # on a second attempt.
   is_retryable_error <- function(e) {
+    # Typed LLMR conditions carry an exact category: rate limits and server
+    # errors are transient; param/auth/unknown are permanent, whatever their
+    # message text happens to contain (e.g., "context length exceeded").
     if (inherits(e, "llmr_api_rate_limit_error") || inherits(e, "llmr_api_server_error")) {
-      log_llm_error(e)
       return(TRUE)
     }
+    if (inherits(e, "llmr_api_error")) return(FALSE)
+    # Untyped errors (network layer, providers without parsed bodies): fall
+    # back to message inspection for transient signatures.
     err_msg <- conditionMessage(e)
-    is_transient <- grepl(
-      "429|500|502|503|504|rate limit|too many requests|exceeded|timeout|timed out|resolve host|could not resolve|connection refused|connection reset|peer closed",
+    grepl(
+      "429|500|502|503|504|408|rate limit|too many requests|temporarily unavailable|overloaded|timeout|timed out|resolve host|could not resolve|connection refused|connection reset|peer closed",
       err_msg, ignore.case = TRUE
     )
-    if (is_transient) {
-      log_llm_error(e)
-      return(TRUE)
-    }
-    return(FALSE)
   }
 
-  # Original error handling logic for non-retryable errors or after all retries fail
   tryCatch(
     retry_with_backoff(
       func = call_func,
@@ -207,9 +231,7 @@ call_llm_robust <- function(config, messages,
       error_filter_func = is_retryable_error
     ),
     error = function(e) {
-      if (!is_retryable_error(e)) {
-         log_llm_error(e)
-      }
+      log_llm_error(e)
       stop(e)
     }
   )
@@ -232,6 +254,10 @@ call_llm_robust <- function(config, messages,
 #'   package's DESCRIPTION.
 #' - Clearing the cache can be done via \code{memoise::forget(cache_llm_call)}
 #'   or by restarting your R session.
+#' - The cache lives in the R process that makes the call. Under a
+#'   \code{future} multisession plan (as used by \code{\link{call_llm_par}}),
+#'   each worker process keeps its own cache, which disappears with the
+#'   worker; identical requests in different workers are not deduplicated.
 #'
 #' @return The (memoised) response object from \code{\link{call_llm}}.
 #'
@@ -270,14 +296,14 @@ cache_llm_call <- memoise::memoise(function(config, messages, verbose = FALSE) {
 #' @keywords internal
 #' @examples
 #' \dontrun{
-#'   # Example of logging an error by catching a failure:
-#'   # Use a deliberately fake API key to force an error
+#'   # Example of logging an error by catching a failure. The variable name
+#'   # below is deliberately one that is not set in the environment, so the
+#'   # call fails locally with a "Missing API key" authentication error.
 #'   config_test <- llm_config(
 #'     provider = "openai",
 #'     model = "gpt-4.1-nano",
-#'     api_key = "FAKE_KEY",
+#'     api_key = "LLMR_UNSET_DEMO_KEY",
 #'     temperature = 0.5,
-#'     top_p = 1,
 #'     max_tokens = 30
 #'   )
 #'
@@ -292,12 +318,3 @@ log_llm_error <- function(err) {
   message(sprintf("[%s] LLMR Error: %s", stamp, msg))
   invisible(NULL)
 }
-
-
-
-
-
-
-
-
-

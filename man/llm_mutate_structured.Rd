@@ -15,6 +15,7 @@ llm_mutate_structured(
   .after = NULL,
   .schema = NULL,
   .fields = NULL,
+  .validate_local = TRUE,
   .batch_size = 1L,
   .batch_payload = c("user", "system"),
   .batch_recovery = c("halve_recursive", "halve_once", "singletons", "retry_same",
@@ -61,6 +62,11 @@ Supports:
 \item \code{NULL} (default): auto-extracts all top-level properties from \code{.schema}
 \item \code{FALSE}: skip field extraction (keep only \code{structured_data} list-column)
 }}
+
+\item{.validate_local}{If TRUE (default) and \code{.schema} is provided, each
+parsed object is validated locally against the schema (requires the
+\code{jsonvalidate} package), adding \code{structured_valid} and \code{structured_error}
+columns, exactly as \code{\link[=llm_fn_structured]{llm_fn_structured()}} does.}
 
 \item{.batch_size}{Integer scalar, or \code{Inf}. Number of rows packed into a
 single generative request. The default, \code{1}, sends one request per row (the

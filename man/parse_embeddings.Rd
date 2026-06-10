@@ -22,11 +22,11 @@ Converts the embedding response data to a numeric matrix.
                   "German elections are different",
                   "A student was always curious.")
 
-  # Configure the embedding API provider (example with Voyage API)
+  # Configure the embedding API provider (example with Voyage API).
+  # The key is read from the VOYAGE_API_KEY environment variable.
   voyage_config <- llm_config(
     provider = "voyage",
-    model = "voyage-3.5-lite",
-    api_key = Sys.getenv("VOYAGE_API_KEY")
+    model = "voyage-3.5-lite"
   )
 
   embedding_response <- call_llm(voyage_config, text_input)

@@ -25,6 +25,10 @@ A memoised version of \code{\link{call_llm}} to avoid repeated identical request
 package's DESCRIPTION.
 \item Clearing the cache can be done via \code{memoise::forget(cache_llm_call)}
 or by restarting your R session.
+\item The cache lives in the R process that makes the call. Under a
+\code{future} multisession plan (as used by \code{\link{call_llm_par}}),
+each worker process keeps its own cache, which disappears with the
+worker; identical requests in different workers are not deduplicated.
 }
 }
 \examples{

@@ -31,6 +31,7 @@
     rec       = "rec_tokens",
     total     = "total_tokens",
     reasoning = "reasoning_tokens",
+    cached    = "cached_tokens",
     id        = "response_id",
     status    = "status_code",
     ecode     = "error_code",
@@ -98,6 +99,7 @@
     rec       = paste0(prefix, "_rec"),
     total     = paste0(prefix, "_tot"),
     reasoning = paste0(prefix, "_reason"),
+    cached    = paste0(prefix, "_cached"),
     id        = paste0(prefix, "_id"),
     status    = paste0(prefix, "_status"),
     ecode     = paste0(prefix, "_ecode"),
@@ -135,13 +137,24 @@
 #' @param prefix For an [llm_mutate()] result, the output column name whose
 #'   diagnostics to summarize (e.g. `"answer"`). Inferred automatically when a
 #'   single diagnostic block is present; required when several are.
+#' @param price_table Optional data frame you supply with your provider's
+#'   current prices, holding columns `model`, `input`, and `output` (US dollars
+#'   per **million** tokens), and optionally `cached` (price per million cached
+#'   prompt tokens). When given, a `cost_estimate` column is added: cached
+#'   tokens are billed at the `cached` rate (or the `input` rate if no `cached`
+#'   column), the remaining sent tokens at `input`, and received tokens at
+#'   `output`. LLMR ships no price list on purpose; prices change, and a stale
+#'   bundled table would mislead silently.
 #'
 #' @return A one-row tibble: `n`, `n_ok`, `n_failed`, `ok_rate`, `n_truncated`
 #'   (finish `"length"`), `n_filtered` (finish `"filter"`), `sent_tokens`,
-#'   `rec_tokens`, `total_tokens`, `reasoning_tokens`, `n_unknown_tokens`
+#'   `rec_tokens`, `total_tokens`, `reasoning_tokens`, `cached_tokens`
+#'   (prompt tokens served from the provider's cache, when reported),
+#'   `n_unknown_tokens`
 #'   (successful rows for which the provider reported no token usage, so the
-#'   token sums above understate the truth), `duration_s`, and (when a batch id
-#'   column is present) `batch_calls` and `rows_per_batch_call`.
+#'   token sums above understate the truth), `duration_s`, (when a batch id
+#'   column is present) `batch_calls` and `rows_per_batch_call`, and (when
+#'   `price_table` is supplied) `cost_estimate` in the table's currency.
 #'
 #' @seealso [llm_failures()], [llm_preview()], [llm_par_resume()].
 #'
@@ -157,7 +170,7 @@
 #' )
 #' llm_usage(res)
 #' @export
-llm_usage <- function(x, prefix = NULL) {
+llm_usage <- function(x, prefix = NULL, price_table = NULL) {
   if (!is.data.frame(x)) {
     stop("`x` must be a data frame (a call_llm_par() or llm_mutate() result).",
          call. = FALSE)
@@ -171,6 +184,7 @@ llm_usage <- function(x, prefix = NULL) {
   rec       <- .llm_get_col(x, m[["rec"]],       NA_integer_)
   total     <- .llm_get_col(x, m[["total"]],     NA_integer_)
   reasoning <- .llm_get_col(x, m[["reasoning"]], NA_integer_)
+  cached    <- .llm_get_col(x, m[["cached"]],    NA_integer_)
   duration  <- .llm_get_col(x, m[["duration"]],  NA_real_)
   batch     <- .llm_get_col(x, m[["batch"]],     NA)
 
@@ -185,7 +199,7 @@ llm_usage <- function(x, prefix = NULL) {
   batch_follow_on <- !is.na(batch_i) & batch_i > 1L
   n_unknown_tokens <- sum((ok %in% TRUE) & is.na(total) & !batch_follow_on)
 
-  tibble::tibble(
+  out <- tibble::tibble(
     n                = n,
     n_ok             = sum(ok %in% TRUE),
     n_failed         = sum(!(ok %in% TRUE)),
@@ -196,11 +210,59 @@ llm_usage <- function(x, prefix = NULL) {
     rec_tokens       = sum(rec,       na.rm = TRUE),
     total_tokens     = sum(total,     na.rm = TRUE),
     reasoning_tokens = sum(reasoning, na.rm = TRUE),
+    cached_tokens    = sum(cached,    na.rm = TRUE),
     n_unknown_tokens = n_unknown_tokens,
     duration_s       = sum(duration,  na.rm = TRUE),
     batch_calls         = if (has_batch) uniq_batches else NA_integer_,
     rows_per_batch_call = if (has_batch) n / uniq_batches else NA_real_
   )
+  if (!is.null(price_table)) {
+    out$cost_estimate <- .llm_cost_estimate(x, m, price_table)
+  }
+  out
+}
+
+# Internal: cost estimate from a user-supplied price table (per million tokens).
+# Cached prompt tokens are billed at the `cached` rate when supplied, otherwise
+# at the input rate (i.e., caching is ignored). Rows whose model has no price
+# are excluded with a warning.
+.llm_cost_estimate <- function(x, m, price_table) {
+  if (!is.data.frame(price_table) ||
+      !all(c("model", "input", "output") %in% names(price_table))) {
+    stop("`price_table` must be a data frame with columns `model`, `input`, ",
+         "`output` (and optionally `cached`), in currency per million tokens.",
+         call. = FALSE)
+  }
+  sent   <- .llm_get_col(x, m[["sent"]],   NA_integer_)
+  rec    <- .llm_get_col(x, m[["rec"]],    NA_integer_)
+  cached <- .llm_get_col(x, m[["cached"]], NA_integer_)
+
+  if ("model" %in% names(x)) {
+    model <- as.character(x$model)
+  } else if (nrow(price_table) == 1L) {
+    model <- rep(price_table$model[[1]], nrow(x))
+  } else {
+    stop("`x` has no `model` column; supply a one-row `price_table` ",
+         "(or use a call_llm_par() result, which carries `model`).", call. = FALSE)
+  }
+
+  idx <- match(model, price_table$model)
+  if (anyNA(idx)) {
+    warning("No price found for model(s): ",
+            paste(unique(model[is.na(idx)]), collapse = ", "),
+            ". Those rows are excluded from the estimate.", call. = FALSE)
+  }
+  p_in    <- price_table$input[idx]
+  p_out   <- price_table$output[idx]
+  p_cache <- if ("cached" %in% names(price_table)) price_table$cached[idx] else p_in
+
+  cached0 <- ifelse(is.na(cached), 0, as.numeric(cached))
+  sent0   <- ifelse(is.na(sent),   0, as.numeric(sent))
+  rec0    <- ifelse(is.na(rec),    0, as.numeric(rec))
+  fresh   <- pmax(sent0 - cached0, 0)
+
+  cost <- fresh * p_in + cached0 * p_cache + rec0 * p_out
+  sum(cost, na.rm = TRUE) / 1e6
 }
 
 #' List the rows of an LLM run that failed or were truncated
@@ -267,5 +329,95 @@ llm_failures <- function(x, prefix = NULL, include = c("all", "failed", "truncat
     bad_param     = .llm_get_col(x, m[["param"]],   NA_character_)[bad],
     error_message = .llm_get_col(x, m[["err"]],     NA_character_)[bad],
     response_id   = .llm_get_col(x, m[["id"]],      NA_character_)[bad]
+  )
+}
+
+#' Draft a methods-section paragraph from an LLM run
+#'
+#' Turns the diagnostic columns of a finished run into a first draft of the
+#' transparency paragraph that journals and methodological guidelines now ask
+#' for: which model(s) and provider(s), how many calls, the inference settings
+#' that were recorded, token totals, and the failure/truncation counts. Edit
+#' the draft; it states only what the result frame actually contains and marks
+#' anything unknown as such.
+#'
+#' @inheritParams llm_usage
+#' @param task Optional one-clause description of what the model was asked to
+#'   do (e.g., `"to code open-ended survey responses into topics"`); it is
+#'   spliced into the first sentence.
+#' @return A character scalar (one paragraph). Print it with `cat()`.
+#' @seealso [llm_usage()], [llm_log_enable()] for the per-call audit trail.
+#' @examples
+#' res <- tibble::tibble(
+#'   model = "openai/gpt-oss-20b", provider = "groq",
+#'   success = c(TRUE, TRUE), finish_reason = c("stop", "stop"),
+#'   sent_tokens = c(10L, 12L), rec_tokens = c(5L, 7L),
+#'   total_tokens = c(15L, 19L), reasoning_tokens = NA_integer_,
+#'   duration = c(0.4, 0.5)
+#' )
+#' cat(llm_methods_text(res, task = "to classify sample sentences"))
+#' @export
+llm_methods_text <- function(x, prefix = NULL, task = NULL) {
+  u <- llm_usage(x, prefix = prefix)
+
+  models <- if ("model" %in% names(x)) {
+    sort(unique(stats::na.omit(as.character(x$model))))
+  } else character(0)
+  providers <- if ("provider" %in% names(x)) {
+    sort(unique(stats::na.omit(as.character(x$provider))))
+  } else character(0)
+
+  model_part <- if (length(models)) {
+    paste0(if (length(models) > 1L) "the large language models " else "the large language model ",
+           paste(sQuote(models, q = FALSE), collapse = ", "))
+  } else {
+    "a large language model (model identifier not recorded in this result frame)"
+  }
+  provider_part <- if (length(providers)) {
+    paste0(" accessed through the ", paste(providers, collapse = ", "),
+           if (length(providers) > 1L) " APIs" else " API")
+  } else ""
+
+  task_part <- if (!is.null(task) && nzchar(task)) paste0(" ", task) else ""
+
+  settings <- character(0)
+  for (p in c("temperature", "top_p", "max_tokens", "seed")) {
+    if (p %in% names(x)) {
+      vals <- unique(stats::na.omit(x[[p]]))
+      if (length(vals) == 1L) settings <- c(settings, paste0(p, " = ", vals))
+      else if (length(vals) > 1L) settings <- c(settings, paste0(p, " varied (", paste(utils::head(vals, 4L), collapse = ", "),
+                                                                 if (length(vals) > 4L) ", ..." else "", ")"))
+    }
+  }
+  settings_part <- if (length(settings)) {
+    paste0(" Inference settings: ", paste(settings, collapse = "; "), ".")
+  } else {
+    " Inference settings beyond provider defaults were not recorded in this result frame."
+  }
+
+  fail_part <- if (u$n_failed > 0 || u$n_truncated > 0) {
+    paste0(" ", u$n_failed, " call(s) failed and ", u$n_truncated,
+           " response(s) were truncated; these are reported by llm_failures().")
+  } else {
+    " All calls completed without failures or truncation."
+  }
+
+  paste0(
+    "Text was processed with ", model_part, provider_part, task_part,
+    " via the LLMR package (version ",
+    as.character(utils::packageVersion("LLMR")), ") for R, on ",
+    format(Sys.Date(), "%Y-%m-%d"), ". ",
+    "The run comprised ", u$n, " call(s), of which ", u$n_ok,
+    " succeeded (", sprintf("%.1f%%", 100 * u$ok_rate), "). ",
+    "Token usage as reported by the provider(s): ",
+    format(u$sent_tokens, big.mark = ","), " sent and ",
+    format(u$rec_tokens, big.mark = ","), " received",
+    if (!is.na(u$cached_tokens) && u$cached_tokens > 0)
+      paste0(" (of the sent tokens, ", format(u$cached_tokens, big.mark = ","),
+             " were served from the provider's prompt cache)") else "",
+    ".", settings_part, fail_part,
+    " Proprietary models can change behind a fixed name; the response-level ",
+    "model identifiers and request ids needed for exact attribution are ",
+    "retained when logging is enabled via llm_log_enable()."
   )
 }

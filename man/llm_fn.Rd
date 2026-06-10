@@ -13,6 +13,7 @@ llm_fn(
   .tags = NULL,
   .fields = NULL,
   .return = c("text", "columns", "object"),
+  .na_action = c("send", "skip", "error"),
   .batch_size = 1L,
   .batch_payload = c("user", "system"),
   .batch_recovery = c("halve_recursive", "halve_once", "singletons", "retry_same",
@@ -40,6 +41,13 @@ When supplied, delegates to \code{\link[=llm_fn_tags]{llm_fn_tags()}} for tag-ba
 \item{.return}{One of \code{c("text","columns","object")}. \code{"columns"}
 returns a tibble of diagnostic columns; \code{"text"} returns a character
 vector; \code{"object"} returns a list of \code{llmr_response} (or \code{NA} on failure).}
+
+\item{.na_action}{What to do with elements whose template references an \code{NA}
+value. \code{"send"} (default) renders \code{NA} as an empty string and sends the
+prompt anyway; \code{"skip"} does not call the API for those elements and
+returns \code{NA} for them (\code{finish_reason = "skipped"} in column mode);
+\code{"error"} stops before any call is made. \code{"skip"}/\code{"error"} are not
+available together with \code{.tags}.}
 
 \item{.batch_size}{Integer scalar, or \code{Inf}. Number of input elements packed
 into a single generative request. The default, \code{1}, sends one request per
@@ -96,7 +104,10 @@ model's outputs: partitioning and parsing add no randomness. Rows the model
 drops, reorders, duplicates, or truncates are detected and re-issued
 according to \code{.batch_recovery}. Because a batch shares one underlying call,
 token counts are reported once per batch (on its first resolved row, \code{NA}
-elsewhere) so that summing token columns is correct.
+elsewhere), as is the wall-clock duration, so that summing those columns is
+correct. When a batch reply is entirely unusable and its rows succeed only
+through recovery calls, the failed call's spend has no successful row to
+land on, so sums can slightly undercount in heavy-recovery runs.
 }
 
 \examples{

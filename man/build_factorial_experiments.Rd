@@ -19,7 +19,9 @@ build_factorial_experiments(
 
 \item{user_prompts}{Character vector (or list) of user-turn prompts.}
 
-\item{system_prompts}{Optional character vector of system messages (recycled against user prompts). Missing/NA values are ignored; messages are user-only.}
+\item{system_prompts}{Optional character vector of system messages. These are
+fully crossed with the user prompts (every combination appears), like the
+other factors. Missing/NA values are ignored; those messages are user-only.}
 
 \item{repetitions}{Integer. Number of repetitions per combination. Default is 1.}
 

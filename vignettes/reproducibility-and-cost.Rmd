@@ -1,0 +1,159 @@
+---
+title: "Reproducibility and cost: logging, replication, caching, batch jobs"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Reproducibility and cost: logging, replication, caching, batch jobs}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>",
+  eval = identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true")
+)
+```
+
+A language model is an instrument, and instruments demand calibration records.
+Reviewers now ask, reasonably: which model, at which settings, on which date,
+with what prompt, how stable are the labels, and what did it cost? This
+article shows how LLMR answers each question with one or two lines of code.
+Examples run on the open-weight `gpt-oss-20b` served by Groq, so they are
+inexpensive to reproduce; set `GROQ_API_KEY` and
+`LLMR_RUN_VIGNETTES=true` to knit them live.
+
+```{r setup}
+library(LLMR)
+cfg <- llm_config("groq", "openai/gpt-oss-20b", temperature = 0, seed = 110)
+```
+
+## 1. An audit trail for every call
+
+`llm_log_enable()` starts a session-wide log: every call made through LLMR,
+whether by `call_llm()`, `llm_mutate()`, a parallel run, or a chat session,
+appends one JSON record with the full request, the reply, token usage, the
+served model version, the request id, and timing. The file is JSONL, so it can
+be archived as supplementary material and read back as a data frame.
+
+```{r audit}
+log_path <- tempfile(fileext = ".jsonl")
+llm_log_enable(log_path)
+
+r <- call_llm(cfg, "In one word, the capital of Senegal?")
+
+llm_log_disable()
+jsonlite::stream_in(file(log_path), verbose = FALSE)[
+  , c("provider", "model", "model_version", "finish_reason", "status")]
+```
+
+Two details matter for sensitive projects. The log never contains API keys.
+And `llm_log_enable(path, include_messages = FALSE)` keeps only metadata,
+parameters, and usage, for prompts that must not leave the analysis machine in
+clear text.
+
+## 2. Replication and reliability
+
+A single model run is one draw from a stochastic process; treat repeated runs
+the way you treat multiple human coders. `llm_replicate()` collects the draws
+and `llm_agreement()` reports per-item majority labels along with the
+statistic reviewers ask for, Krippendorff's alpha.
+
+```{r replicate}
+reviews <- tibble::tibble(text = c(
+  "The course changed how I think.",
+  "Lectures were fine, assignments tedious.",
+  "A complete waste of an afternoon."
+))
+
+cfg_warm <- llm_config("groq", "openai/gpt-oss-20b", temperature = 1)
+
+reps <- llm_replicate(
+  reviews, sentiment,
+  prompt  = "Sentiment of '{text}'. Answer with exactly one word: positive, negative, or neutral.",
+  .config = cfg_warm, .times = 5
+)
+
+ag <- llm_agreement(reps, prefix = "sentiment")
+ag
+ag$by_row
+```
+
+Low alpha is itself a finding: the instrument disagrees with itself on this
+construct, and downstream estimates should carry that uncertainty rather than
+hide it.
+
+## 3. A methods paragraph you can edit
+
+`llm_methods_text()` drafts the transparency paragraph from what a result
+frame actually records, marking anything unknown as unknown.
+
+```{r methods}
+res <- call_llm_par(
+  build_factorial_experiments(
+    configs = cfg,
+    user_prompts = c("Classify: 'great work'", "Classify: 'do better'")
+  )
+)
+cat(llm_methods_text(res, task = "to classify short feedback messages"))
+```
+
+## 4. What did it cost?
+
+`llm_usage()` reports tokens, and tokens only, because bundled price tables go
+stale and then mislead silently. If you want money, hand it your own current
+prices (per million tokens) and it applies them, billing cached prompt tokens
+at the cached rate when your table has one:
+
+```{r usage}
+llm_usage(res)
+
+my_prices <- data.frame(
+  model  = "openai/gpt-oss-20b",
+  input  = 0.10,   # $ per million input tokens; check your provider's page
+  output = 0.50,
+  cached = 0.05
+)
+llm_usage(res, price_table = my_prices)$cost_estimate
+```
+
+## 5. Prompt caching
+
+Annotation runs repeat a long instruction prefix thousands of times, which is
+exactly the shape prompt caches reward. OpenAI, DeepSeek, and Gemini cache
+long prefixes automatically; for Anthropic, add `cache = TRUE` to the config
+and LLMR marks the system prompt and tool definitions as cacheable. Either
+way, cached tokens show up in `tokens(x)$cached` and in the `cached_tokens`
+column that `llm_usage()` sums, so the saving is visible rather than assumed.
+
+## 6. Batch jobs at half price
+
+When results can wait (minutes to 24 hours), the provider batch APIs price
+tokens at roughly half the live rate. LLMR wraps them in three verbs, and the
+job object survives the R session:
+
+```{r batch, eval = FALSE}
+job <- llm_batch_submit(
+  cfg,
+  c("Classify: 'superb'", "Classify: 'awful'", "Classify: 'fine, I guess'"),
+  state_path = "sentiment_batch.rds"
+)
+llm_batch_status(job)
+
+# hours later, in a fresh session:
+res_batch <- llm_batch_fetch("sentiment_batch.rds")
+llm_usage(res_batch)
+```
+
+The fetched tibble has the same diagnostic columns as a live
+`call_llm_par()` run, so `llm_parse_structured_col()`, `llm_usage()`, and
+`llm_failures()` work on it unchanged. Batch jobs are supported for OpenAI,
+Groq, Anthropic, and Gemini.
+
+## 7. Seeds, versions, and honest limits
+
+Pass `seed` in `llm_config()` and LLMR forwards it where the provider supports
+one. Treat it as a stabilizer, not a guarantee: providers update serving
+stacks behind fixed model names. That is why every response records
+`model_version`, the identifier the server reports having served, and why the
+audit log stores it per call. Determinism you cannot have; attribution you
+can.

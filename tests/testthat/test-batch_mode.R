@@ -323,8 +323,8 @@ test_that("default .batch_size = 1 keeps the legacy llm_mutate columns", {
   out <- with_stub_broadcast(mk, llm_mutate(df, ans, prompt = "{city}", .config = cfg))
   expect_identical(setdiff(names(out), names(df)),
     c("ans", "ans_finish", "ans_sent", "ans_rec", "ans_tot", "ans_reason",
-      "ans_ok", "ans_err", "ans_id", "ans_status", "ans_ecode", "ans_param",
-      "ans_t"))
+      "ans_cached", "ans_ok", "ans_err", "ans_id", "ans_status", "ans_ecode",
+      "ans_param", "ans_t"))
   expect_false(any(grepl("_batch|_bn|_bi", names(out))))
 })
 

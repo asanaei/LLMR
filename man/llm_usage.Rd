@@ -4,7 +4,7 @@
 \alias{llm_usage}
 \title{Summarize token usage and outcomes of an LLM run}
 \usage{
-llm_usage(x, prefix = NULL)
+llm_usage(x, prefix = NULL, price_table = NULL)
 }
 \arguments{
 \item{x}{A data frame from \code{\link[=call_llm_par]{call_llm_par()}} or \code{\link[=llm_mutate]{llm_mutate()}}.}
@@ -12,14 +12,26 @@ llm_usage(x, prefix = NULL)
 \item{prefix}{For an \code{\link[=llm_mutate]{llm_mutate()}} result, the output column name whose
 diagnostics to summarize (e.g. \code{"answer"}). Inferred automatically when a
 single diagnostic block is present; required when several are.}
+
+\item{price_table}{Optional data frame you supply with your provider's
+current prices, holding columns \code{model}, \code{input}, and \code{output} (US dollars
+per \strong{million} tokens), and optionally \code{cached} (price per million cached
+prompt tokens). When given, a \code{cost_estimate} column is added: cached
+tokens are billed at the \code{cached} rate (or the \code{input} rate if no \code{cached}
+column), the remaining sent tokens at \code{input}, and received tokens at
+\code{output}. LLMR ships no price list on purpose; prices change, and a stale
+bundled table would mislead silently.}
 }
 \value{
 A one-row tibble: \code{n}, \code{n_ok}, \code{n_failed}, \code{ok_rate}, \code{n_truncated}
 (finish \code{"length"}), \code{n_filtered} (finish \code{"filter"}), \code{sent_tokens},
-\code{rec_tokens}, \code{total_tokens}, \code{reasoning_tokens}, \code{n_unknown_tokens}
+\code{rec_tokens}, \code{total_tokens}, \code{reasoning_tokens}, \code{cached_tokens}
+(prompt tokens served from the provider's cache, when reported),
+\code{n_unknown_tokens}
 (successful rows for which the provider reported no token usage, so the
-token sums above understate the truth), \code{duration_s}, and (when a batch id
-column is present) \code{batch_calls} and \code{rows_per_batch_call}.
+token sums above understate the truth), \code{duration_s}, (when a batch id
+column is present) \code{batch_calls} and \code{rows_per_batch_call}, and (when
+\code{price_table} is supplied) \code{cost_estimate} in the table's currency.
 }
 \description{
 Reads the diagnostic columns produced by \code{\link[=call_llm_par]{call_llm_par()}} (and

@@ -2,21 +2,16 @@ library(testthat)
 library(LLMR)
 
 ## use shared helper in helper-keys.R
+## Live tests run against the inexpensive open-weight gpt-oss-20b on Groq.
 
-
-test_that("call_llm works with OpenAI API", {
-  skip_if_no_env("OPENAI_API_KEY")
-  skip_on_cran()  # Skip this test on CRAN
+test_that("call_llm works with the Groq API", {
+  skip_if_no_env("GROQ_API_KEY")
+  skip_on_cran()
   config <- llm_config(
-    provider = "openai",
-    model = "gpt-4.1-nano",
-    api_key = "OPENAI_API_KEY",
+    provider = "groq",
+    model = "openai/gpt-oss-20b",
     temperature = 1,
-    max_tokens = 1024,
-#    top_p = 1,
-#   troubleshooting = FALSE,
-#    frequency_penalty = 0,
-#    presence_penalty = 0
+    max_tokens = 1024
   )
 
   messages <- list(
@@ -24,9 +19,9 @@ test_that("call_llm works with OpenAI API", {
     list(role = "user", content = "What's the capital of France?")
   )
 
-  # Call the function (this will make a real API call)
   result <- call_llm(config, messages)
 
-  # Check the result (assuming you have a way to validate it)
-  expect_true(grepl("Paris", result, ignore.case = TRUE))
+  expect_s3_class(result, "llmr_response")
+  expect_true(grepl("Paris", as.character(result), ignore.case = TRUE))
+  expect_true(is.finite(tokens(result)$total))
 })

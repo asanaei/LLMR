@@ -36,9 +36,11 @@ one exception is Gemini with \code{vertex = TRUE}, which reads \code{VERTEX_ACCE
 \item{api_key}{Provider API key. Preferred form is \code{llm_api_key_env("VAR")},
 referencing an environment variable by name (see \code{provider} for the
 formulaic defaults). A bare environment-variable name or \code{"env:VAR"}
-string also works. Supplying a literal key string is accepted but
-discouraged and triggers a warning. When omitted, the provider default
-is used.}
+string also works, as does a character vector of variable names tried in
+order. Supplying a literal key string is accepted but discouraged and
+triggers a warning. When omitted (or given as an empty string, which is
+what \code{Sys.getenv()} returns for an unset variable), the provider default
+is used. Printing a config never reveals the key.}
 
 \item{troubleshooting}{Logical. If \code{TRUE}, prints the messages and the config
 for debugging. The API key is masked in this output, not shown.}
@@ -55,23 +57,70 @@ provider parameters. If \code{FALSE} (default), well-known compatibility shims
 may apply (e.g., renaming OpenAI's \code{max_tokens} -> \code{max_completion_tokens}
 after a server hint; see \code{call_llm()} notes).}
 
-\item{...}{Additional provider-specific parameters (e.g., \code{temperature},
-\code{top_p}, \code{max_tokens}, \code{top_k}, \code{repetition_penalty}, \code{reasoning_effort},
-\code{api_url}, etc.). Values are forwarded verbatim unless documented shims apply.
-For Anthropic extended thinking, supply \code{thinking_budget} (canonical;
-mapped to \code{thinking.budget_tokens}) together with \code{include_thoughts = TRUE}
-to request the thinking block in the response.}
+\item{...}{Additional model parameters. LLMR understands a small canonical
+set spelled the OpenAI way and translates it per provider, so you can keep
+one vocabulary across backends:
+\itemize{
+\item \code{temperature}, \code{top_p}, \code{top_k}, \code{max_tokens},
+\code{frequency_penalty}, \code{presence_penalty}, \code{repetition_penalty} --
+sampling controls. Parameters a provider does not accept are
+dropped with a console note (e.g., \code{repetition_penalty} for
+Gemini); spellings a provider renames are renamed
+(e.g., \code{max_tokens} becomes \code{maxOutputTokens} for Gemini).
+\item \code{seed} -- request reproducible sampling where supported
+(OpenAI-compatible providers and Gemini; Anthropic has no seed).
+Determinism is not guaranteed; record \code{model_version} from the
+response for the full picture.
+\item \code{logprobs}, \code{top_logprobs} -- token log-probabilities where
+supported (OpenAI-compatible chat APIs and Gemini). Retrieve them
+tidily with \code{\link[=llm_logprobs]{llm_logprobs()}}.
+\item \code{thinking_budget}, \code{include_thoughts} -- reasoning controls for
+Gemini and Anthropic. \code{thinking_budget} caps reasoning tokens
+(\code{thinkingConfig.thinkingBudget} on Gemini,
+\code{thinking.budget_tokens} on Anthropic, where it must be smaller
+than \code{max_tokens}). \code{include_thoughts = TRUE} asks Gemini to
+return its reasoning; Anthropic returns thinking blocks whenever
+thinking is on. Returned reasoning lands in the response's
+\code{thinking} field.
+\item \code{timeout} -- total request timeout in seconds (default 600; also
+settable globally via \code{options(llmr.timeout = ...)}).
+\item \code{cache} -- set \code{cache = TRUE} to mark the system prompt and tools
+as cacheable for Anthropic (prompt caching). OpenAI, Gemini,
+DeepSeek, and several compatible providers cache long prompt
+prefixes automatically; cached token counts are reported in
+\code{tokens(x)$cached} either way.
+\item Anything else (e.g., \code{reasoning_effort}, \code{api_url},
+provider-specific flags) is forwarded verbatim, so new provider
+features work without waiting for an LLMR release.
+}}
 }
 \value{
 An object of class \code{c("llm_config", provider)}. Fields:
 \code{provider}, \code{model}, \code{api_key}, \code{troubleshooting}, \code{embedding},
-\code{no_change}, and \code{model_params} (a named list of extras).
+\code{no_change}, and \code{model_params} (a named list of extras). \code{print()} masks
+the API key.
 }
 \description{
 \code{llm_config()} builds a provider-agnostic configuration object that
 \code{call_llm()} (and friends) understand. You can pass provider-specific
 parameters via \code{...}; LLMR forwards them as-is, with a few safe conveniences.
 }
+\section{Advanced hooks}{
+
+Three optional functions in \code{...} customize the HTTP exchange when a
+provider needs something unusual (a gateway header, an exotic body field, a
+nonstandard response envelope). All are applied on every request for every
+provider:
+\itemize{
+\item \code{request_modifier}: \verb{function(body) -> body}, edits the JSON body
+before serialization (OpenAI-compatible chat paths).
+\item \code{req_builder}: \verb{function(req) -> req}, edits the \code{httr2} request
+(headers, URL, auth) just before it is performed.
+\item \code{response_modifier}: \verb{function(content) -> content}, edits the
+parsed JSON before LLMR interprets it.
+}
+}
+
 \section{Temperature range clamping}{
 
 Anthropic temperatures must be in \verb{[0, 1]}; others in \verb{[0, 2]}. Out-of-range

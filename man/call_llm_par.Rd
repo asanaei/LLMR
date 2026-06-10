@@ -15,16 +15,19 @@ call_llm_par(
   max_workers = NULL,
   progress = FALSE,
   json_output = NULL,
-  start_jitter = 5
+  start_jitter = 0
 )
 }
 \arguments{
 \item{experiments}{A tibble/data.frame with required list-columns 'config' (llm_config objects)
 and 'messages' (character vector OR message list).}
 
-\item{simplify}{Whether to cbind 'experiments' to the output data frame or not.}
+\item{simplify}{If TRUE (default), provider, model, and the model parameters
+stored in each row's config are unnested into regular columns for easy
+filtering and grouping.}
 
-\item{tries}{Integer. Number of retries for each call. Default is 10.}
+\item{tries}{Integer. Total number of attempts per call (first call plus
+retries). Default is 10.}
 
 \item{wait_seconds}{Numeric. Initial wait time (seconds) before retry. Default is 2.}
 
@@ -32,7 +35,9 @@ and 'messages' (character vector OR message list).}
 
 \item{verbose}{Logical. If TRUE, prints progress and debug information.}
 
-\item{memoize}{Logical. If TRUE, enables caching for identical requests.}
+\item{memoize}{Logical. If TRUE, enables caching for identical requests.
+Note that under a multisession plan each worker process keeps its own
+cache, so deduplication is per worker, not global.}
 
 \item{max_workers}{Integer. Maximum number of parallel workers. If NULL, auto-detects.}
 
@@ -41,20 +46,25 @@ and 'messages' (character vector OR message list).}
 \item{json_output}{Deprecated. Raw JSON string is always included as raw_response_json.
 This parameter is kept for backward compatibility but has no effect.}
 
-\item{start_jitter}{Calls are made after a uniformly distributed delay
-between 0 and \code{start_jitter} seconds.}
+\item{start_jitter}{Each call starts after a uniformly distributed delay
+between 0 and \code{start_jitter} seconds. The default is 0 (no delay);
+set a few seconds when launching very large runs against a provider with
+strict burst limits.}
 }
 \value{
 A tibble containing all original columns plus:
 \itemize{
 \item \code{response_text} - assistant text (or \code{NA} on failure)
-\item \code{raw_response_json} - raw JSON string
+\item \code{raw_response_json} - raw JSON string (on failure: the
+provider's error body when available)
 \item \code{success}, \code{error_message}
 \item \code{finish_reason} - e.g. "stop", "length", "filter", "tool", or "error:\code{category}"
 \item \code{sent_tokens}, \code{rec_tokens}, \code{total_tokens}, \code{reasoning_tokens}
 \item \code{response_id}
 \item \code{duration} - seconds
-\item \code{response} - the full \code{llmr_response} object (or \code{NA} on failure)
+\item \code{status_code}, \code{error_code}, \code{bad_param} - error
+diagnostics (NA on success)
+\item \code{response} - the full \code{llmr_response} object (or \code{NULL} on failure)
 }
 
 The \code{response} column holds \code{llmr_response} objects on success, or \code{NULL} on failure.

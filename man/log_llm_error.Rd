@@ -17,14 +17,14 @@ Logs an error with a timestamp for troubleshooting.
 }
 \examples{
 \dontrun{
-  # Example of logging an error by catching a failure:
-  # Use a deliberately fake API key to force an error
+  # Example of logging an error by catching a failure. The variable name
+  # below is deliberately one that is not set in the environment, so the
+  # call fails locally with a "Missing API key" authentication error.
   config_test <- llm_config(
     provider = "openai",
     model = "gpt-4.1-nano",
-    api_key = "FAKE_KEY",
+    api_key = "LLMR_UNSET_DEMO_KEY",
     temperature = 0.5,
-    top_p = 1,
     max_tokens = 30
   )
 

@@ -10,6 +10,7 @@ llm_judge(
   .config,
   prompt,
   .tags = c("reasoning", "score"),
+  .output = "judge_res",
   ...
 )
 }
@@ -25,6 +26,9 @@ target column value (other data columns are also available).}
 
 \item{.tags}{Tags to extract from the judge response. Defaults to
 \code{c("reasoning", "score")}.}
+
+\item{.output}{Name of the column that receives the judge's raw response.
+Default \code{"judge_res"}.}
 
 \item{...}{Passed to \code{\link[=llm_mutate_tags]{llm_mutate_tags()}}.}
 }

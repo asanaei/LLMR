@@ -8,8 +8,8 @@ call_llm_robust(
   config,
   messages,
   tries = 5,
-  wait_seconds = 10,
-  backoff_factor = 5,
+  wait_seconds = 2,
+  backoff_factor = 3,
   verbose = FALSE,
   memoize = FALSE
 )
@@ -19,11 +19,12 @@ call_llm_robust(
 
 \item{messages}{A list of message objects (or character vector for embeddings).}
 
-\item{tries}{Integer. Number of retries before giving up. Default is 5.}
+\item{tries}{Integer. Total number of attempts (the first call plus retries)
+before giving up. Default is 5.}
 
-\item{wait_seconds}{Numeric. Initial wait time (seconds) before the first retry. Default is 10.}
+\item{wait_seconds}{Numeric. Initial wait time (seconds) before the first retry. Default is 2.}
 
-\item{backoff_factor}{Numeric. Multiplier for wait time after each failure. Default is 5.}
+\item{backoff_factor}{Numeric. Multiplier for wait time after each failure. Default is 3.}
 
 \item{verbose}{Logical. If TRUE, prints the full API response.}
 
@@ -33,18 +34,25 @@ call_llm_robust(
 The successful result from \code{\link{call_llm}}, or an error if all retries fail.
 }
 \description{
-Wraps \code{\link{call_llm}} to handle rate-limit errors (HTTP 429 or related
-"Too Many Requests" messages). It retries the call a specified number of times,
-using exponential backoff. You can also choose to cache responses if you do
-not need fresh results each time.
+Wraps \code{\link{call_llm}} so that transient failures are retried while
+permanent ones fail fast. Retried conditions are rate limits (HTTP 429),
+server errors (HTTP 5xx and 408), and network-level interruptions
+(timeouts, connection resets, DNS failures). Errors that retrying cannot
+fix, such as an invalid parameter (400), a missing key (401/403), or a
+prompt that exceeds the context window, are raised immediately.
+}
+\details{
+When the provider supplies a \code{Retry-After} header with a 429, the wait
+honors it; otherwise waits grow exponentially with a little jitter so that
+parallel workers do not retry in lockstep.
 }
 \examples{
 \dontrun{
 robust_resp <- call_llm_robust(
-config = llm_config("openai", "gpt-5-nano"),
+config = llm_config("groq", "openai/gpt-oss-20b"),
 messages = list(list(role = "user", content = "Hello, LLM!")),
 tries = 5,
-wait_seconds = 10,
+wait_seconds = 2,
 memoize = FALSE
 )
 print(robust_resp)

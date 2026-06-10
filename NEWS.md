@@ -1,3 +1,186 @@
+# LLMR 0.8.3
+
+## New features
+
+- **Provider batch APIs.** `llm_batch_submit()`, `llm_batch_status()`,
+  `llm_batch_fetch()`, and `llm_batch_cancel()` drive the asynchronous batch
+  endpoints of OpenAI, Groq, Anthropic, and Gemini, which price requests at
+  roughly half the live rate. Jobs are plain R objects without secrets (keys
+  stay environment references), so a job can be saved with `state_path=`,
+  the session closed, and results fetched later or from another machine.
+- **Audit log for reproducible research.** `llm_log_enable(path)` appends one
+  JSON record per API call (timestamp, provider, model, the served
+  `model_version`, full request parameters and messages, reply text, token
+  usage including cached tokens, request id, status, timing) to a JSONL file;
+  `llm_log_disable()` and `llm_log_status()` manage it. Failed calls are
+  logged too. `include_messages = FALSE` keeps a metadata-only trail for
+  confidential prompts.
+- **A draft methods paragraph.** `llm_methods_text()` turns a result frame
+  into the transparency paragraph journals increasingly require: models,
+  providers, call counts, recorded inference settings, token totals, and
+  failure counts, stated only as far as the data supports.
+- **Replication and reliability.** `llm_replicate()` runs every row `.times`
+  times through the parallel engine; `llm_agreement()` reports per-unit
+  majority labels and overall reliability (mean pairwise agreement and
+  Krippendorff's alpha for nominal data, missing-safe).
+- **Native tool calling with an execution loop.** `llm_tool()` wraps an R
+  function with a JSON-Schema argument spec; `call_llm_tools()` sends the
+  definitions, executes the calls the model makes, feeds results back, and
+  returns the final response with a `tool_history` attribute.
+  `tool_calls()` extracts requested calls from any response. Supported on
+  OpenAI-compatible providers and Anthropic.
+- **Streaming.** `call_llm_stream()` delivers the reply chunk by chunk
+  (callback) for OpenAI-compatible providers, Anthropic, and Gemini, and
+  returns a normal `llmr_response` at the end, with usage when the provider
+  reports it in the stream.
+- **Token log-probabilities.** Pass `logprobs = TRUE` (and `top_logprobs = k`)
+  in `llm_config()`; `llm_logprobs()` returns them tidily (OpenAI-compatible
+  providers and Gemini) for confidence scoring and calibration.
+- **Reproducibility knobs.** A canonical `seed` parameter is forwarded where
+  supported; every response now records `model_version` (the identifier the
+  server reports having served) and, when returned separately, the model's
+  reasoning text in a `thinking` field.
+- **Prompt caching.** `cache = TRUE` marks the system prompt and tools as
+  cacheable for Anthropic; cached prompt tokens are now extracted from all
+  providers that report them (`tokens(x)$cached`, `cached_tokens` /
+  `*_cached` diagnostic columns) and counted by `llm_usage()`.
+- **Cost estimates on your own prices.** `llm_usage(price_table = ...)`
+  accepts a user-supplied table (per-million-token prices, optional cached
+  rate) and adds a `cost_estimate`; LLMR still ships no price list, on
+  purpose.
+- **NA policy for templates.** `llm_fn()`/`llm_mutate()` gain
+  `.na_action = c("send", "skip", "error")`; `llm_preview()` flags rows whose
+  templates reference `NA` or render empty prompts.
+- **Quality-of-life.** `chat_session()` gains `quiet=` and multimodal sends
+  (named-vector shortcut); a one-line summary message after runs with
+  failures or truncations points to `llm_failures()`; `print(llm_config)` is
+  masked and informative; `options(llmr.quiet = TRUE)` silences advisory
+  notes; every request carries a total timeout (`timeout=` per config or
+  `options(llmr.timeout=)`, default 600 s).
+
+## Provider-path overhaul
+
+- The nine OpenAI-compatible providers (groq, together, deepseek, xiaomi,
+  alibaba, zhipu, moonshot, xai, ollama) now share one request builder with
+  the full feature set: multimodal file parts (previously serialized raw,
+  with the local path leaked to the provider), the complete canonical
+  parameter set, structured output, tools, verbatim extras passthrough, and
+  the modifiability hooks. Parameters a provider rejects are dropped with a
+  console note instead of silently.
+- The `req_builder`, `response_modifier`, and `request_modifier` hooks now
+  apply on every provider path (previously only OpenAI) and are documented
+  in `llm_config()`.
+- Gemini: `thinking_budget` / `include_thoughts` are finally sent
+  (`generationConfig.thinkingConfig`); presence/frequency penalties, `seed`,
+  and logprobs are translated rather than dropped; `enable_structured_output()`
+  sends the schema by default via `responseJsonSchema` (set
+  `gemini_enable_response_schema = FALSE` for old models); embeddings use
+  `batchEmbedContents` (one HTTP call per up to 100 texts instead of one per
+  text) and go through the standard error handling; Gemini thought parts are
+  kept out of the answer text and surfaced as `thinking`.
+- Anthropic: `top_k` is supported again (it was wrongly dropped as
+  "unsupported"); `no_change` is honored; PDFs are sent as `document` blocks
+  (previously mislabeled as images); an invalid `thinking_budget >=
+  max_tokens` combination warns before the call; unknown typed content
+  blocks pass through, enabling the tool loop; the false claim that LLMR
+  "sets the beta header automatically" is gone from the docs
+  (`anthropic_beta = ...` sends one).
+- OpenAI: `max_completion_tokens` is honored directly (reasoning models no
+  longer pay a guaranteed failed round trip); the Responses-API autodetect
+  recognizes `gpt-5-pro` and the deep-research models and no longer matches
+  nonexistent ones; the Responses path drops the parameters that API rejects
+  (penalties, logprobs, seed) with a note, maps `reasoning_effort` to its
+  nested shape, and no longer duplicates system text when all messages are
+  system.
+- Embedding routing now follows the documented inference (`embedding = NULL`
+  + "embedding" in the model name) for every provider, and embedding
+  endpoints no longer receive chat-only parameters from a reused config.
+  `get_batched_embeddings()` gains retry controls and its `verbose` default
+  is documented correctly.
+
+## Reliability fixes
+
+- The retry helper no longer sleeps after the final failed attempt
+  (previously up to ~104 minutes wasted on the default schedule); waits
+  honor `Retry-After` when a 429 provides one, and add jitter so parallel
+  workers do not retry in lockstep.
+- Retry classification is exact for typed errors: rate limits and server
+  errors (now including 403->auth, 408->retryable) retry; parameter,
+  authentication, and quota errors fail fast. The over-broad `"exceeded"`
+  message pattern (which retried `context_length_exceeded` for the full
+  schedule) is gone.
+- `call_llm_robust()` defaults are humane (`wait_seconds = 2`,
+  `backoff_factor = 3`) and consistent with `call_llm_par()`;
+  `start_jitter` in the parallel engine defaults to 0 (it silently added up
+  to 5 s per row).
+- Failed rows in `call_llm_par()` results now carry the provider's raw error
+  body in `raw_response_json`.
+
+## Bug fixes
+
+- **`expand_llm_config()`**: sweeping `provider` now updates the S3 class, so
+  the swept config dispatches to the right API (previously every swept
+  provider was called through the original provider's path).
+- **`call_llm_par_structured()` / `call_llm_par_tags()`**: prompts containing
+  literal braces (typical for structured-output instructions) no longer
+  abort the run; strings glue cannot parse pass through verbatim.
+- **Key handling**: an empty-string `api_key` (what `Sys.getenv()` returns
+  for an unset variable) falls back to the provider's default variables with
+  a warning instead of sending an empty Bearer header; `NA` keys are
+  rejected; a vector `api_key` works as ordered fallbacks; legacy configs
+  holding a literal key string resolve correctly and error messages never
+  echo a key.
+- **Chat sessions**: the NA-token fix now also covers `send_structured()` and
+  `send_tags()` (one usage-less response could previously poison the running
+  totals); multi-part sends are no longer truncated to their first element.
+- **Column safety**: `llm_mutate()` replaces an existing output column with a
+  notice (mutate semantics) instead of letting `bind_cols()` mangle both
+  names; hoisted structured/tag fields never silently overwrite existing
+  columns (suffix + warning); the parallel engine's collision warning fires
+  regardless of `verbose`; `summary.llmr_experiment()` follows
+  collision-renamed columns.
+- **Row batching**: user tags shaped like `row_2` are rejected in batched tag
+  mode (they would scramble the demultiplexer); assistant turns error
+  instead of being silently dropped; `duration` is attributed once per batch
+  so `llm_usage()` stops overcounting wall time; fully-failed batch calls
+  attribute their token spend to the first failed row; the protocol
+  instructions state the actual item count.
+- **Structured output**: JSON recovery is string-aware (braces inside string
+  values no longer corrupt extraction); `disable_structured_output()`
+  removes a custom-named schema tool; `llm_mutate_structured()` validates
+  locally like `llm_fn_structured()` (new `.validate_local`).
+  `enable_structured_output()` now knows which providers reject a server-side
+  `json_schema` (DeepSeek, Alibaba, Zhipu, Moonshot, Xiaomi) and requests
+  JSON-object mode with local validation there, instead of a guaranteed
+  HTTP 400. In strict mode the schema sent to the provider is hardened the
+  way the OpenAI protocol formally requires (`additionalProperties: false`
+  and all properties required, filled in only where unspecified), so plain
+  schemas work on OpenAI and Groq without boilerplate.
+- **`llm_par_resume()`** works on `call_llm_sweep()` / `call_llm_broadcast()`
+  / `call_llm_compare()` results (they now keep the `config` list-column) and
+  refreshes `structured_ok` / `structured_data` for re-run rows.
+- **Responses**: OpenAI-style refusals surface their text and map to
+  `finish_reason = "filter"` (as do Gemini safety verdicts such as
+  RECITATION); `llm_judge()` gains `.output=` and refuses to clobber a
+  `.target` column.
+- Assorted: `call_llm()` troubleshooting output prints real newlines; dead
+  code removed (`parse_embeddings()` no-op branch, unreachable per-provider
+  default models); embedding example code no longer uses the discouraged
+  `Sys.getenv()` key pattern.
+
+## Documentation
+
+- `llm_config()` now documents the full canonical parameter set (including
+  `seed`, `logprobs`, `thinking_budget`, `timeout`, `cache`) and the three
+  request hooks. The Anthropic thinking example is valid
+  (`max_tokens > thinking_budget`). `build_factorial_experiments()` documents
+  that system prompts are crossed, not recycled. Vignettes updated
+  accordingly, plus a new article on reproducibility and cost.
+- Live tests and examples run on inexpensive open-weight models (Groq
+  `openai/gpt-oss-20b`, DeepSeek, Moonshot, Qwen, Gemini Flash-Lite).
+
+---
+
 # LLMR 0.8.0
 
 ## New features

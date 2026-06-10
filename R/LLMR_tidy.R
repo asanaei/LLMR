@@ -2,6 +2,82 @@
 
 #' @importFrom glue glue_data
 
+# ---- shared helpers for the tidy layer -------------------------------------
+
+# Which rows reference at least one NA value in their prompt template(s)?
+# glue's `.na = NULL` propagates missingness, so re-rendering with it turns
+# "any placeholder was NA" into an NA result without guessing column names.
+# Templates glue cannot parse yield FALSE (no detection) rather than an error.
+.llm_na_rows <- function(df, prompt = NULL, .messages = NULL) {
+  n <- nrow(df)
+  templates <- c(
+    if (!is.null(prompt)) as.character(prompt),
+    if (!is.null(.messages)) as.character(unname(.messages))
+  )
+  if (!length(templates)) return(rep(FALSE, n))
+  out <- rep(FALSE, n)
+  for (tpl in templates) {
+    probe <- tryCatch(
+      as.character(glue::glue_data(df, tpl, .na = NULL)),
+      error = function(e) NULL
+    )
+    if (!is.null(probe) && length(probe) == n) out <- out | is.na(probe)
+  }
+  out
+}
+
+# Expand a result tibble computed on a subset of rows back to n rows, leaving
+# all-NA rows (same column schema) where rows were skipped. Skipped rows are
+# labeled in finish_reason so they are distinguishable from failures.
+.llm_expand_skipped <- function(res, keep, n) {
+  if (all(keep)) return(res)
+  out <- res[rep(NA_integer_, n), , drop = FALSE]
+  out[which(keep), ] <- res
+  if ("finish_reason" %in% names(out)) {
+    out$finish_reason[!keep] <- "skipped"
+  }
+  if ("success" %in% names(out)) out$success[!keep] <- NA
+  out
+}
+
+# One-line outcome note after a run with failures or truncations, so problems
+# are visible even when the user asked for plain text. Silenced by
+# options(llmr.quiet = TRUE).
+.llm_outcome_note <- function(res) {
+  if (isTRUE(getOption("llmr.quiet"))) return(invisible(NULL))
+  if (!is.data.frame(res) || !"success" %in% names(res)) return(invisible(NULL))
+  skipped <- if ("finish_reason" %in% names(res)) res$finish_reason %in% "skipped" else rep(FALSE, nrow(res))
+  n_fail  <- sum(!(res$success %in% TRUE) & !skipped)
+  n_trunc <- if ("finish_reason" %in% names(res)) sum(res$finish_reason %in% "length") else 0L
+  n_skip  <- sum(skipped)
+  if (n_fail + n_trunc + n_skip == 0L) return(invisible(NULL))
+  parts <- c(
+    if (n_fail)  sprintf("%d call%s failed", n_fail, if (n_fail > 1L) "s" else ""),
+    if (n_trunc) sprintf("%d response%s truncated (finish_reason = \"length\")",
+                         n_trunc, if (n_trunc > 1L) "s" else ""),
+    if (n_skip)  sprintf("%d row%s skipped (.na_action)", n_skip, if (n_skip > 1L) "s" else "")
+  )
+  message("LLMR: ", paste(parts, collapse = "; "),
+          ". Inspect with llm_failures().")
+  invisible(NULL)
+}
+
+# Overwrite-with-notice semantics for generated columns, mirroring
+# dplyr::mutate(): an existing column of the same name is replaced (and a note
+# is emitted) instead of letting bind_cols() mangle both names.
+.llm_drop_clobbered <- function(.data, new_names, context = "llm_mutate()") {
+  clobber <- intersect(new_names, names(.data))
+  if (length(clobber)) {
+    if (!isTRUE(getOption("llmr.quiet"))) {
+      message(sprintf("%s is replacing existing column%s: %s",
+                      context, if (length(clobber) > 1L) "s" else "",
+                      paste(clobber, collapse = ", ")))
+    }
+    .data <- .data[, setdiff(names(.data), clobber), drop = FALSE]
+  }
+  .data
+}
+
 
 #' @title Apply an LLM prompt over vectors/data frames
 #' @name llm_fn
@@ -20,6 +96,12 @@
 #' @param .return One of \code{c("text","columns","object")}. `"columns"`
 #'   returns a tibble of diagnostic columns; `"text"` returns a character
 #'   vector; `"object"` returns a list of `llmr_response` (or `NA` on failure).
+#' @param .na_action What to do with elements whose template references an `NA`
+#'   value. `"send"` (default) renders `NA` as an empty string and sends the
+#'   prompt anyway; `"skip"` does not call the API for those elements and
+#'   returns `NA` for them (`finish_reason = "skipped"` in column mode);
+#'   `"error"` stops before any call is made. `"skip"`/`"error"` are not
+#'   available together with `.tags`.
 #' @param .batch_size Integer scalar, or `Inf`. Number of input elements packed
 #'   into a single generative request. The default, `1`, sends one request per
 #'   element (the historical behaviour). When greater than `1`, elements are
@@ -66,7 +148,10 @@
 #' drops, reorders, duplicates, or truncates are detected and re-issued
 #' according to `.batch_recovery`. Because a batch shares one underlying call,
 #' token counts are reported once per batch (on its first resolved row, `NA`
-#' elsewhere) so that summing token columns is correct.
+#' elsewhere), as is the wall-clock duration, so that summing those columns is
+#' correct. When a batch reply is entirely unusable and its rows succeed only
+#' through recovery calls, the failed call's spend has no successful row to
+#' land on, so sums can slightly undercount in heavy-recovery runs.
 #'
 #' @seealso [llm_mutate()], [llm_fn_structured()], [llm_fn_tags()],
 #'   [llm_parse_batch_tags()], [setup_llm_parallel()], [call_llm_broadcast()],
@@ -89,6 +174,7 @@ llm_fn <- function(x,
                    .tags = NULL,
                    .fields = NULL,
                    .return = c("text","columns","object"),
+                   .na_action = c("send", "skip", "error"),
                    .batch_size = 1L,
                    .batch_payload = c("user", "system"),
                    .batch_recovery = c("halve_recursive", "halve_once",
@@ -96,12 +182,28 @@ llm_fn <- function(x,
 
   stopifnot(inherits(.config, "llm_config"))
   .return <- match.arg(.return)
+  .na_action <- match.arg(.na_action)
   .batched <- .validate_batch_size(.batch_size)
   .batch_payload  <- match.arg(.batch_payload)
   .batch_recovery <- match.arg(.batch_recovery)
   if (.batched) .assert_batch_not_embedding(.config)
 
+  row_df0 <- if (is.data.frame(x)) x else data.frame(x = x, stringsAsFactors = FALSE)
+  n_rows  <- nrow(row_df0)
+  na_rows <- if (.na_action != "send") .llm_na_rows(row_df0, prompt = prompt) else rep(FALSE, n_rows)
+  if (.na_action == "error" && any(na_rows)) {
+    stop("Rows with NA in their prompt template: ",
+         paste(utils::head(which(na_rows), 10L), collapse = ", "),
+         if (sum(na_rows) > 10L) " ..." else "",
+         ". Use .na_action = \"skip\" or clean the data first.", call. = FALSE)
+  }
+  keep <- !na_rows
+
   if (!is.null(.tags)) {
+    if (.na_action != "send") {
+      stop("`.na_action` values other than \"send\" are not supported together with `.tags`.",
+           call. = FALSE)
+    }
     return(llm_fn_tags(x, prompt,
                        .config = .config,
                        .system_prompt = .system_prompt,
@@ -114,27 +216,30 @@ llm_fn <- function(x,
                        .batch_recovery = .batch_recovery))
   }
 
-  user_txt <- if (is.data.frame(x)) {
-    glue::glue_data(x, prompt, .na = "")
-  } else {
-    glue::glue_data(list(x = x), prompt, .na = "")
-  }
+  user_txt <- as.character(glue::glue_data(row_df0, prompt, .na = ""))
 
-  # Embeddings branch unchanged
-  if (isTRUE(.config$embedding) ||
-      grepl("embedding", .config$model, ignore.case = TRUE)) {
+  # Embeddings branch
+  if (.is_embedding_config(.config)) {
     emb <- get_batched_embeddings(
-      texts        = user_txt,
+      texts        = user_txt[keep],
       embed_config = .config,
       ...
     )
-    return(emb)
+    if (all(keep)) return(emb)
+    if (is.null(emb)) return(NULL)
+    out <- matrix(NA_real_, nrow = n_rows, ncol = ncol(emb),
+                  dimnames = list(NULL, colnames(emb)))
+    out[which(keep), ] <- emb
+    return(out)
   }
 
   if (.batched) {
+    if (.return == "object")
+      stop(".return = \"object\" is not supported with .batch_size > 1.",
+           call. = FALSE)
     res <- .run_batched(
       config         = .config,
-      per_row_texts  = as.character(user_txt),
+      per_row_texts  = user_txt[keep],
       system_text    = .system_prompt,
       mode           = "plain",
       batch_size     = .batch_size,
@@ -142,14 +247,13 @@ llm_fn <- function(x,
       batch_recovery = .batch_recovery,
       dots           = rlang::dots_list(...)
     )
-    if (.return == "object")
-      stop(".return = \"object\" is not supported with .batch_size > 1.",
-           call. = FALSE)
+    res <- .llm_expand_skipped(res, keep, n_rows)
+    .llm_outcome_note(res)
     if (.return == "text")
-      return(ifelse(res$success, res$response_text, NA_character_))
+      return(ifelse(res$success %in% TRUE, res$response_text, NA_character_))
     return(tibble::as_tibble(res[, intersect(c(
       "response_text","finish_reason",
-      "sent_tokens","rec_tokens","total_tokens","reasoning_tokens",
+      "sent_tokens","rec_tokens","total_tokens","reasoning_tokens","cached_tokens",
       "success","error_message","status_code","error_code","bad_param",
       "response_id","duration","raw_response_json",
       "batch_id","batch_size","batch_row"), names(res))]))
@@ -159,8 +263,7 @@ llm_fn <- function(x,
   # llm_mutate(), and llm_preview() never diverge. For a bare-vector `x`, glue
   # against a one-column data.frame `x`; this is byte-identical to the previous
   # inline lapply() and is locked by golden tests (test-render-messages.R).
-  row_df <- if (is.data.frame(x)) x else data.frame(x = x, stringsAsFactors = FALSE)
-  msgs <- .llm_build_messages_df(row_df, prompt = prompt,
+  msgs <- .llm_build_messages_df(row_df0[keep, , drop = FALSE], prompt = prompt,
                                  .system_prompt = .system_prompt)
 
   res <- call_llm_broadcast(
@@ -168,9 +271,11 @@ llm_fn <- function(x,
     messages = msgs,
     ...
   )
+  res <- .llm_expand_skipped(res, keep, n_rows)
+  .llm_outcome_note(res)
 
   if (.return == "text") {
-    return(ifelse(res$success, res$response_text, NA_character_))
+    return(ifelse(res$success %in% TRUE, res$response_text, NA_character_))
   }
 
   if (.return == "object") {
@@ -181,12 +286,12 @@ llm_fn <- function(x,
     return(out)
   }
 
-  tibble::as_tibble(res[, c(
+  tibble::as_tibble(res[, intersect(c(
     "response_text","finish_reason",
-    "sent_tokens","rec_tokens","total_tokens","reasoning_tokens",
+    "sent_tokens","rec_tokens","total_tokens","reasoning_tokens","cached_tokens",
     "success","error_message","status_code","error_code","bad_param",
     "response_id","duration","raw_response_json"
-  )])
+  ), names(res))])
 
 }
 
@@ -215,7 +320,15 @@ llm_fn <- function(x,
 #' @param .return One of \code{c("columns","text","object")}. For generative mode,
 #'   controls how results are added. `"columns"` (default) adds text plus
 #'   diagnostic columns; `"text"` adds a single text column; `"object"` adds a
-#'   list-column of `llmr_response` objects.
+#'   list-column of `llmr_response` objects named `<output>_obj`. Ignored (with
+#'   a warning) when `.structured = TRUE` or `.tags` is supplied, which always
+#'   return parsed columns.
+#' @param .na_action What to do with rows whose template references an `NA`
+#'   value. `"send"` (default) renders `NA` as an empty string and sends the
+#'   prompt anyway; `"skip"` does not call the API for those rows (the output
+#'   column is `NA` and `finish_reason` is `"skipped"`); `"error"` stops before
+#'   any call is made. With `.structured` or `.tags`, only `"send"` and
+#'   `"error"` are available.
 #' @param .structured Logical. If `TRUE`, enables structured JSON output with automatic
 #'   parsing. When enabled, this is equivalent to calling [llm_mutate_structured()].
 #'   Default is `FALSE`.
@@ -421,6 +534,7 @@ llm_mutate <- function(.data,
                        .before = NULL,
                        .after  = NULL,
                        .return = c("columns","text","object"),
+                       .na_action = c("send", "skip", "error"),
                        .structured = FALSE,
                        .schema = NULL,
                        .fields = NULL,
@@ -433,6 +547,8 @@ llm_mutate <- function(.data,
 
   stopifnot(inherits(.config, "llm_config"))
   roles_allowed <- c("system", "user", "assistant", "file")
+  .na_action <- match.arg(.na_action)
+  .ret_requested <- match.arg(.return)
   .batched <- .validate_batch_size(.batch_size)
   .batch_payload  <- match.arg(.batch_payload)
   .batch_recovery <- match.arg(.batch_recovery)
@@ -472,8 +588,27 @@ llm_mutate <- function(.data,
 
   if (!is.data.frame(.data)) stop("`.data` must be a data.frame or tibble; got: ", paste(class(.data), collapse = "/"))
 
+  # NA policy: detect rows whose templates reference missing values before any
+  # API call is made.
+  na_rows <- if (.na_action != "send") .llm_na_rows(.data, prompt, .messages) else rep(FALSE, nrow(.data))
+  if (.na_action == "error" && any(na_rows)) {
+    stop("Rows with NA in their prompt template: ",
+         paste(utils::head(which(na_rows), 10L), collapse = ", "),
+         if (sum(na_rows) > 10L) " ..." else "",
+         ". Use .na_action = \"skip\" or clean the data first.", call. = FALSE)
+  }
+  if (.na_action == "skip" && (isTRUE(.structured) || !is.null(.tags))) {
+    stop("`.na_action = \"skip\"` is not supported together with `.structured` or `.tags`; ",
+         "use \"error\" or filter the rows first.", call. = FALSE)
+  }
+  keep <- !na_rows
+
   # If .structured = TRUE, delegate to llm_mutate_structured
   if (isTRUE(.structured)) {
+    if (!identical(.ret_requested, "columns")) {
+      warning("`.return` is ignored when `.structured = TRUE`; parsed columns are returned.",
+              call. = FALSE)
+    }
     args <- list(
       .data = .data,
       prompt = prompt,
@@ -501,6 +636,10 @@ llm_mutate <- function(.data,
   }
 
   if (!is.null(.tags)) {
+    if (!identical(.ret_requested, "columns")) {
+      warning("`.return` is ignored when `.tags` is supplied; parsed columns are returned.",
+              call. = FALSE)
+    }
     args <- list(
       .data = .data,
       prompt = prompt,
@@ -543,8 +682,7 @@ llm_mutate <- function(.data,
   # -------------------------------------------------------------------------
 
   # ---- Embedding branch ----------------------------------------------------
-  if (isTRUE(.config$embedding) ||
-      grepl("embedding", .config$model, ignore.case = TRUE)) {
+  if (.is_embedding_config(.config)) {
 
     user_txt <- if (!is.null(.messages)) {
       stopifnot(is.character(.messages), length(.messages) > 0)
@@ -565,8 +703,14 @@ llm_mutate <- function(.data,
 
     emb_mat <- do.call(
       get_batched_embeddings,
-      c(list(texts = user_txt, embed_config = .config), dots)
+      c(list(texts = user_txt[keep], embed_config = .config), dots)
     )
+    if (!all(keep) && !is.null(emb_mat)) {
+      full <- matrix(NA_real_, nrow = nrow(.data), ncol = ncol(emb_mat),
+                     dimnames = list(NULL, colnames(emb_mat)))
+      full[which(keep), ] <- emb_mat
+      emb_mat <- full
+    }
 
     # Determine prefix
     out_q  <- rlang::enquo(output)
@@ -587,7 +731,10 @@ llm_mutate <- function(.data,
 
     emb_df <- tibble::as_tibble(as.data.frame(emb_mat, stringsAsFactors = FALSE))
 
-    res <- dplyr::bind_cols(.data, emb_df)
+    res <- dplyr::bind_cols(
+      .llm_drop_clobbered(.data, names(emb_df), context = "llm_mutate()"),
+      emb_df
+    )
 
     if (!is.null(.before) || !is.null(.after)) {
       res <- dplyr::relocate(
@@ -608,8 +755,9 @@ llm_mutate <- function(.data,
 
   msgs <- build_generative_messages(.data, prompt, .messages, .system_prompt)
 
-  .ret <- match.arg(.return)
+  .ret <- .ret_requested
   out_sym <- rlang::enquo(output)
+  n_rows <- nrow(.data)
 
   if (.batched) {
     if (.ret == "object")
@@ -628,11 +776,13 @@ llm_mutate <- function(.data,
     }, character(1))
 
     res <- .run_batched(
-      config = .config, per_row_texts = per_row, system_text = sys_shared,
+      config = .config, per_row_texts = per_row[keep], system_text = sys_shared,
       mode = "plain", batch_size = .batch_size, batch_payload = .batch_payload,
       batch_recovery = .batch_recovery, dots = dots)
+    res <- .llm_expand_skipped(res, keep, n_rows)
+    .llm_outcome_note(res)
 
-    base_text <- ifelse(res$success, res$response_text, NA_character_)
+    base_text <- ifelse(res$success %in% TRUE, res$response_text, NA_character_)
     if (.ret == "text") {
       return(.data |>
                dplyr::mutate(!!out_sym := base_text,
@@ -644,10 +794,12 @@ llm_mutate <- function(.data,
 
   res <- do.call(
     call_llm_broadcast,
-    c(list(config = .config, messages = msgs), dots)
+    c(list(config = .config, messages = msgs[keep]), dots)
   )
+  res <- .llm_expand_skipped(res, keep, n_rows)
+  .llm_outcome_note(res)
 
-  base_text <- ifelse(res$success, res$response_text, NA_character_)
+  base_text <- ifelse(res$success %in% TRUE, res$response_text, NA_character_)
 
   if (.ret == "text") {
     return(.data |>
@@ -674,6 +826,7 @@ llm_mutate <- function(.data,
     !!paste0(rlang::as_name(out_sym), "_rec")     := res$rec_tokens,
     !!paste0(rlang::as_name(out_sym), "_tot")     := res$total_tokens,
     !!paste0(rlang::as_name(out_sym), "_reason")  := res$reasoning_tokens,
+    !!paste0(rlang::as_name(out_sym), "_cached")  := if ("cached_tokens" %in% names(res)) res$cached_tokens else rep(NA_integer_, nrow(res)),
     !!paste0(rlang::as_name(out_sym), "_ok")      := res$success,
     !!paste0(rlang::as_name(out_sym), "_err")     := res$error_message,
     !!paste0(rlang::as_name(out_sym), "_id")      := res$response_id,
@@ -683,7 +836,12 @@ llm_mutate <- function(.data,
     !!paste0(rlang::as_name(out_sym), "_t")       := res$duration
   )
 
-  res_df <- dplyr::bind_cols(.data, added)
+  # mutate semantics: an existing column with the output's name is replaced
+  # (with a notice) instead of letting bind_cols() rename both copies.
+  res_df <- dplyr::bind_cols(
+    .llm_drop_clobbered(.data, names(added), context = "llm_mutate()"),
+    added
+  )
 
   res_df <- dplyr::relocate(
     res_df,

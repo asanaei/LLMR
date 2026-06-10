@@ -9,9 +9,14 @@
 #' `<PROVIDER>_KEY`). Use `llm_api_key_env()` only when your variable has a
 #' non-standard name.
 #'
-#' @param var Name of the environment variable (e.g., "OPENAI_API_KEY").
+#' @param var Name of the environment variable (e.g., "OPENAI_API_KEY"). A
+#'   character vector is also accepted; the variables are tried in order and the
+#'   first one that is set wins, which is convenient when a key may live under
+#'   more than one name (e.g., `c("GROQ_API_KEY", "GROQ_KEY")`).
 #' @param required If TRUE, a missing variable raises an authentication error at
-#'   call time.
+#'   call time. If FALSE, a missing variable resolves to an empty key, which is
+#'   appropriate for providers that do not require authentication (e.g., a local
+#'   Ollama server).
 #' @param default Optional default used if the environment variable is not set.
 #' @return A secret handle to pass as `api_key = llm_api_key_env("VARNAME")` in
 #'   [llm_config()].
@@ -49,21 +54,52 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
 #' @keywords internal
 #' @noRd
 .resolve_api_key <- function(secret, provider = NULL, model = NULL) {
-  # Back-compat: allow plain strings that name the variable, optionally with "env:" prefix
+  # Back-compat: configs saved by older LLMR versions stored a plain string here,
+  # either the name of an environment variable (optionally with an "env:" prefix)
+  # or the key itself.
   if (is.character(secret) && length(secret) == 1L) {
     var <- sub("^env:", "", secret)
-    val <- Sys.getenv(var, unset = "")
-    if (nzchar(val)) return(val)
-    .llmr_error(
-      message = sprintf(
-        "Missing API key. Set environment variable '%s' for provider '%s'%s.",
-        var, provider %||% "?", if (!is.null(model)) paste0(" (model '", model, "')") else ""
-      ),
-      category = "auth"
-    )
+    looks_like_env <- grepl("^env:", secret) || grepl("^[A-Z][A-Z0-9_]*$", var)
+    if (looks_like_env) {
+      val <- Sys.getenv(var, unset = "")
+      if (nzchar(val)) return(val)
+      .llmr_error(
+        message = sprintf(
+          "Missing API key. Set environment variable '%s' for provider '%s'%s.",
+          var, provider %||% "?", if (!is.null(model)) paste0(" (model '", model, "')") else ""
+        ),
+        category = "auth"
+      )
+    }
+    # Not env-shaped: this is a literal key from a legacy config. Use it, but
+    # never echo it in any message.
+    if (is.na(secret) || !nzchar(secret)) {
+      .llmr_error(
+        message = sprintf(
+          "Empty API key for provider '%s'. Set '%s' in your environment, or pass api_key = llm_api_key_env(\"VARNAME\").",
+          provider %||% "?",
+          paste(.default_api_key_env(provider %||% "PROVIDER"), collapse = "' or '")
+        ),
+        category = "auth"
+      )
+    }
+    return(secret)
   }
 
-  if (inherits(secret, "llmr_secret_literal")) return(secret$value)
+  if (inherits(secret, "llmr_secret_literal")) {
+    val <- secret$value
+    if (!is.character(val) || length(val) != 1L || is.na(val) || !nzchar(val)) {
+      .llmr_error(
+        message = sprintf(
+          "Empty or invalid literal API key for provider '%s'. Set '%s' in your environment, or pass api_key = llm_api_key_env(\"VARNAME\").",
+          provider %||% "?",
+          paste(.default_api_key_env(provider %||% "PROVIDER"), collapse = "' or '")
+        ),
+        category = "auth"
+      )
+    }
+    return(val)
+  }
 
   if (inherits(secret, "llmr_secret_env")) {
     for (v in secret$ref) {

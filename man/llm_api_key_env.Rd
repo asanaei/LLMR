@@ -7,10 +7,15 @@
 llm_api_key_env(var, required = TRUE, default = NULL)
 }
 \arguments{
-\item{var}{Name of the environment variable (e.g., "OPENAI_API_KEY").}
+\item{var}{Name of the environment variable (e.g., "OPENAI_API_KEY"). A
+character vector is also accepted; the variables are tried in order and the
+first one that is set wins, which is convenient when a key may live under
+more than one name (e.g., \code{c("GROQ_API_KEY", "GROQ_KEY")}).}
 
 \item{required}{If TRUE, a missing variable raises an authentication error at
-call time.}
+call time. If FALSE, a missing variable resolves to an empty key, which is
+appropriate for providers that do not require authentication (e.g., a local
+Ollama server).}
 
 \item{default}{Optional default used if the environment variable is not set.}
 }

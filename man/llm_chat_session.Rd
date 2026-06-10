@@ -10,7 +10,7 @@
 \alias{print.llm_chat_session}
 \title{Chat Session Object and Methods}
 \usage{
-chat_session(config, system = NULL, ...)
+chat_session(config, system = NULL, quiet = FALSE, ...)
 
 \method{as.data.frame}{llm_chat_session}(x, ...)
 
@@ -26,6 +26,9 @@ chat_session(config, system = NULL, ...)
 \item{config}{An \link{llm_config} \strong{for a generative model} (\code{embedding = FALSE}).}
 
 \item{system}{Optional system prompt inserted once at the beginning.}
+
+\item{quiet}{Logical. If \code{TRUE}, \verb{$send()} and friends do not print the
+reply; they still return it invisibly. Useful inside scripts and loops.}
 
 \item{...}{Default arguments forwarded to every \code{\link[=call_llm_robust]{call_llm_robust()}} call (e.g. \code{verbose = TRUE}).}
 
@@ -64,7 +67,10 @@ caching, and error logging.
 \describe{
 \item{\code{$send(text, ..., role = "user")}}{
 Append a message (default role \code{"user"}), query the model,
-print the assistant's reply, and invisibly return it.}
+print the assistant's reply (unless \code{quiet = TRUE}), and invisibly
+return it. \code{text} may also be a named character vector using the same
+multimodal shortcut as \code{\link[=call_llm]{call_llm()}}, e.g.
+\code{chat$send(c(user = "Describe this image.", file = "plot.png"))}.}
 \item{\code{$send_structured(text, schema, ..., role = "user", .fields = NULL, .validate_local = TRUE)}}{
 Send a message with structured-output enabled using \code{schema}, append the assistant's reply,
 parse JSON (and optionally validate locally when \code{.validate_local = TRUE}),

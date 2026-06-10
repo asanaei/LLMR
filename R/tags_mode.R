@@ -12,6 +12,20 @@
   unique(tags)
 }
 
+# Batched mode wraps each row in <row_i>...</row_i>; a user tag that itself
+# looks like a row marker would be read as a row boundary and scramble the
+# demultiplexer, so reject it up front.
+.assert_tags_not_rowlike <- function(tags) {
+  bad <- grepl("^row[_-]?[0-9]+$", tags, ignore.case = TRUE)
+  if (any(bad)) {
+    stop("Tag name(s) ", paste(shQuote(tags[bad]), collapse = ", "),
+         " collide with the <row_N> markers used by batched mode ",
+         "(.batch_size > 1). Rename the tag or use .batch_size = 1.",
+         call. = FALSE)
+  }
+  invisible(tags)
+}
+
 .escape_regex <- function(x) {
   gsub("([][{}()+*^$|\\\\?.])", "\\\\\\1", x, perl = TRUE)
 }
@@ -165,12 +179,26 @@ llm_parse_tags_col <- function(.data, tags, tags_col = "response_text", fields =
   out <- .data
   fields <- if (is.null(fields)) tags else fields
 
+  # Snapshot the caller's columns: extracted tags must never silently
+  # overwrite existing data.
+  orig_names <- names(.data)
+  .hoist_name <- function(dest) {
+    nm <- paste0(prefix, dest)
+    if (nm %in% orig_names) {
+      nm2 <- make.unique(c(orig_names, nm), sep = "_")[length(orig_names) + 1L]
+      warning(sprintf(
+        "Column '%s' already exists; writing the extracted tag to '%s' instead. Use `prefix=` to control naming.",
+        nm, nm2))
+      nm2
+    } else nm
+  }
+
   if (!tags_col %in% names(.data)) {
     out$tags_ok <- rep(FALSE, n)
     out$tags_data <- replicate(n, NULL, simplify = FALSE)
     if (!identical(fields, FALSE) && length(fields)) {
       dest <- if (is.null(names(fields))) fields else names(fields)
-      for (f in dest) out[[paste0(prefix, f)]] <- rep(NA_character_, n)
+      for (f in dest) out[[.hoist_name(f)]] <- rep(NA_character_, n)
     }
     return(tibble::as_tibble(out))
   }
@@ -193,7 +221,7 @@ llm_parse_tags_col <- function(.data, tags, tags_col = "response_text", fields =
       vals <- lapply(parsed, function(x) {
         if (is.null(x)) NULL else x[[src_tags[[k]]]]
       })
-      out[[paste0(prefix, dest_names[[k]])]] <- .coerce_tag_col(vals, n)
+      out[[.hoist_name(dest_names[[k]])]] <- .coerce_tag_col(vals, n)
     }
   }
 
@@ -270,6 +298,7 @@ llm_mutate_tags <- function(.data,
 
   if (.batched) {
     .assert_batch_not_embedding(.config)
+    .assert_tags_not_rowlike(tags)
     return(.llm_mutate_tags_batched(
       .data = .data,
       output = if (output_missing) NULL else rlang::ensym(output),
@@ -350,6 +379,7 @@ llm_fn_tags <- function(x,
 
   if (.batched) {
     .assert_batch_not_embedding(.config)
+    .assert_tags_not_rowlike(tags)
     user_txt <- if (is.data.frame(x)) glue::glue_data(x, prompt, .na = "") else
       glue::glue_data(list(x = x), prompt, .na = "")
     res <- .run_batched(
@@ -405,13 +435,18 @@ call_llm_par_tags <- function(experiments, .tags, .fields = NULL, ...) {
   tags <- .validate_tags(.tags)
 
   ex <- experiments
+  # Character messages are glue-templated against the experiment's metadata
+  # columns; strings glue cannot parse (e.g. literal braces) pass through
+  # verbatim instead of aborting the run.
   ex$messages <- lapply(seq_len(nrow(ex)), function(i) {
     msg <- ex$messages[[i]]
     rowdf <- ex[i, setdiff(names(ex), c("config", "messages")), drop = FALSE]
     if (is.character(msg)) {
       nm <- names(msg)
-      out <- vapply(msg, function(s) as.character(glue::glue_data(rowdf, s, .na = "")),
-                    character(1), USE.NAMES = FALSE)
+      out <- vapply(msg, function(s) {
+        tryCatch(as.character(glue::glue_data(rowdf, s, .na = "")),
+                 error = function(e) s)
+      }, character(1), USE.NAMES = FALSE)
       if (!is.null(nm)) names(out) <- nm
       msg <- out
     }

@@ -33,13 +33,16 @@ articles:
 - title: Advanced
   contents:
   - experiments
+  - reproducibility-and-cost
   - presidential_embeddings
 reference:
 - title: Core
   contents:
   - llm_config
+  - print.llm_config
   - llm_api_key_env
   - call_llm
+  - call_llm_stream
   - llmr_response
   - finish_reason
   - tokens
@@ -67,10 +70,15 @@ reference:
   - llm_render_messages
   - llm_usage
   - llm_failures
+  - llm_methods_text
+  - llm_log_enable
+  - llm_logprobs
 - title: Tidy helpers and parallel
   contents:
   - llm_fn
   - llm_mutate
+  - llm_replicate
+  - llm_agreement
   - build_factorial_experiments
   - call_llm_par
   - call_llm_broadcast
@@ -82,6 +90,18 @@ reference:
   - llm_judge
   - setup_llm_parallel
   - reset_llm_parallel
+- title: Batch APIs (asynchronous, discounted)
+  contents:
+  - llm_batch_submit
+  - llm_batch_status
+  - llm_batch_fetch
+  - llm_batch_cancel
+- title: Tools (function calling)
+  contents:
+  - llm_tool
+  - call_llm_tools
+  - tool_calls
+  - bind_tools
 - title: Embeddings
   contents:
   - parse_embeddings
@@ -91,6 +111,3 @@ reference:
   - call_llm_robust
   - cache_llm_call
   - log_llm_error
-- title: Utilities
-  contents:
-  - bind_tools

@@ -212,8 +212,12 @@ A few points worth keeping in mind:
   protocol. Prefer capable models at `temperature = 0`, and modest batch sizes.
 - **Diagnostics.** When batching actually groups rows, `llm_mutate()` adds
   `<col>_batch`, `<col>_bn`, and `<col>_bi` columns identifying the batch, its
-  size, and the row's position within it. Token counts are attributed once per
-  batch (on its first resolved row) so that summing token columns is correct.
+  size, and the row's position within it. Token counts and wall-clock duration
+  are attributed once per batch (on its first resolved row) so that summing
+  those columns is correct. One caveat: when a batch reply is entirely unusable
+  and its rows succeed only through recovery calls, the failed call's spend has
+  no successful row to land on, so sums can slightly undercount in
+  heavy-recovery runs.
 
 ## Preview before you spend, summarize after
 

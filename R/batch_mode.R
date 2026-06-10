@@ -111,17 +111,17 @@
 #' @noRd
 .batch_instruction_plain <- function(m) {
   paste(
-    "You are answering MULTIPLE independent items in ONE response.",
+    sprintf("You are answering %d independent items in ONE response.", m),
     "The items are wrapped in numbered tags <row_1> ... </row_1>,",
-    "<row_2> ... </row_2>, and so on, up to <row_m>.",
+    sprintf("<row_2> ... </row_2>, and so on, up to <row_%d>.", m),
     "Return your answer for EVERY item inside a matching tag with the SAME",
     "number, like:",
     "<row_1>",
     "your full answer to item 1",
     "</row_1>",
     "Rules:",
-    "- Emit exactly one <row_i> block per item, using the SAME numbers 1..m",
-    "  you were given.",
+    sprintf("- Emit exactly %d <row_i> blocks, one per item, using the SAME", m),
+    sprintf("  numbers 1..%d you were given.", m),
     "- Put ONLY the answer inside each block. No prose, headings, Markdown, or",
     "  code fences outside the blocks.",
     "- Do not merge, skip, reorder by content, renumber, or invent items.",
@@ -144,18 +144,18 @@
   tag_lines <- paste0("<", tags, ">...</", tags, ">")
   paste(
     c(
-      "You are answering MULTIPLE independent items in ONE response.",
+      sprintf("You are answering %d independent items in ONE response.", m),
       "The items are wrapped in numbered tags <row_1> ... </row_1>,",
-      "<row_2> ... </row_2>, and so on, up to <row_m>.",
-      "For EACH item, return one <row_i> block using the SAME number, and",
-      "INSIDE that block place these field tags exactly (this one level of",
-      "nesting is REQUIRED here):",
+      sprintf("<row_2> ... </row_2>, and so on, up to <row_%d>.", m),
+      sprintf("For EACH of the %d items, return one <row_i> block using the SAME", m),
+      "number, and INSIDE that block place these field tags exactly (this one",
+      "level of nesting is REQUIRED here):",
       "<row_1>",
       tag_lines,
       "</row_1>",
       "Rules:",
       "- The outer <row_i> wraps the inner field tags. Nest only this one level.",
-      "- Use the SAME numbers 1..m you were given; do not skip, reorder by",
+      sprintf("- Use the SAME numbers 1..%d you were given; do not skip, reorder by", m),
       "  content, renumber, or invent items.",
       paste0("- Inside each block use ONLY the field tags ",
              paste0("<", tags, ">", collapse = ", "),
@@ -180,14 +180,14 @@
 #' @noRd
 .batch_struct_instruction <- function(m) {
   paste(
-    "You extract structured data for MULTIPLE independent items in ONE response.",
-    "The items are wrapped in numbered tags <row_1> ... </row_1> up to <row_m>.",
+    sprintf("You extract structured data for %d independent items in ONE response.", m),
+    sprintf("The items are wrapped in numbered tags <row_1> ... </row_1> up to <row_%d>.", m),
     "Return ONLY a single JSON object of the form",
     '{"results": [ {"row": <int>, ...fields... }, ... ]}',
-    "with exactly one array element per item and \"row\" set to the SAME integer",
-    "i from <row_i>. Each element must otherwise satisfy the requested schema.",
-    "Do not skip, reorder by content, renumber, or invent items. If a value is",
-    "unknown use null. No prose, no code fences.",
+    sprintf("with exactly %d array elements, one per item, and \"row\" set to the SAME", m),
+    "integer i from <row_i>. Each element must otherwise satisfy the requested",
+    "schema. Do not skip, reorder by content, renumber, or invent items. If a",
+    "value is unknown use null. No prose, no code fences.",
     sep = "\n"
   )
 }
@@ -293,17 +293,25 @@
     stop("Batched generative mode does not support file/multimodal content. ",
          "Use .batch_size = 1 for multimodal rows.", call. = FALSE)
   }
-  # per-row system/assistant turns must be identical across rows (a single
-  # shared system prompt); otherwise they cannot be hoisted out of the batch.
+  # Assistant turns cannot be carried in a <row_i> payload at all; silently
+  # dropping them would change the conversation, so refuse outright.
+  has_assistant <- any(vapply(eval_msgs, function(m) {
+    !is.null(names(m)) && any(names(m) == "assistant")
+  }, logical(1)))
+  if (isTRUE(has_assistant)) {
+    stop("Batched generative mode does not support assistant turns in message ",
+         "templates. Use .batch_size = 1 for multi-turn messages.", call. = FALSE)
+  }
+  # per-row system turns must be identical across rows (a single shared system
+  # prompt); otherwise they cannot be hoisted out of the batch.
   nonuser <- lapply(eval_msgs, function(m) {
     if (is.null(names(m))) return(character(0))
-    m[names(m) %in% c("system", "assistant")]
+    m[names(m) %in% "system"]
   })
   uniq <- unique(lapply(nonuser, unname))
   if (length(uniq) > 1L) {
-    stop("Batched generative mode requires a single shared system prompt and ",
-         "no per-row assistant turns. Use .batch_size = 1 for per-row ",
-         "multi-turn messages.", call. = FALSE)
+    stop("Batched generative mode requires a single shared system prompt. ",
+         "Use .batch_size = 1 for per-row system prompts.", call. = FALSE)
   }
   invisible(TRUE)
 }
@@ -479,13 +487,14 @@ llm_parse_batch_tags <- function(text, tags, m) {
 
 #' Build the per-row diagnostic record from a shared batch response row
 #'
-#' Token counts are NOT row-separable, so they are attributed to a single row
-#' (the engine assigns the batch totals to the first resolved row and NA to the
-#' rest); descriptive scalars are copied. `finish_reason`/`success` are set by
-#' the engine per row to reflect the row's actual outcome.
+#' Token counts and wall-clock duration are NOT row-separable, so both are
+#' attributed to a single row (the engine assigns them to the first resolved
+#' row and NA to the rest, so that summing either column over rows is correct);
+#' descriptive scalars are copied. `finish_reason`/`success` are set by the
+#' engine per row to reflect the row's actual outcome.
 #'
 #' @param res_b A one-row `call_llm_par`-shaped tibble for the batch call.
-#' @param with_tokens Logical; whether this row carries the batch token totals.
+#' @param with_tokens Logical; whether this row carries the batch totals.
 #' @return A one-row list of diagnostic fields.
 #' @keywords internal
 #' @noRd
@@ -498,8 +507,9 @@ llm_parse_batch_tags <- function(text, tags, m) {
     rec_tokens        = if (with_tokens) res_b$rec_tokens[[1]]       else na_int,
     total_tokens      = if (with_tokens) res_b$total_tokens[[1]]     else na_int,
     reasoning_tokens  = if (with_tokens) res_b$reasoning_tokens[[1]] else na_int,
+    cached_tokens     = if (with_tokens && "cached_tokens" %in% names(res_b)) res_b$cached_tokens[[1]] else na_int,
     response_id       = res_b$response_id[[1]] %||% NA_character_,
-    duration          = res_b$duration[[1]]    %||% NA_real_,
+    duration          = if (with_tokens) (res_b$duration[[1]] %||% NA_real_) else NA_real_,
     status_code       = res_b$status_code[[1]]  %||% NA_integer_,
     error_code        = res_b$error_code[[1]]   %||% NA_character_,
     bad_param         = res_b$bad_param[[1]]    %||% NA_character_
@@ -587,14 +597,19 @@ llm_parse_batch_tags <- function(text, tags, m) {
     meta[[g]]  <<- .shared_batch_meta(res_b, with_tokens)
   }
 
-  fail_rows <- function(rows, fr, res_b = NULL, bid = NA_character_) {
+  fail_rows <- function(rows, fr, res_b = NULL, bid = NA_character_,
+                        tokens_available = FALSE) {
+    # When the failing call's spend has not been credited to any committed row,
+    # attach it to the first failed row so token sums still reflect reality.
+    first_assigned <- !isTRUE(tokens_available)
     for (g in rows) {
       if (status[g] != "unresolved") next
       finish[g]  <<- fr
       status[g]  <<- "failed"
       bid_col[g] <<- bid
       meta[[g]]  <<- if (is.null(res_b))
-        .empty_meta() else .shared_batch_meta(res_b, FALSE)
+        .empty_meta() else .shared_batch_meta(res_b, !first_assigned)
+      first_assigned <- TRUE
     }
   }
 
@@ -626,7 +641,8 @@ llm_parse_batch_tags <- function(text, tags, m) {
                    if (b$depth == 0L) "ok" else "recovered",
                    b$bid, 1L, 1L, TRUE, rb)
       } else {
-        fail_rows(g, rb$finish_reason[1] %||% "error:batch_call", rb, b$bid)
+        fail_rows(g, rb$finish_reason[1] %||% "error:batch_call", rb, b$bid,
+                  tokens_available = TRUE)
       }
       next
     }
@@ -638,6 +654,7 @@ llm_parse_batch_tags <- function(text, tags, m) {
     U <- integer(0)
     head_only <- FALSE
     ctxerr <- FALSE
+    tokens_credited <- FALSE
 
     if (!isTRUE(res_b$success[1])) {
       U <- g_rows
@@ -685,13 +702,15 @@ llm_parse_batch_tags <- function(text, tags, m) {
                    b$bid, m, li, !first_tok_assigned, res_b)
         first_tok_assigned <- TRUE
       }
+      tokens_credited <- first_tok_assigned
     }
 
     if (!length(U)) next
 
     # ---- decide recovery for the unresolved set U --------------------------
     if (identical(batch_recovery, "none") || b$depth >= max_depth) {
-      fail_rows(U, .terminal_reason(res_b), res_b, b$bid); next
+      fail_rows(U, .terminal_reason(res_b), res_b, b$bid,
+                tokens_available = !tokens_credited); next
     }
 
     U <- sort(U)
@@ -707,7 +726,10 @@ llm_parse_batch_tags <- function(text, tags, m) {
     }
 
     if (identical(batch_recovery, "retry_same")) {
-      if (b$depth + 1L >= max_depth) { fail_rows(U, .terminal_reason(res_b), res_b, b$bid); next }
+      if (b$depth + 1L >= max_depth) {
+        fail_rows(U, .terminal_reason(res_b), res_b, b$bid,
+                  tokens_available = !tokens_credited); next
+      }
       queue[[length(queue) + 1L]] <- list(rows = U, depth = b$depth + 1L,
                                           bid = paste0(b$bid, ".r"))
     } else if (identical(batch_recovery, "singletons") || head_only || ctxerr) {
@@ -767,6 +789,7 @@ llm_parse_batch_tags <- function(text, tags, m) {
     !!paste0(nm, "_rec")      := res$rec_tokens,
     !!paste0(nm, "_tot")      := res$total_tokens,
     !!paste0(nm, "_reason")   := res$reasoning_tokens,
+    !!paste0(nm, "_cached")   := if ("cached_tokens" %in% names(res)) res$cached_tokens else rep(NA_integer_, nrow(res)),
     !!paste0(nm, "_ok")       := res$success,
     !!paste0(nm, "_err")      := res$error_message,
     !!paste0(nm, "_id")       := res$response_id,
@@ -780,7 +803,10 @@ llm_parse_batch_tags <- function(text, tags, m) {
     added[[paste0(nm, "_bn")]]    <- res$batch_size
     added[[paste0(nm, "_bi")]]    <- res$batch_row
   }
-  res_df <- dplyr::bind_cols(.data, added)
+  res_df <- dplyr::bind_cols(
+    .llm_drop_clobbered(.data, names(added), context = "llm_mutate()"),
+    added
+  )
   if (is.null(.before) && is.null(.after)) return(res_df)
   if (!is.null(.before)) {
     dplyr::relocate(res_df, dplyr::all_of(names(added)), .before = {{ .before }})
@@ -921,6 +947,7 @@ llm_parse_batch_tags <- function(text, tags, m) {
   list(raw_response_json = NA_character_, error_message = NA_character_,
        sent_tokens = NA_integer_, rec_tokens = NA_integer_,
        total_tokens = NA_integer_, reasoning_tokens = NA_integer_,
+       cached_tokens = NA_integer_,
        response_id = NA_character_, duration = NA_real_,
        status_code = NA_integer_, error_code = NA_character_,
        bad_param = NA_character_)
@@ -967,6 +994,7 @@ llm_parse_batch_tags <- function(text, tags, m) {
     rec_tokens        = getm("rec_tokens", NA_integer_),
     total_tokens      = getm("total_tokens", NA_integer_),
     reasoning_tokens  = getm("reasoning_tokens", NA_integer_),
+    cached_tokens     = getm("cached_tokens", NA_integer_),
     response_id       = getm("response_id", NA_character_),
     duration          = getm("duration", NA_real_),
     status_code       = getm("status_code", NA_integer_),

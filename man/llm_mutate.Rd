@@ -14,6 +14,7 @@ llm_mutate(
   .before = NULL,
   .after = NULL,
   .return = c("columns", "text", "object"),
+  .na_action = c("send", "skip", "error"),
   .structured = FALSE,
   .schema = NULL,
   .fields = NULL,
@@ -53,7 +54,16 @@ generated column(s) are placed.}
 \item{.return}{One of \code{c("columns","text","object")}. For generative mode,
 controls how results are added. \code{"columns"} (default) adds text plus
 diagnostic columns; \code{"text"} adds a single text column; \code{"object"} adds a
-list-column of \code{llmr_response} objects.}
+list-column of \code{llmr_response} objects named \verb{<output>_obj}. Ignored (with
+a warning) when \code{.structured = TRUE} or \code{.tags} is supplied, which always
+return parsed columns.}
+
+\item{.na_action}{What to do with rows whose template references an \code{NA}
+value. \code{"send"} (default) renders \code{NA} as an empty string and sends the
+prompt anyway; \code{"skip"} does not call the API for those rows (the output
+column is \code{NA} and \code{finish_reason} is \code{"skipped"}); \code{"error"} stops before
+any call is made. With \code{.structured} or \code{.tags}, only \code{"send"} and
+\code{"error"} are available.}
 
 \item{.structured}{Logical. If \code{TRUE}, enables structured JSON output with automatic
 parsing. When enabled, this is equivalent to calling \code{\link[=llm_mutate_structured]{llm_mutate_structured()}}.

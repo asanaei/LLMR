@@ -4,7 +4,15 @@
 \alias{get_batched_embeddings}
 \title{Generate Embeddings in Batches}
 \usage{
-get_batched_embeddings(texts, embed_config, batch_size = 50, verbose = FALSE)
+get_batched_embeddings(
+  texts,
+  embed_config,
+  batch_size = 50,
+  verbose = FALSE,
+  tries = 5,
+  wait_seconds = 2,
+  backoff_factor = 3
+)
 }
 \arguments{
 \item{texts}{Character vector of texts to embed. If named, the names will be
@@ -12,9 +20,14 @@ used as row names in the output matrix.}
 
 \item{embed_config}{An \code{llm_config} object configured for embeddings.}
 
-\item{batch_size}{Integer. Number of texts to process in each batch. Default is 50.}
+\item{batch_size}{Integer. Number of texts to process in each batch. Default is 50.
+(Gemini's developer API embeds at most 100 texts per request; larger
+batches are split automatically.)}
 
-\item{verbose}{Logical. If TRUE, prints progress messages. Default is TRUE.}
+\item{verbose}{Logical. If TRUE, prints progress messages. Default is FALSE.}
+
+\item{tries, wait_seconds, backoff_factor}{Retry controls forwarded to
+\code{\link{call_llm_robust}} for each batch.}
 }
 \value{
 A numeric matrix where each row is an embedding vector for the corresponding text.
@@ -35,11 +48,11 @@ return a numeric matrix.
   texts <- c("Hello world", "How are you?", "Machine learning is great")
   names(texts) <- c("greeting", "question", "statement")
 
+  # The key is read from the VOYAGE_API_KEY environment variable.
   embed_cfg <- llm_config(
     provider = "voyage",
     model = "voyage-3.5-lite",
-    embedding = TRUE,
-    api_key = Sys.getenv("VOYAGE_API_KEY")
+    embedding = TRUE
   )
 
   embeddings <- get_batched_embeddings(

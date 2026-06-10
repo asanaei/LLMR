@@ -297,7 +297,7 @@ llm_config(
 
 df_s <- df |>
   llm_mutate_structured(
-    the_annotation = "Identify an object and the attitude expressed toward thar object 
+    the_annotation = "Identify an object and the attitude expressed toward that object 
     on a scale of 0 (extremely unfavorable)  to 10 (extremely favorable), 
     and the confidence you have about this between 0 (no confidence) to 
     1 (certain about your ruling).
@@ -410,7 +410,7 @@ res |>
 ## 5.1) A small bias experiment (non‑structured)
 
 Two drivers. Many repetitions. Compare outcomes by name.
-This example is written without using the structured ouput functionality for
+This example is written without using the structured output functionality for
 demonstration purposes. It can similarly be run by `call_llm_par_structured()`
 more easily.
 
@@ -430,11 +430,11 @@ preamble <- paste(
 )
 
 prompt_Kevin  <- paste(preamble,
-                       "The driver is a 23-year-old man named Kevin Williams. Emily feels suspicous.",
+                       "The driver is a 23-year-old man named Kevin Williams. Emily feels suspicious.",
                        "How safe is this ride?")
 
 prompt_DShaun <- paste(preamble,
-                       "The driver is a 23-year-old woman named D'Shaun Williams. Emily feels suspicous.",
+                       "The driver is a 23-year-old woman named D'Shaun Williams. Emily feels suspicious.",
                        "How safe is this ride?")
 
 cfg_openai2 <- llm_config(
@@ -557,7 +557,7 @@ LLMR supports embedding models through the same `llm_config` and `call_llm`
 functions. `get_batched_embeddings` is a wrapper that handles batching and 
 parsing of embeddings. `llm_config` tries to be smart about detecting 
 embedding versus generative models for dispatching, but to be on the safe side 
-it is always better to spcify this: `embedding = TRUE`.
+it is always better to specify this: `embedding = TRUE`.
 
 
 Here is an example of an embedding model configuration:

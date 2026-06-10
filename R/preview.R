@@ -74,8 +74,10 @@ llm_render_messages <- function(.data,
 #' list-column of `issues`. Problems that would only surface mid-run (a missing
 #' file, a `"file"` role combined with `.batch_size > 1`, an embedding config
 #' with row batching, `.return = "object"` with batching, a schema supplied
-#' without `.structured`) are collected per row so you see all of them at once
-#' rather than hitting the first error.
+#' without `.structured`, a template that references `NA` values or renders an
+#' empty prompt, a file part with no accompanying user text, or a tag name that
+#' collides with the batched `<row_N>` protocol) are collected per row so you
+#' see all of them at once rather than hitting the first error.
 #'
 #' Batched data travels inside numbered `<row_i>...</row_i>` tags; the
 #' `batch_id` / `batch_size` / `batch_row` columns show how rows would be
@@ -148,10 +150,15 @@ llm_preview <- function(.data,
     batch_n[idx]   <- length(idx)
   }
 
-  is_embedding <- !is.null(.config) &&
-    (isTRUE(.config$embedding) ||
-       (is.character(.config$model) &&
-          grepl("embedding", .config$model, ignore.case = TRUE)))
+  is_embedding <- !is.null(.config) && .is_embedding_config(.config)
+
+  # Rows whose templates reference NA values (rendered as "" on the real path).
+  na_rows <- .llm_na_rows(.data, prompt, .messages)
+
+  # Tag names that would collide with the <row_N> batching protocol.
+  rowlike_tags <- if (!is.null(.tags)) {
+    .tags[grepl("^row[_-]?[0-9]+$", .tags, ignore.case = TRUE)]
+  } else character(0)
 
   show_rows <- if (is.null(rows)) seq_len(n) else {
     r <- as.integer(rows)
@@ -190,6 +197,24 @@ llm_preview <- function(.data,
     }
     if (isTRUE(.structured) && !is.null(.tags)) {
       issues <- c(issues, ".structured takes precedence over .tags")
+    }
+    if (isTRUE(na_rows[i])) {
+      issues <- c(issues,
+                  "template references NA values (rendered as empty strings; see .na_action)")
+    }
+    user_chars <- sum(nchar(unname(m[nm == "user"])))
+    if (!has_file && user_chars == 0L) {
+      issues <- c(issues,
+                  "rendered user prompt is empty; this row would still be sent and billed")
+    }
+    if (has_file && !any(nm == "user" & nzchar(unname(m)))) {
+      issues <- c(issues,
+                  "a file part needs at least one non-empty user text in the same message")
+    }
+    if (length(rowlike_tags) && isTRUE(batch_active)) {
+      issues <- c(issues,
+                  paste0("tag name(s) ", paste(rowlike_tags, collapse = ", "),
+                         " collide with the <row_N> markers used by batched mode"))
     }
 
     collapsed <- paste0(nm, ": ", unname(m), collapse = "\n---\n")

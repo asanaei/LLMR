@@ -2,12 +2,11 @@ library(testthat)
 library(LLMR)
 
 test_that("llm_fn returns correct length vector", {
-  skip_if_no_env("OPENAI_API_KEY")
+  skip_if_no_env("GROQ_API_KEY")
   skip_on_cran()                       # avoid API calls on CRAN
   cfg <- llm_config(
-    provider = "openai",
-    model    = "gpt-4.1-nano",
-    api_key  = "OPENAI_API_KEY",
+    provider = "groq",
+    model    = "openai/gpt-oss-20b",
     temperature = 0
   )
 

@@ -27,7 +27,10 @@ is_truncated(x)
 \value{
 A length-1 character vector or \code{NA_character_}.
 
-A list \code{list(sent, rec, total, reasoning)}. Missing values are \code{NA}.
+A list \code{list(sent, rec, total, reasoning, cached)}. Missing
+values are \code{NA}. \code{cached} counts prompt tokens the provider read from
+its cache (cheaper than fresh input tokens); it is \code{NA} for providers that
+do not report cache usage.
 
 \code{TRUE} if truncated, otherwise \code{FALSE}.
 }
@@ -47,9 +50,17 @@ Convenience check for truncation due to token limits.
 \itemize{
 \item \code{text}: character scalar. Assistant reply.
 \item \code{provider}: character. Provider id (e.g., \code{"openai"}, \code{"gemini"}).
-\item \code{model}: character. Model id.
+\item \code{model}: character. Model id as requested in the config.
+\item \code{model_version}: character. The model identifier the server reports having
+served (e.g., a dated snapshot). Useful for reproducibility records; \code{NA}
+when the provider does not echo it.
 \item \code{finish_reason}: one of \code{"stop"}, \code{"length"}, \code{"filter"}, \code{"tool"}, \code{"other"}.
-\item \code{usage}: list with integers \code{sent}, \code{rec}, \code{total}, \code{reasoning} (if available).
+\item \code{usage}: list with integers \code{sent}, \code{rec}, \code{total}, \code{reasoning}, and
+\code{cached} (tokens read from the provider's prompt cache; \code{NA} when not
+reported).
+\item \code{thinking}: character. Reasoning text when the provider returns it
+separately (e.g., Anthropic thinking blocks, Gemini thought parts,
+DeepSeek \code{reasoning_content}); \code{NA} otherwise.
 \item \code{response_id}: provider's response identifier if present.
 \item \code{duration_s}: numeric seconds from request to parse.
 \item \code{raw}: parsed provider JSON (list).

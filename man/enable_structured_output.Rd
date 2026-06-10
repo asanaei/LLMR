@@ -34,6 +34,25 @@ Turn on structured output for a model configuration. Supports OpenAI-compatible
 providers (OpenAI, Groq, Together, x.ai, DeepSeek, Xiaomi, Alibaba (Qwen), Zhipu,
 Moonshot), Anthropic, and Gemini.
 }
+\section{Server-side enforcement by provider}{
+
+OpenAI, Groq, Together, x.ai, and Ollama accept a strict \code{json_schema}
+response format. DeepSeek, Alibaba (Qwen), Zhipu, Moonshot, and Xiaomi
+accept only JSON-object mode; for them the supplied schema drives local
+parsing and validation, so the prompt itself should describe the desired
+fields. Anthropic enforcement runs through a forced tool call; Gemini
+through \code{responseJsonSchema}.
+}
+
+\section{Gemini}{
+
+A supplied schema is sent as \code{responseJsonSchema} (standard JSON Schema,
+supported by Gemini 2.5+ models) together with the JSON mime type. For an
+older model that rejects it, set \code{gemini_enable_response_schema = FALSE} in
+the config to fall back to JSON-mime-type-only mode (the reply is still
+parsed and can be validated locally).
+}
+
 \section{When to use tags instead}{
 
 For tasks where strict JSON schema is unnecessary or unsupported, consider

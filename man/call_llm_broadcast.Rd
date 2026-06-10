@@ -15,8 +15,10 @@ a list where each element is a pre-formatted message list.}
 \item{...}{Additional arguments passed to \code{call_llm_par} (e.g., tries, verbose, progress).}
 }
 \value{
-A tibble with columns: message_index (metadata), provider, model,
-all model parameters, response_text, raw_response_json, success, error_message.
+A tibble with columns: message_index (metadata), the \code{config}
+list-column (so \code{\link[=llm_par_resume]{llm_par_resume()}} can re-run failures), provider, model,
+all model parameters, response_text, raw_response_json, success,
+error_message, and the other diagnostics documented in \code{\link[=call_llm_par]{call_llm_par()}}.
 }
 \description{
 Broadcasts different messages using the same configuration in parallel.

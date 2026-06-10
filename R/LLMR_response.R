@@ -10,9 +10,17 @@
 #' ## Fields
 #' - `text`: character scalar. Assistant reply.
 #' - `provider`: character. Provider id (e.g., `"openai"`, `"gemini"`).
-#' - `model`: character. Model id.
+#' - `model`: character. Model id as requested in the config.
+#' - `model_version`: character. The model identifier the server reports having
+#'   served (e.g., a dated snapshot). Useful for reproducibility records; `NA`
+#'   when the provider does not echo it.
 #' - `finish_reason`: one of `"stop"`, `"length"`, `"filter"`, `"tool"`, `"other"`.
-#' - `usage`: list with integers `sent`, `rec`, `total`, `reasoning` (if available).
+#' - `usage`: list with integers `sent`, `rec`, `total`, `reasoning`, and
+#'   `cached` (tokens read from the provider's prompt cache; `NA` when not
+#'   reported).
+#' - `thinking`: character. Reasoning text when the provider returns it
+#'   separately (e.g., Anthropic thinking blocks, Gemini thought parts,
+#'   DeepSeek `reasoning_content`); `NA` otherwise.
 #' - `response_id`: provider's response identifier if present.
 #' - `duration_s`: numeric seconds from request to parse.
 #' - `raw`: parsed provider JSON (list).
@@ -68,18 +76,23 @@ new_llmr_response <- function(text,
                               usage = list(sent = NA_integer_,
                                            rec = NA_integer_,
                                            total = NA_integer_,
-                                           reasoning = NA_integer_),
+                                           reasoning = NA_integer_,
+                                           cached = NA_integer_),
                               response_id = NA_character_,
                               duration_s = NA_real_,
                               raw = NULL,
-                              raw_json = NULL) {
+                              raw_json = NULL,
+                              model_version = NA_character_,
+                              thinking = NA_character_) {
   structure(
     list(
       text          = as.character(text %||% NA_character_),
       provider      = provider,
       model         = model,
+      model_version = model_version,
       finish_reason = finish_reason,
       usage         = usage,
+      thinking      = thinking,
       response_id   = response_id,
       duration_s    = duration_s,
       raw           = raw,
@@ -114,7 +127,10 @@ finish_reason <- function(x) {
 #' Returns a list with token counts for an \code{llmr_response}.
 #'
 #' @param x An \code{llmr_response} object.
-#' @return A list \code{list(sent, rec, total, reasoning)}. Missing values are \code{NA}.
+#' @return A list \code{list(sent, rec, total, reasoning, cached)}. Missing
+#'   values are \code{NA}. `cached` counts prompt tokens the provider read from
+#'   its cache (cheaper than fresh input tokens); it is `NA` for providers that
+#'   do not report cache usage.
 #' @examples
 #' \dontrun{
 #' u <- tokens(r)
@@ -123,7 +139,9 @@ finish_reason <- function(x) {
 #' @rdname llmr_response
 #' @export
 tokens <- function(x) {
-  if (!inherits(x, "llmr_response")) return(list(sent = NA, rec = NA, total = NA, reasoning = NA))
+  if (!inherits(x, "llmr_response")) {
+    return(list(sent = NA, rec = NA, total = NA, reasoning = NA, cached = NA))
+  }
   x$usage
 }
 
@@ -188,6 +206,10 @@ print.llmr_response <- function(x, ...) {
 .std_finish_reason <- function(content) {
   fr <- NULL
   if (!is.null(content$choices) && length(content$choices) >= 1) {
+    # An OpenAI-style refusal is a content filter in standardized terms even
+    # though the provider labels the finish "stop".
+    ref <- content$choices[[1]]$message$refusal
+    if (!is.null(ref) && is.character(ref) && nzchar(ref[1])) return("filter")
     fr <- content$choices[[1]]$finish_reason %||% content$choices[[1]]$finishReason
   }
 
@@ -212,7 +234,8 @@ print.llmr_response <- function(x, ...) {
   if (!nzchar(fr)) return("other")
   if (fr %in% c("stop","end_turn","completed","done")) return("stop")
   if (fr %in% c("length","max_tokens","max_token","maxoutputtokens","max_completion_tokens","incomplete")) return("length")
-  if (fr %in% c("content_filter","safety","blocked")) return("filter")
+  if (fr %in% c("content_filter","safety","blocked","refusal","recitation",
+                "prohibited_content","blocklist","spii","image_safety")) return("filter")
   if (fr %in% c("tool_calls","tool_use","tool","function_call")) return("tool")
   "other"
 }
@@ -250,4 +273,79 @@ print.llmr_response <- function(x, ...) {
   rt3 <- tryCatch(content$usageMetadata$thoughtsTokenCount, error = function(e) NA_integer_)
   if (!is.null(rt3) && !is.na(rt3)) return(as.integer(rt3))
   NA_integer_
+}
+
+#' Extract cached prompt-token counts if present
+#' @keywords internal
+#' @noRd
+.cached_tokens_from <- function(content) {
+  grab <- function(x) {
+    if (is.null(x)) return(NULL)
+    v <- suppressWarnings(as.integer(x))
+    if (length(v) == 1L && !is.na(v)) v else NULL
+  }
+  # OpenAI Chat Completions / OpenAI-compatible providers
+  v <- grab(tryCatch(content$usage$prompt_tokens_details$cached_tokens, error = function(e) NULL))
+  if (!is.null(v)) return(v)
+  # OpenAI Responses API
+  v <- grab(tryCatch(content$usage$input_tokens_details$cached_tokens, error = function(e) NULL))
+  if (!is.null(v)) return(v)
+  # Anthropic
+  v <- grab(tryCatch(content$usage$cache_read_input_tokens, error = function(e) NULL))
+  if (!is.null(v)) return(v)
+  # DeepSeek reports prompt_cache_hit_tokens at the top level of usage
+  v <- grab(tryCatch(content$usage$prompt_cache_hit_tokens, error = function(e) NULL))
+  if (!is.null(v)) return(v)
+  # Gemini
+  v <- grab(tryCatch(content$usageMetadata$cachedContentTokenCount, error = function(e) NULL))
+  if (!is.null(v)) return(v)
+  NA_integer_
+}
+
+#' Extract the served model identifier if the provider echoes one
+#' @keywords internal
+#' @noRd
+.model_version_from <- function(content) {
+  mv <- content$model %||% content$modelVersion %||% NULL
+  if (!is.null(mv) && is.character(mv) && nzchar(mv[1])) return(mv[1])
+  # OpenAI chat completions also carry a backend fingerprint
+  fp <- content$system_fingerprint %||% NULL
+  if (!is.null(fp) && is.character(fp) && nzchar(fp[1])) return(fp[1])
+  NA_character_
+}
+
+#' Extract separately-returned reasoning text if present
+#'
+#' Providers differ: Anthropic returns `thinking` content blocks, Gemini marks
+#' parts with `thought = TRUE` (when `include_thoughts` is requested), and
+#' DeepSeek-style reasoners return `reasoning_content` next to `content`.
+#' @keywords internal
+#' @noRd
+.thinking_from <- function(content) {
+  # Anthropic: content blocks of type "thinking"
+  if (!is.null(content$content) && is.list(content$content)) {
+    th <- vapply(content$content, function(b) {
+      if (identical(b$type, "thinking") && is.character(b$thinking)) b$thinking else ""
+    }, character(1))
+    th <- th[nzchar(th)]
+    if (length(th)) return(paste(th, collapse = "\n"))
+  }
+  # OpenAI-compatible reasoners (DeepSeek, some Groq/Together models)
+  if (!is.null(content$choices) && length(content$choices) >= 1) {
+    rc <- content$choices[[1]]$message$reasoning_content %||%
+          content$choices[[1]]$message$reasoning %||% NULL
+    if (!is.null(rc) && is.character(rc) && nzchar(rc[1])) return(rc[1])
+  }
+  # Gemini: parts flagged as thoughts
+  if (!is.null(content$candidates) && length(content$candidates) >= 1) {
+    parts <- tryCatch(content$candidates[[1]]$content$parts, error = function(e) NULL)
+    if (is.list(parts) && length(parts)) {
+      th <- vapply(parts, function(p) {
+        if (isTRUE(p$thought) && is.character(p$text)) p$text else ""
+      }, character(1))
+      th <- th[nzchar(th)]
+      if (length(th)) return(paste(th, collapse = "\n"))
+    }
+  }
+  NA_character_
 }
