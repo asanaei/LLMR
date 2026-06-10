@@ -11,7 +11,8 @@ Description: Provides a unified interface to large language models across multip
 License: MIT + file LICENSE
 Encoding: UTF-8
 Imports: httr2 (>= 1.0.0), curl, purrr, dplyr, tidyr, rlang, memoise, future, future.apply,
-        tibble, base64enc, mime,  glue (>= 1.6.0),  cli (>= 3.6.0), jsonlite, vctrs
+        tibble, base64enc, mime,  glue (>= 1.6.0),  cli (>= 3.6.0), jsonlite, vctrs,
+        digest
 Suggests: testthat (>= 3.0.0), roxygen2 (>= 7.1.2), httptest2,
        progressr, knitr, rmarkdown, ggplot2, R.rsp, jsonvalidate,
        stringi, kableExtra

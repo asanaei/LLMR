@@ -8,6 +8,12 @@
   roughly half the live rate. Jobs are plain R objects without secrets (keys
   stay environment references), so a job can be saved with `state_path=`,
   the session closed, and results fetched later or from another machine.
+- **`llm_hash()`: one content-hash convention for the ecosystem.**
+  Canonical form (classes stripped, named lists sorted, functions deparsed),
+  canonical JSON, SHA-256 over the UTF-8 bytes -- independent of R's
+  serialization format and of construction order. Downstream packages
+  (locked coding protocols, replication archives) use these hashes as
+  identifiers of record.
 - **Audit log for reproducible research.** Each record carries a
   `schema_version` field (currently `"1.0"`) so downstream tools can parse
   the log against a stable contract. `llm_log_enable(path)` appends one

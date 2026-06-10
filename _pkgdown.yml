@@ -74,6 +74,7 @@ reference:
   - llm_methods_text
   - llm_log_enable
   - llm_logprobs
+  - llm_hash
 - title: Tidy helpers and parallel
   contents:
   - llm_fn

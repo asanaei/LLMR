@@ -516,3 +516,19 @@ test_that("call_llm_tools aggregates loop spend and enforces max_tool_calls", {
   expect_error(call_llm_tools(cfg, "double 2", tools = dbl, max_tool_calls = 0),
                class = "llmr_tool_limit")
 })
+
+test_that("llm_hash is canonical, order-blind, and pinned across versions", {
+  # the pinned value guards the convention itself: if this test ever fails,
+  # the hash function changed and every downstream identifier broke with it
+  expect_identical(
+    llm_hash(list(model = "gpt-oss-20b", temperature = 0)),
+    "7c5ffbb0b308f20bf188a3efd962a2895f45ad202307234ee1965d86abc0606c")
+  expect_identical(llm_hash(list(a = 1, b = "x")),
+                   llm_hash(list(b = "x", a = 1)))      # order-blind
+  expect_false(identical(llm_hash(list(a = 1)), llm_hash(list(a = 2))))
+  s3 <- structure(list(a = 1), class = "whatever")
+  expect_identical(llm_hash(s3), llm_hash(list(a = 1))) # class-blind
+  expect_identical(llm_hash(function(x) x + 1),
+                   llm_hash(function(x) x + 1))         # functions by source
+  expect_match(llm_hash("plain string"), "^[a-f0-9]{64}$")
+})
