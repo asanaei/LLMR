@@ -426,6 +426,10 @@ test_that("strict mode hardens schemas as the providers require", {
 # ---- fixes from the cross-review --------------------------------------------
 
 test_that("gemini requests label assistant turns as 'model'", {
+  old_key <- Sys.getenv("GEMINI_API_KEY", unset = NA)
+  Sys.setenv(GEMINI_API_KEY = "test-key-not-real")
+  on.exit(if (is.na(old_key)) Sys.unsetenv("GEMINI_API_KEY")
+          else Sys.setenv(GEMINI_API_KEY = old_key), add = TRUE)
   cfg <- llm_config("gemini", "gemini-2.5-flash-lite")
   req <- LLMR:::.gemini_chat_request(cfg, list(
     list(role = "user", content = "a"),
