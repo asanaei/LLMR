@@ -423,7 +423,7 @@ test_that("strict mode hardens schemas as the providers require", {
   expect_length(h2$required, 0L)
 })
 
-# ---- fixes from the cross-review --------------------------------------------
+# ---- provider-path regression fixes ------------------------------------------
 
 test_that("gemini requests label assistant turns as 'model'", {
   old_key <- Sys.getenv("GEMINI_API_KEY", unset = NA)
