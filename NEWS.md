@@ -1,3 +1,14 @@
+# LLMR 0.8.4
+
+## New features
+
+* Added the exported S3 generics `diagnostics(x, ...)` and `report(x, ...)`,
+  with default methods that error when no class-specific method is available.
+  These are additive infrastructure for the LLMR method packages (LLMRcoder,
+  LLMRvalid, LLMRpanel, LLMRarchive), which register methods on them;
+  `diagnostics()` returns a result object's machine-readable health numbers and
+  `report()` drafts its methods-section prose. No existing behavior changes.
+
 # LLMR 0.8.3
 
 ## New features

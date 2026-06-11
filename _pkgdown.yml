@@ -75,6 +75,13 @@ reference:
   - llm_log_enable
   - llm_logprobs
   - llm_hash
+- title: Method-package generics
+  desc: >
+    Shared generics implemented by the LLMR method packages (LLMRcoder,
+    LLMRvalid, LLMRpanel, LLMRarchive) on their result objects.
+  contents:
+  - diagnostics
+  - report
 - title: Tidy helpers and parallel
   contents:
   - llm_fn

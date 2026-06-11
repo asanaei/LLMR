@@ -144,7 +144,7 @@ multi-agent designs on top of it. Four method packages carry the measurement
 workflow: [LLMRcoder](https://asanaei.github.io/LLMRcoder/) for
 codebook-first annotation with sealed gold-set validation,
 [LLMRvalid](https://asanaei.github.io/LLMRvalid/) for robustness audits of
-LLM-mediated estimates, [LLMRtrail](https://asanaei.github.io/LLMRtrail/) for
+LLM-mediated estimates, [LLMRarchive](https://asanaei.github.io/LLMRarchive/) for
 verifiable replication archives built from LLMR's audit logs, and
 [LLMRpanel](https://asanaei.github.io/LLMRpanel/) for calibrated silicon
 samples in survey and experiment design. An overview of the family lives at
