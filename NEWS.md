@@ -1,3 +1,30 @@
+# LLMR 0.8.5
+
+## New features
+
+* Added two additive provenance helpers for the method packages.
+  `llm_response_record()` flattens a single `llmr_response` (or a caught error)
+  into a one-row tibble with the family's response-contract columns
+  (`response_text`, `response_id`, `provider`, `model`, `model_version`,
+  `finish_reason`, token counts, `success`, `error_message`, `duration_s`,
+  `created_at`, `request_hash`); a failed call is a row, never a dropped call.
+  `llm_request_hash()` gives a stable identity for a call over provider, model,
+  messages, generation parameters, and any tool/schema signature, excluding API
+  keys and transport-only knobs. The archive layer keys deduplication and replay
+  on it. Both build on the existing `llm_hash()` convention. No existing
+  behavior changes.
+
+# LLMR 0.8.4
+
+## New features
+
+* Added the exported S3 generics `diagnostics(x, ...)` and `report(x, ...)`,
+  with default methods that error when no class-specific method is available.
+  These are additive infrastructure for the LLMR method packages (LLMRcoder,
+  LLMRvalid, LLMRpanel, LLMRarchive), which register methods on them;
+  `diagnostics()` returns a result object's machine-readable health numbers and
+  `report()` drafts its methods-section prose. No existing behavior changes.
+
 # LLMR 0.8.3
 
 ## New features
