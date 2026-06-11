@@ -45,6 +45,12 @@ jobs:
             run_dont_run = FALSE
           )
 
+      - name: Add AI usage capsule
+        run: |
+          mkdir -p docs/ai
+          cp inst/ai/*.md docs/ai/
+          printf '\n## AI usage\n\n- [Usage capsule for AI assistants](ai/LLMR.md)\n' >> docs/llms.txt
+
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v6
