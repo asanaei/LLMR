@@ -25,3 +25,10 @@ test_that("registered diagnostics and report methods dispatch", {
   expect_identical(diagnostics(x), list(surface = "diagnostics", value = 42L))
   expect_identical(report(x), list(surface = "report", value = 42L))
 })
+
+test_that("reset is an S3 generic with a helpful erroring default", {
+  expect_true(is.function(reset))
+  expect_true(any(grepl('UseMethod("reset")', deparse(body(reset)), fixed = TRUE)))
+  expect_error(reset(list(a = 1)),
+               "No reset\\(\\) method for objects of class <list>")
+})

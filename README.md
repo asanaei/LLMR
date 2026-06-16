@@ -140,15 +140,16 @@ reset_llm_parallel()
 
 LLMR is the provider layer of a family of packages for LLM-assisted research.
 [LLMRAgent](https://asanaei.github.io/LLMRAgent/) builds agents and
-multi-agent designs on top of it. Four method packages carry the measurement
-workflow: [LLMRcoder](https://asanaei.github.io/LLMRcoder/) for
-codebook-first annotation with sealed gold-set validation,
-[LLMRvalid](https://asanaei.github.io/LLMRvalid/) for robustness audits of
-LLM-mediated estimates, [LLMRarchive](https://asanaei.github.io/LLMRarchive/) for
-verifiable replication archives built from LLMR's audit logs, and
-[LLMRpanel](https://asanaei.github.io/LLMRpanel/) for calibrated silicon
-samples in survey and experiment design. An overview of the family lives at
-the [ecosystem page](https://asanaei.github.io/LLMR-ecosystem/).
+multi-agent designs on top of it.
+[LLMRcontent](https://asanaei.github.io/LLMRcontent/) carries the measurement
+workflow in one package: codebook-first annotation with sealed gold-set
+validation, robustness audits of LLM-mediated estimates, and verifiable
+replication archives built from LLMR's audit logs.
+[LLMRpanel](https://asanaei.github.io/LLMRpanel/) provides calibrated silicon
+samples for survey and experiment design, and
+[FocusGroup](https://asanaei.github.io/FocusGroup/) supports moderated
+multi-agent discussions. An overview of the family lives at the
+[ecosystem page](https://asanaei.github.io/LLMR-ecosystem/).
 
 ## Contributing
 

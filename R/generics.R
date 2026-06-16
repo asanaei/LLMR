@@ -1,6 +1,6 @@
 # generics.R ----------------------------------------------------------------
-# Two shared S3 generics for the LLMR method packages (LLMRcoder, LLMRvalid,
-# LLMRpanel, LLMRarchive). LLMR defines the generics and an erroring default
+# Two shared S3 generics for the LLMR method packages (LLMRcontent,
+# LLMRpanel). LLMR defines the generics and an erroring default
 # only; the method packages register class-specific methods. Additive: no
 # existing LLMR behavior changes.
 
@@ -12,7 +12,7 @@
 #' which drafts methods-section prose.
 #'
 #' LLMR defines the generic and an erroring default only. The method packages
-#' (LLMRcoder, LLMRvalid, LLMRpanel, LLMRarchive) provide the implementations,
+#' (LLMRcontent, LLMRpanel) provide the implementations,
 #' each returning a tibble of the key numbers for its own result classes.
 #'
 #' @param x An object returned by an LLMR method package.
@@ -21,7 +21,7 @@
 #' @seealso [report()]
 #' @examples
 #' \dontrun{
-#' # LLMRvalid, for instance, returns one row of stability and fragility numbers:
+#' # LLMRcontent, for instance, returns one row of stability and fragility numbers:
 #' diagnostics(audit)
 #' }
 #' @export
@@ -35,7 +35,7 @@ diagnostics.default <- function(x, ...) {
   if (!length(cls)) cls <- typeof(x)
   .llmr_error(
     message = sprintf(
-      "No diagnostics() method for objects of class <%s>; this generic is implemented by the LLMR method packages (LLMRcoder, LLMRvalid, LLMRpanel, LLMRarchive).",
+      "No diagnostics() method for objects of class <%s>; this generic is implemented by the LLMR method packages (LLMRcontent, LLMRpanel).",
       paste(cls, collapse = ", ")
     ),
     category = "param"
@@ -50,17 +50,17 @@ diagnostics.default <- function(x, ...) {
 #' machine-readable numbers.
 #'
 #' LLMR defines the generic and an erroring default only. The method packages
-#' (LLMRcoder, LLMRvalid, LLMRpanel, LLMRarchive) provide the implementations.
+#' (LLMRcontent, LLMRpanel) provide the implementations.
 #'
 #' @param x An object returned by an LLMR method package.
 #' @param ... Passed to methods (some methods require extra arguments, e.g.
-#'   LLMRcoder's `report()` on a validation needs the gold set and protocol).
+#'   some LLMRcontent report methods require the gold set and protocol).
 #' @return A method-defined report object, by convention a character vector
 #'   with a print method.
 #' @seealso [diagnostics()]
 #' @examples
 #' \dontrun{
-#' # LLMRvalid, for instance, drafts the robustness appendix:
+#' # LLMRcontent, for instance, drafts the robustness appendix:
 #' report(audit)
 #' }
 #' @export
@@ -74,7 +74,7 @@ report.default <- function(x, ...) {
   if (!length(cls)) cls <- typeof(x)
   .llmr_error(
     message = sprintf(
-      "No report() method for objects of class <%s>; this generic is implemented by the LLMR method packages (LLMRcoder, LLMRvalid, LLMRpanel, LLMRarchive).",
+      "No report() method for objects of class <%s>; this generic is implemented by the LLMR method packages (LLMRcontent, LLMRpanel).",
       paste(cls, collapse = ", ")
     ),
     category = "param"

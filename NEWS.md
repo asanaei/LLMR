@@ -1,3 +1,26 @@
+# LLMR 0.8.6
+
+## New features
+
+* Added `llm_log_read()`, which parses a JSONL audit log (written by
+  `llm_log_enable()`) into its records and a per-record manifest tibble, with a
+  record hash over each verbatim line and a request hash identifying each call.
+  This is the generic log reader the ecosystem's archive tooling builds on.
+* Added the `reset()` S3 generic with an erroring default, alongside
+  `diagnostics()` and `report()`, so a method package can register a reset for a
+  stateful result object.
+
+## Changes
+
+* `llm_request_hash()` now canonicalizes its `messages` to a provider-neutral
+  list of role/content turns before hashing, so the message *shape* (a bare
+  string, a named character vector, or a list of turns) no longer changes the
+  hash; only roles and text do. It keys on all generation parameters (everything
+  in `model_params` except transport knobs) and gains `provider`/`model`
+  arguments so a call read from a log hashes identically to the same call
+  described by a config. This changes the hash *values* relative to 0.8.5; the
+  hashes are new in this release cycle and nothing depends on the old values.
+
 # LLMR 0.8.5
 
 ## New features
@@ -20,8 +43,9 @@
 
 * Added the exported S3 generics `diagnostics(x, ...)` and `report(x, ...)`,
   with default methods that error when no class-specific method is available.
-  These are additive infrastructure for the LLMR method packages (LLMRcoder,
-  LLMRvalid, LLMRpanel, LLMRarchive), which register methods on them;
+  These are additive infrastructure for the LLMR method packages (at the time
+  the then-separate LLMRcoder, LLMRvalid, LLMRarchive, since merged into
+  LLMRcontent, and LLMRpanel), which register methods on them;
   `diagnostics()` returns a result object's machine-readable health numbers and
   `report()` drafts its methods-section prose. No existing behavior changes.
 

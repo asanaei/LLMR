@@ -1,6 +1,6 @@
 # hash.R ------------------------------------------------------------------------
-# The ecosystem's content hash. Downstream packages (LLMRcoder protocols,
-# LLMRtrail archives) use these hashes as scientific identifiers -- a value
+# The ecosystem's content hash. Downstream packages (LLMRcontent protocols,
+# LLMRcontent archives) use these hashes as scientific identifiers -- a value
 # cited in a paper must be reproducible on any machine, in any R version,
 # forever. Hence: canonical form (classes stripped, named lists sorted,
 # functions deparsed), canonical JSON, SHA-256 over the UTF-8 bytes of that
@@ -32,7 +32,7 @@
 #' value recorded in a paper today is checkable on any machine later.
 #'
 #' Downstream packages treat these hashes as identifiers of record
-#' (`LLMRcoder::protocol_lock()`, `LLMRtrail::archive_build()`); the
+#' (`LLMRcontent::protocol_lock()`, `LLMRcontent::archive_build()`); the
 #' convention is versioned by this function's documentation -- any future
 #' change would be a new function, not a silent edit.
 #'

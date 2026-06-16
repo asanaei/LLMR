@@ -53,15 +53,29 @@ test_that("api keys never enter the hash input", {
   expect_match(h, "^[0-9a-f]{64}$")
 })
 
-test_that("config-free call via extra still hashes", {
+test_that("config-free call via direct provider/model and extra params hashes", {
+  # The log side has no config; it supplies provider/model directly and the
+  # generation parameters through extra$params.
   h <- llm_request_hash(
-    config = NULL, messages = "Hello",
-    extra = list(provider = "groq", model = "x", seed = 110)
+    provider = "groq", model = "x", messages = "Hello",
+    extra = list(params = list(seed = 110))
   )
   expect_match(h, "^[0-9a-f]{64}$")
   expect_false(identical(
     h,
-    llm_request_hash(NULL, "Hello",
-                     extra = list(provider = "groq", model = "x", seed = 7))
+    llm_request_hash(provider = "groq", model = "x", messages = "Hello",
+                     extra = list(params = list(seed = 7)))
   ))
+})
+
+test_that("message shape does not change the hash (canonicalization)", {
+  cfg <- llm_config("openai", "gpt-4.1-mini", temperature = 0)
+  expect_identical(
+    llm_request_hash(cfg, "Hello"),
+    llm_request_hash(cfg, c(user = "Hello"))
+  )
+  expect_identical(
+    llm_request_hash(cfg, c(user = "Hello")),
+    llm_request_hash(cfg, list(list(role = "user", content = "Hello")))
+  )
 })

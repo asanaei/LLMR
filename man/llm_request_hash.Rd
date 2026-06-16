@@ -7,6 +7,8 @@
 llm_request_hash(
   config = NULL,
   messages = NULL,
+  provider = NULL,
+  model = NULL,
   tools = NULL,
   response_format = NULL,
   schema = NULL,
@@ -16,11 +18,19 @@ llm_request_hash(
 \arguments{
 \item{config}{An \code{\link[=llm_config]{llm_config()}} (its \code{provider}, \code{model}, and the
 answer-relevant entries of \code{model_params} are used), or \code{NULL} to supply
-\code{provider}/\code{model}/\code{params} directly through \code{extra}.}
+\code{provider}/\code{model} directly and the generation parameters through
+\code{extra$params}.}
 
 \item{messages}{The messages or prompt sent. A character scalar, a named
 character vector of roles, or a list of \code{list(role=, content=)} turns --
-whatever was passed to \code{\link[=call_llm]{call_llm()}}. Canonicalized before hashing.}
+whatever was passed to \code{\link[=call_llm]{call_llm()}}. Canonicalized to a provider-neutral
+list of role/content turns before hashing, so the message \emph{shape} (a bare
+string vs a named vector vs a turn list) does not change the hash; only the
+roles and text do.}
+
+\item{provider, model}{Provider and model ids. Taken from \code{config} when it is
+given; supply them directly (with \code{extra$params}) when hashing a call read
+from an audit log, where there is no \code{config}.}
 
 \item{tools}{Optional tool definitions (as passed to \code{\link[=call_llm]{call_llm()}} /
 \code{\link[=bind_tools]{bind_tools()}}). Their signature is included when present.}
@@ -30,29 +40,47 @@ flag or object) that constrains the output.}
 
 \item{schema}{Optional JSON Schema used for structured output.}
 
-\item{extra}{Optional named list folded into the hashed object for callers
-that hold parameters outside a config (e.g. \code{list(provider=, model=, params=, seed=)}). Use it to add identity-relevant fields the standard
-arguments do not cover.}
+\item{extra}{Optional named list folded into the hashed object. The log side
+passes the call's generation parameters here as \code{extra$params} (a named
+list), which are consumed into the param key exactly as a config's
+\code{model_params} would be; a config, when given, takes precedence over
+\code{extra$params}. Any other entries are hashed as-is, to add identity-relevant
+fields the standard arguments do not cover.}
 }
 \value{
 A 64-character lowercase SHA-256 hex string (see \code{\link[=llm_hash]{llm_hash()}}).
 }
 \description{
-A request hash identifies the question asked, so two calls collide only when
-everything that can change the answer is identical: provider, model, the
-messages, the generation parameters, and any tool or response-format
-signature. It is the key the archive layer uses for deduplication and replay,
-and the value to record when reproducibility of a specific call matters.
+A request hash identifies the question asked. It keys on provider, model, the
+canonical role/content turns, and the generation parameters
+(\code{model_params} minus transport and internal knobs), plus any explicit tool,
+response-format, or schema signature. It is the key the archive layer uses for
+deduplication and replay, and the value to record when reproducibility of a
+specific call matters.
 }
 \details{
 The hash is built over a canonical object and passed to \code{\link[=llm_hash]{llm_hash()}}, so it
 inherits that convention: construction order and S3 class do not matter, and
 the value does not depend on R's serialization format. API keys and volatile
-fields (timestamps, request ids) are never part of the input. Transport-only
-knobs in \code{model_params} -- \code{req_builder}, \code{response_modifier}, \code{timeout},
-\code{api_url}, \code{max_tries}, \code{verbose} -- are excluded, since they change how a
-call is issued, not what is asked.
+fields (timestamps, request ids) are never part of the input. Transport and
+internal knobs in \code{model_params} (see the source for the full list -- e.g.
+\code{req_builder}, \code{response_modifier}, \code{timeout}, \code{api_url}, \code{max_tries},
+\code{request_modifier}, \code{cache}, \code{use_responses_api}, \code{vertex}) are excluded,
+since they change how a call is issued, not what is asked.
 }
+\section{Scope}{
+
+The hash keys on the canonical turns and generation parameters. It is designed
+so a call described by an \code{\link[=llm_config]{llm_config()}} and the same call read from a logged
+provider request body agree for the common chat/completions path. It does
+\emph{not} attempt to reconstruct every provider's exact translated body: calls
+that differ only in features outside this key -- the OpenAI Responses API
+(\code{input}/\code{instructions}), full tool-call transcripts, or provider-injected
+defaults -- may hash the same across the config and log sides. The archive
+layer's collision detection is the backstop for those cases: it flags when one
+replay key gathers records whose stored request hashes disagree.
+}
+
 \examples{
 cfg <- llm_config("openai", "gpt-4.1-mini", temperature = 0)
 h1 <- llm_request_hash(cfg, "Hello")

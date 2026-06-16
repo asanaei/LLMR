@@ -14,7 +14,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-Contemporary behavioral research increasingly leverages large language models (LLMs) to simulate human judgments. This vignette illustrates a streamlined methodology for conducting a classical moral philosophy experiment---the Trolley Dilemma---using the `LLMR` package. We bypass the elementary chat functionalities and proceed directly to a vectorised experimental design using `llm_mutate()`. 
+Behavioral researchers increasingly use large language models (LLMs) to simulate human judgments. This vignette runs a classical moral philosophy experiment, the Trolley Dilemma, with the `LLMR` package. It skips the single-call chat functions and goes straight to a vectorized experimental design built with `llm_mutate()`.
 
 For this demonstration, we utilize an open-weights model provided via the Groq API.
 
@@ -45,7 +45,7 @@ dilemmas <- tibble::tibble(
 
 ## Vectorised Execution with Soft Structuring
 
-To systematically extract the model's decisions, we deploy `llm_mutate()`. Rather than imposing a rigid JSON schema---which can induce failure modes in some inference endpoints---we instruct the model to use simple XML-like tags. This "soft structuring" approach remains robust across varying provider capabilities.
+To extract the model's decisions, we call `llm_mutate()`. Rather than imposing a rigid JSON schema, which some inference endpoints handle poorly, we ask the model to mark its answer with simple XML-like tags. Tags place fewer demands on the provider than schema validation, so the same prompt works across a wider range of endpoints.
 
 ```{r mutate}
 experiment_results <- dilemmas |>
@@ -69,4 +69,4 @@ experiment_results |>
 
 ## Conclusion
 
-This approach encapsulates the core objective of `LLMR`: frictionless science. Researchers specify the conditions, articulate a robust prompt, and retrieve a structured dataset ready for statistical evaluation, eliminating intermediate parsing logic and cumbersome loop constructs.
+The example shows the pattern `LLMR` is built for. The researcher defines the conditions in a data frame, writes one prompt, and receives a structured dataset ready for statistical analysis. The tag parsing and the iteration over rows are handled by `llm_mutate()`, so no explicit loop or string-parsing code is needed.

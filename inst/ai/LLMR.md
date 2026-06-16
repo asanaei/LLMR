@@ -5,9 +5,9 @@ description: Unified LLM provider layer for R - one config across OpenAI/Anthrop
 
 # LLMR — usage capsule for AI assistants
 
-One file to use the package correctly. Depth: vignettes `quickstart`,
-`tidy-and-structured`, `about-schema`, `interactive-calls`,
-`reproducibility-and-cost`, `experiments`.
+This capsule summarizes how to use the package correctly. For more detail, see
+the vignettes `quickstart`, `tidy-and-structured`, `about-schema`,
+`interactive-calls`, `reproducibility-and-cost`, and `experiments`.
 
 ## Install and keys
 

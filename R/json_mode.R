@@ -682,8 +682,8 @@ llm_fn_structured <- function(x,
 #' Like [llm_mutate()], this function supports shorthand syntax:
 #'
 #' \preformatted{
-#' df |> llm_mutate_structured(result = "{text}", .schema = schema)
-#' df |> llm_mutate_structured(result = c(system = "Be brief.", user = "{text}"), .schema = schema)
+#' df |> llm_mutate_structured(result = "{text}", .config = cfg, .schema = schema)
+#' df |> llm_mutate_structured(result = c(system = "Be brief.", user = "{text}"), .config = cfg, .schema = schema)
 #' }
 #'
 #' @seealso [llm_mutate()], [llm_fn_structured()], [enable_structured_output()],

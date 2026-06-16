@@ -25,7 +25,7 @@ run_llmr_vignette <-
 
 This vignette demonstrates how to use LLMR for embedding analysis of presidential inaugural speeches.
 
-**Note:** This vignette requires a valid Gemini API key and never runs live API calls during package checks. To run it locally, set `LLMR_RUN_VIGNETTES=true` before rendering.**
+**Note:** This vignette requires a valid Gemini API key and never runs live API calls during package checks. To run it locally, set `LLMR_RUN_VIGNETTES=true` before rendering.
 
 ```{r setup}
 library(LLMR)
@@ -103,7 +103,7 @@ if (run_llmr_vignette) {
 
   # Perform hierarchical clustering
   hc <- hclust(dist_object, method = "ward.D2")
-  plot(hc, main = "Clustering of Presidential Inaugural Speeches\n(only beginning the paragraphs)")
+  plot(hc, main = "Clustering of Presidential Inaugural Speeches\n(opening excerpts)")
 } else {
   message("Set LLMR_RUN_VIGNETTES=true to run live embedding clustering.")
 }

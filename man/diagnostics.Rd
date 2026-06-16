@@ -22,12 +22,12 @@ which drafts methods-section prose.
 }
 \details{
 LLMR defines the generic and an erroring default only. The method packages
-(LLMRcoder, LLMRvalid, LLMRpanel, LLMRarchive) provide the implementations,
+(LLMRcontent, LLMRpanel) provide the implementations,
 each returning a tibble of the key numbers for its own result classes.
 }
 \examples{
 \dontrun{
-# LLMRvalid, for instance, returns one row of stability and fragility numbers:
+# LLMRcontent, for instance, returns one row of stability and fragility numbers:
 diagnostics(audit)
 }
 }

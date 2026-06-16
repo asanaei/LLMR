@@ -10,7 +10,7 @@ report(x, ...)
 \item{x}{An object returned by an LLMR method package.}
 
 \item{...}{Passed to methods (some methods require extra arguments, e.g.
-LLMRcoder's \code{report()} on a validation needs the gold set and protocol).}
+some LLMRcontent report methods require the gold set and protocol).}
 }
 \value{
 A method-defined report object, by convention a character vector
@@ -24,11 +24,11 @@ machine-readable numbers.
 }
 \details{
 LLMR defines the generic and an erroring default only. The method packages
-(LLMRcoder, LLMRvalid, LLMRpanel, LLMRarchive) provide the implementations.
+(LLMRcontent, LLMRpanel) provide the implementations.
 }
 \examples{
 \dontrun{
-# LLMRvalid, for instance, drafts the robustness appendix:
+# LLMRcontent, for instance, drafts the robustness appendix:
 report(audit)
 }
 }

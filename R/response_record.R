@@ -1,7 +1,7 @@
 # response_record.R -----------------------------------------------------------
 # One flattening path from a generative call to a single provenance row. Every
 # downstream package that keeps a record of what a model returned should reach
-# for this, so the columns are the same in LLMRcoder, LLMRvalid, LLMRpanel,
+# for this, so the columns are the same in LLMRcontent, LLMRpanel,
 # LLMRAgent, FocusGroup, and the archives that seal them. A caught error is a
 # row too -- success = FALSE -- never a dropped call.
 

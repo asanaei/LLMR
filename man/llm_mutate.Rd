@@ -208,7 +208,7 @@ df |>
 
 # Multimodal: include an image path with role 'file'
 pics <- tibble::tibble(
-  img    = c("inst/extdata/cat.png", "inst/extdata/dog.jpg"),
+  img    = c("path/to/cat.png", "path/to/dog.jpg"),
   prompt = c("Describe the image.", "Describe the image.")
 )
 pics |>

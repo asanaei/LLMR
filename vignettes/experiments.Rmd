@@ -21,7 +21,7 @@ This vignette demonstrates:
 2. Running experiments in parallel with `call_llm_par()`
 3. Comparing unstructured vs. structured output across providers
 
-The workflow is: **design → parallel execution → analysis**
+The workflow builds a factorial design, runs the calls in parallel, and then analyzes the returned tibble.
 
 We will compare three configurations on two prompts, once unstructured and once with structured output. We use open models via DeepSeek and Groq to ensure fast and low-cost execution.
 

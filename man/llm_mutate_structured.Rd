@@ -95,8 +95,8 @@ Drop-in schema-first variant of \code{\link[=llm_mutate]{llm_mutate()}}. Produce
 Like \code{\link[=llm_mutate]{llm_mutate()}}, this function supports shorthand syntax:
 
 \preformatted{
-df |> llm_mutate_structured(result = "{text}", .schema = schema)
-df |> llm_mutate_structured(result = c(system = "Be brief.", user = "{text}"), .schema = schema)
+df |> llm_mutate_structured(result = "{text}", .config = cfg, .schema = schema)
+df |> llm_mutate_structured(result = c(system = "Be brief.", user = "{text}"), .config = cfg, .schema = schema)
 }
 }
 

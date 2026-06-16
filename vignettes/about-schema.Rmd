@@ -14,11 +14,14 @@ knitr::opts_chunk$set(
 ```  
 
 
-## TL;DR
+## Overview
 
-- **JSON mode**: ask the model for “a JSON object.” Lower friction. Weak guarantees.  
-- **Schema output**: give a JSON Schema and request strict validation. Higher reliability *when the provider enforces it*.  
-- **Reality**: enforcement and request shapes differ across providers. Use **defensive parsing** and **local validation**.
+JSON mode asks the model for a JSON object; it is easy to request but gives
+weak guarantees about shape. Schema output supplies a JSON Schema and requests
+strict validation, which is more reliable when the provider enforces it.
+Enforcement and request shapes differ across providers, so this vignette
+relies on defensive parsing and local validation rather than trusting any one
+provider's guarantee.
 
 ---
 
@@ -150,7 +153,7 @@ If your key is set, you should see `structured_ok = TRUE`, `structured_valid = T
 
 ---
 
-### 3) DeepSeek: force a schema
+### 3) DeepSeek: JSON-object mode with local validation
 
 ```{r}
 safe({
@@ -231,7 +234,7 @@ Works when outputs arrive fenced, with pre/post text, or when arrays sneak in. N
 
 ---
 
-## Pro tip: Combine with parallel execution
+## Parallel execution with schema validation
 
 For production ETL workflows, combine schema validation with parallelization:
 

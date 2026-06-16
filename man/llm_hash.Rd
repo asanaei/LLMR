@@ -25,7 +25,7 @@ value recorded in a paper today is checkable on any machine later.
 }
 \details{
 Downstream packages treat these hashes as identifiers of record
-(\code{LLMRcoder::protocol_lock()}, \code{LLMRtrail::archive_build()}); the
+(\code{LLMRcontent::protocol_lock()}, \code{LLMRcontent::archive_build()}); the
 convention is versioned by this function's documentation -- any future
 change would be a new function, not a silent edit.
 }

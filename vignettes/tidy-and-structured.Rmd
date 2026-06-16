@@ -120,7 +120,7 @@ df |>
 
 ## llm_mutate with .structured flag
 
-You can now enable structured output directly in `llm_mutate()` using `.structured = TRUE`:
+Enable structured output directly in `llm_mutate()` using `.structured = TRUE`:
 
 ```{r}
 schema <- list(
