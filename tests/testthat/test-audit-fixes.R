@@ -74,11 +74,11 @@ test_that("llm_par_resume gives a clear error on collision-renamed success", {
 test_that("llm_preview flags object+batch in plain mode but not in tag mode", {
   df <- tibble::tibble(text = c("a", "b", "c"))
   p_plain <- llm_preview(df, prompt = "{text}", .return = "object",
-                         .batch_size = 2)
+                         .rows_per_prompt = 2)
   expect_true(any(grepl("object", p_plain$issues[[1]])))
 
   p_tags <- llm_preview(df, prompt = "{text}", .return = "object",
-                        .batch_size = 2, .tags = c("a", "b"))
+                        .rows_per_prompt = 2, .tags = c("a", "b"))
   expect_false(any(grepl("object", unlist(p_tags$issues))))
 })
 

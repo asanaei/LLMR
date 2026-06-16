@@ -378,7 +378,7 @@ test_that("row-like tag names are rejected in batched tag mode", {
   cfg <- llm_config("openai", "m")
   expect_error(
     llm_fn_tags(c("a", "b"), "{x}", .config = cfg,
-                .tags = c("row_1", "other"), .batch_size = 2),
+                .tags = c("row_1", "other"), .rows_per_prompt = 2),
     "row_N|<row_"
   )
 })

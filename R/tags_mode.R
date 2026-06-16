@@ -20,7 +20,7 @@
   if (any(bad)) {
     stop("Tag name(s) ", paste(shQuote(tags[bad]), collapse = ", "),
          " collide with the <row_N> markers used by batched mode ",
-         "(.batch_size > 1). Rename the tag or use .batch_size = 1.",
+         "(.rows_per_prompt > 1). Rename the tag or use .rows_per_prompt = 1.",
          call. = FALSE)
   }
   invisible(tags)
@@ -282,9 +282,9 @@ llm_mutate_tags <- function(.data,
                             .after = NULL,
                             .tags,
                             .fields = NULL,
-                            .batch_size = 1L,
-                            .batch_payload = c("user", "system"),
-                            .batch_recovery = c("halve_recursive", "halve_once",
+                            .rows_per_prompt = 1L,
+                            .rowpack_payload = c("user", "system"),
+                            .rowpack_recovery = c("halve_recursive", "halve_once",
                                                 "singletons", "retry_same", "none"),
                             ...) {
   tags <- .validate_tags(.tags)
@@ -292,9 +292,9 @@ llm_mutate_tags <- function(.data,
   before_missing <- missing(.before)
   after_missing <- missing(.after)
   dots <- rlang::dots_list(...)
-  .batched <- .validate_batch_size(.batch_size)
-  .batch_payload  <- match.arg(.batch_payload)
-  .batch_recovery <- match.arg(.batch_recovery)
+  .batched <- .validate_rows_per_prompt(.rows_per_prompt)
+  .rowpack_payload  <- match.arg(.rowpack_payload)
+  .rowpack_recovery <- match.arg(.rowpack_recovery)
 
   if (.batched) {
     .assert_batch_not_embedding(.config)
@@ -307,8 +307,8 @@ llm_mutate_tags <- function(.data,
       .before = if (before_missing) NULL else .before,
       .after  = if (after_missing) NULL else .after,
       tags = tags, .fields = .fields,
-      .batch_size = .batch_size, .batch_payload = .batch_payload,
-      .batch_recovery = .batch_recovery, dots = dots))
+      .rows_per_prompt = .rows_per_prompt, .rowpack_payload = .rowpack_payload,
+      .rowpack_recovery = .rowpack_recovery, dots = dots))
   }
 
   prompted <- .add_tag_prompt(.messages, .system_prompt, tags)
@@ -354,7 +354,7 @@ llm_mutate_tags <- function(.data,
 #'   tibble with the parsed tag columns and diagnostics; `"text"` returns the
 #'   raw response text. Unlike [llm_fn()], `"object"` here returns the parsed tag
 #'   data (a list, one element per row), not `llmr_response` objects; this form
-#'   is also supported together with `.batch_size > 1`.
+#'   is also supported together with `.rows_per_prompt > 1`.
 #' @seealso [llm_fn()], [llm_mutate_tags()], [llm_parse_tags_col()],
 #'   [call_llm_par_tags()]
 #' @export
@@ -366,16 +366,16 @@ llm_fn_tags <- function(x,
                         .tags,
                         .fields = NULL,
                         .return = c("columns", "text", "object"),
-                        .batch_size = 1L,
-                        .batch_payload = c("user", "system"),
-                        .batch_recovery = c("halve_recursive", "halve_once",
+                        .rows_per_prompt = 1L,
+                        .rowpack_payload = c("user", "system"),
+                        .rowpack_recovery = c("halve_recursive", "halve_once",
                                             "singletons", "retry_same", "none")) {
 
   tags <- .validate_tags(.tags)
   .return <- match.arg(.return)
-  .batched <- .validate_batch_size(.batch_size)
-  .batch_payload  <- match.arg(.batch_payload)
-  .batch_recovery <- match.arg(.batch_recovery)
+  .batched <- .validate_rows_per_prompt(.rows_per_prompt)
+  .rowpack_payload  <- match.arg(.rowpack_payload)
+  .rowpack_recovery <- match.arg(.rowpack_recovery)
 
   if (.batched) {
     .assert_batch_not_embedding(.config)
@@ -385,8 +385,8 @@ llm_fn_tags <- function(x,
     res <- .run_batched(
       config = .config, per_row_texts = as.character(user_txt),
       system_text = .system_prompt, mode = "tags", tags = tags,
-      batch_size = .batch_size, batch_payload = .batch_payload,
-      batch_recovery = .batch_recovery, dots = rlang::dots_list(...))
+      rows_per_prompt = .rows_per_prompt, rowpack_payload = .rowpack_payload,
+      rowpack_recovery = .rowpack_recovery, dots = rlang::dots_list(...))
     out2 <- llm_parse_tags_col(res, tags = tags, tags_col = "response_text",
                                fields = .fields)
     if (.return == "text")

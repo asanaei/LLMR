@@ -30,7 +30,7 @@ A one-row tibble: \code{n}, \code{n_ok}, \code{n_failed}, \code{ok_rate}, \code{
 \code{n_unknown_tokens}
 (successful rows for which the provider reported no token usage, so the
 token sums above understate the truth), \code{duration_s}, (when a batch id
-column is present) \code{batch_calls} and \code{rows_per_batch_call}, and (when
+column is present) \code{rowpack_calls} and \code{rows_per_rowpack}, and (when
 \code{price_table} is supplied) \code{cost_estimate} in the table's currency.
 }
 \description{

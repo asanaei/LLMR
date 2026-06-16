@@ -10,26 +10,26 @@
 # calls); see the "Row batching" discussion in llm_config()/llm_mutate().
 #
 # Everything here is a thin layer ABOVE call_llm_broadcast()/call_llm_par();
-# those engines are unchanged. The default .batch_size = 1 never enters this
+# those engines are unchanged. The default .rows_per_prompt = 1 never enters this
 # file: the entry points keep their original one-call-per-row path.
 # -------------------------------------------------------------------
 
 # ----- Argument validation (shared by entry points) ------------------------
 
-#' Validate `.batch_size` and report whether batching is active
+#' Validate `.rows_per_prompt` and report whether batching is active
 #'
-#' @param batch_size The user-supplied `.batch_size`.
+#' @param rows_per_prompt The user-supplied `.rows_per_prompt`.
 #' @return `TRUE` when batching is active (`>1` or `Inf`), else `FALSE`.
 #'   `is.infinite` is checked before any integer coercion, since
 #'   `as.integer(Inf)` is `NA`.
 #' @keywords internal
 #' @noRd
-.validate_batch_size <- function(batch_size) {
-  if (!is.numeric(batch_size) || length(batch_size) != 1L ||
-      is.na(batch_size) || batch_size < 1) {
-    stop("`.batch_size` must be a single number >= 1, or Inf.", call. = FALSE)
+.validate_rows_per_prompt <- function(rows_per_prompt) {
+  if (!is.numeric(rows_per_prompt) || length(rows_per_prompt) != 1L ||
+      is.na(rows_per_prompt) || rows_per_prompt < 1) {
+    stop("`.rows_per_prompt` must be a single number >= 1, or Inf.", call. = FALSE)
   }
-  is.infinite(batch_size) || batch_size > 1
+  is.infinite(rows_per_prompt) || rows_per_prompt > 1
 }
 
 #' Error if batching is requested for an embedding configuration
@@ -38,7 +38,7 @@
 .assert_batch_not_embedding <- function(config) {
   if (isTRUE(config$embedding) ||
       grepl("embedding", config$model, ignore.case = TRUE)) {
-    stop(".batch_size controls generative row batching and does not apply to ",
+    stop(".rows_per_prompt controls generative row batching and does not apply to ",
          "embeddings; use get_batched_embeddings(batch_size = ) for ",
          "embedding-call chunking.", call. = FALSE)
   }
@@ -291,7 +291,7 @@
   }, logical(1)))
   if (isTRUE(has_file)) {
     stop("Batched generative mode does not support file/multimodal content. ",
-         "Use .batch_size = 1 for multimodal rows.", call. = FALSE)
+         "Use .rows_per_prompt = 1 for multimodal rows.", call. = FALSE)
   }
   # Assistant turns cannot be carried in a <row_i> payload at all; silently
   # dropping them would change the conversation, so refuse outright.
@@ -300,7 +300,7 @@
   }, logical(1)))
   if (isTRUE(has_assistant)) {
     stop("Batched generative mode does not support assistant turns in message ",
-         "templates. Use .batch_size = 1 for multi-turn messages.", call. = FALSE)
+         "templates. Use .rows_per_prompt = 1 for multi-turn messages.", call. = FALSE)
   }
   # per-row system turns must be identical across rows (a single shared system
   # prompt); otherwise they cannot be hoisted out of the batch.
@@ -311,7 +311,7 @@
   uniq <- unique(lapply(nonuser, unname))
   if (length(uniq) > 1L) {
     stop("Batched generative mode requires a single shared system prompt. ",
-         "Use .batch_size = 1 for per-row system prompts.", call. = FALSE)
+         "Use .rows_per_prompt = 1 for per-row system prompts.", call. = FALSE)
   }
   invisible(TRUE)
 }
@@ -403,7 +403,7 @@
 #' Splits a single batched reply into its numbered `<row_i>` blocks and then
 #' applies the standard flat tag parser ([llm_parse_tags()]) inside each block.
 #' This is the parsing counterpart to the `<row_i>` protocol that LLMR uses when
-#' `.batch_size > 1` together with `.tags`; it is exported so the protocol is
+#' `.rows_per_prompt > 1` together with `.tags`; it is exported so the protocol is
 #' inspectable and testable on its own.
 #'
 #' @param text Character scalar: one batched model response containing
@@ -429,9 +429,9 @@
 #'   "<row_2><age>34</age><job>welder</job></row_2>",
 #'   sep = "\n"
 #' )
-#' llm_parse_batch_tags(txt, tags = c("age", "job"), m = 2)
+#' llm_parse_rowpack_tags(txt, tags = c("age", "job"), m = 2)
 #' @export
-llm_parse_batch_tags <- function(text, tags, m) {
+llm_parse_rowpack_tags <- function(text, tags, m) {
   tags <- .validate_tags(tags)
   m <- as.integer(m)
   if (is.na(m) || m < 1L) stop("`m` must be a positive integer.", call. = FALSE)
@@ -522,16 +522,16 @@ llm_parse_batch_tags <- function(text, tags, m) {
 #'
 #' Partitions rows, composes one `<row_i>` request per batch, dispatches through
 #' the unchanged [call_llm_broadcast()], de-multiplexes the reply back to rows,
-#' and recovers unresolved rows per `.batch_recovery`. Returns a tibble with the
+#' and recovers unresolved rows per `.rowpack_recovery`. Returns a tibble with the
 #' exact [call_llm_par()] column set (in original row order, always `n` rows)
-#' plus `batch_id`, `batch_size`, `batch_row`.
+#' plus `rowpack_id`, `rows_per_prompt`, `rowpack_row`.
 #'
 #' @param config An `llm_config`.
 #' @param per_row_texts Character vector of already-expanded per-row content.
 #' @param system_text Optional shared system prompt.
 #' @param mode One of `"plain"`, `"tags"`, `"structured"`.
 #' @param tags Field tags (tag mode).
-#' @param batch_size,batch_payload,batch_recovery The batching controls.
+#' @param rows_per_prompt,rowpack_payload,rowpack_recovery The batching controls.
 #' @param dots Extra args forwarded to [call_llm_broadcast()] (e.g. `tries`).
 #' @param .broadcast Test seam; defaults to [call_llm_broadcast()].
 #' @return A tibble; see Description.
@@ -540,9 +540,9 @@ llm_parse_batch_tags <- function(text, tags, m) {
 .run_batched <- function(config, per_row_texts, system_text = NULL,
                          mode = c("plain", "tags", "structured"),
                          tags = NULL,
-                         batch_size = 1L,
-                         batch_payload = "user",
-                         batch_recovery = "halve_recursive",
+                         rows_per_prompt = 1L,
+                         rowpack_payload = "user",
+                         rowpack_recovery = "halve_recursive",
                          dots = list(),
                          .broadcast = call_llm_broadcast) {
   mode <- match.arg(mode)
@@ -577,12 +577,12 @@ llm_parse_batch_tags <- function(text, tags, m) {
 
   call_budget <- 3L * n
   calls_made  <- 0L
-  max_depth   <- ceiling(log2(max(if (is.infinite(batch_size)) n else batch_size, 2))) + 2L
+  max_depth   <- ceiling(log2(max(if (is.infinite(rows_per_prompt)) n else rows_per_prompt, 2))) + 2L
 
   # one batch call -> a one-row res_b tibble (via the broadcast seam)
   do_call_batch <- function(rows) {
     msg <- .compose_batch_message(per_row_texts[rows], system_text,
-                                  instruction_for(length(rows)), batch_payload)
+                                  instruction_for(length(rows)), rowpack_payload)
     do.call(.broadcast, c(list(config = config, messages = list(msg)), dots))
   }
 
@@ -614,8 +614,8 @@ llm_parse_batch_tags <- function(text, tags, m) {
   }
 
   # ---- queue-driven recovery ------------------------------------------------
-  # initial queue: partition the n rows by batch_size (Inf -> one batch)
-  init_parts <- .batch_partition(n, batch_size)
+  # initial queue: partition the n rows by rows_per_prompt (Inf -> one batch)
+  init_parts <- .batch_partition(n, rows_per_prompt)
   queue <- lapply(seq_along(init_parts), function(j) {
     list(rows = init_parts[[j]], depth = 0L, bid = as.character(j))
   })
@@ -628,7 +628,7 @@ llm_parse_batch_tags <- function(text, tags, m) {
 
     # m == 1 -> normal UNWRAPPED singleton (single parse semantics)
     if (m == 1L) {
-      if (calls_made >= call_budget) { fail_rows(g_rows, "error:batch_budget"); next }
+      if (calls_made >= call_budget) { fail_rows(g_rows, "error:rowpack_budget"); next }
       g <- g_rows[1]
       smsg <- if (is.null(system_text)) per_row_texts[g] else
         c(system = system_text, user = per_row_texts[g])
@@ -641,13 +641,13 @@ llm_parse_batch_tags <- function(text, tags, m) {
                    if (b$depth == 0L) "ok" else "recovered",
                    b$bid, 1L, 1L, TRUE, rb)
       } else {
-        fail_rows(g, rb$finish_reason[1] %||% "error:batch_call", rb, b$bid,
+        fail_rows(g, rb$finish_reason[1] %||% "error:rowpack_call", rb, b$bid,
                   tokens_available = TRUE)
       }
       next
     }
 
-    if (calls_made >= call_budget) { fail_rows(g_rows, "error:batch_budget"); next }
+    if (calls_made >= call_budget) { fail_rows(g_rows, "error:rowpack_budget"); next }
     res_b <- do_call_batch(g_rows)
     calls_made <- calls_made + 1L
 
@@ -708,7 +708,7 @@ llm_parse_batch_tags <- function(text, tags, m) {
     if (!length(U)) next
 
     # ---- decide recovery for the unresolved set U --------------------------
-    if (identical(batch_recovery, "none") || b$depth >= max_depth) {
+    if (identical(rowpack_recovery, "none") || b$depth >= max_depth) {
       fail_rows(U, .terminal_reason(res_b), res_b, b$bid,
                 tokens_available = !tokens_credited); next
     }
@@ -725,16 +725,16 @@ llm_parse_batch_tags <- function(text, tags, m) {
       }
     }
 
-    if (identical(batch_recovery, "retry_same")) {
+    if (identical(rowpack_recovery, "retry_same")) {
       if (b$depth + 1L >= max_depth) {
         fail_rows(U, .terminal_reason(res_b), res_b, b$bid,
                   tokens_available = !tokens_credited); next
       }
       queue[[length(queue) + 1L]] <- list(rows = U, depth = b$depth + 1L,
                                           bid = paste0(b$bid, ".r"))
-    } else if (identical(batch_recovery, "singletons") || head_only || ctxerr) {
+    } else if (identical(rowpack_recovery, "singletons") || head_only || ctxerr) {
       enqueue_chunks(1L)
-    } else if (identical(batch_recovery, "halve_once")) {
+    } else if (identical(rowpack_recovery, "halve_once")) {
       k2 <- max(1L, as.integer(ceiling(m / 2)))
       if (k2 >= m) k2 <- 1L
       # halve_once: split once; children at depth that prevents further recursion
@@ -754,7 +754,7 @@ llm_parse_batch_tags <- function(text, tags, m) {
 
   # rows never touched (e.g. budget) -> terminal NA
   for (g in which(status == "unresolved")) {
-    finish[g] <- "error:batch_unresolved"
+    finish[g] <- "error:rowpack_unresolved"
     status[g] <- "failed"
     meta[[g]] <- .empty_meta()
   }
@@ -798,10 +798,10 @@ llm_parse_batch_tags <- function(text, tags, m) {
     !!paste0(nm, "_param")    := res$bad_param,
     !!paste0(nm, "_t")        := res$duration
   )
-  if (all(c("batch_id", "batch_size", "batch_row") %in% names(res))) {
-    added[[paste0(nm, "_batch")]] <- res$batch_id
-    added[[paste0(nm, "_bn")]]    <- res$batch_size
-    added[[paste0(nm, "_bi")]]    <- res$batch_row
+  if (all(c("rowpack_id", "rows_per_prompt", "rowpack_row") %in% names(res))) {
+    added[[paste0(nm, "_rowpack")]] <- res$rowpack_id
+    added[[paste0(nm, "_rpn")]]    <- res$rows_per_prompt
+    added[[paste0(nm, "_rpi")]]    <- res$rowpack_row
   }
   res_df <- dplyr::bind_cols(
     .llm_drop_clobbered(.data, names(added), context = "llm_mutate()"),
@@ -831,15 +831,15 @@ llm_parse_batch_tags <- function(text, tags, m) {
 #' @noRd
 .llm_structured_batched <- function(x = NULL, prompt, .config, .system_prompt,
                                     .schema, .fields, .validate_local = TRUE,
-                                    .batch_size, .batch_payload, .batch_recovery,
+                                    .rows_per_prompt, .rowpack_payload, .rowpack_recovery,
                                     dots,
                                     data_df = NULL, output = NULL,
                                     .before = NULL, .after = NULL) {
   .assert_batch_not_embedding(.config)
-  warning("Structured output with .batch_size > 1 packs rows into one JSON ",
+  warning("Structured output with .rows_per_prompt > 1 packs rows into one JSON ",
           "object {\"results\":[{\"row\":i, ...}]} and relies on the model ",
           "honoring that protocol; per-element results are parsed and ",
-          "validated locally. Use .batch_size = 1 for strict provider-side ",
+          "validated locally. Use .rows_per_prompt = 1 for strict provider-side ",
           "schema enforcement.", call. = FALSE, immediate. = FALSE)
 
   # ensure JSON-object mode so the wrapper parses cleanly (OpenAI-compatible);
@@ -860,8 +860,8 @@ llm_parse_batch_tags <- function(text, tags, m) {
 
   res <- .run_batched(
     config = cfg, per_row_texts = per_row, system_text = .system_prompt,
-    mode = "structured", batch_size = .batch_size,
-    batch_payload = .batch_payload, batch_recovery = .batch_recovery, dots = dots)
+    mode = "structured", rows_per_prompt = .rows_per_prompt,
+    rowpack_payload = .rowpack_payload, rowpack_recovery = .rowpack_recovery, dots = dots)
 
   fields_auto <- if (is.null(.fields) && !is.null(.schema))
     .auto_fields_from_schema(.schema) else .fields
@@ -896,8 +896,8 @@ llm_parse_batch_tags <- function(text, tags, m) {
 .llm_mutate_tags_batched <- function(.data, output, prompt, .messages, .config,
                                      .system_prompt, .before, .after,
                                      tags, .fields,
-                                     .batch_size, .batch_payload,
-                                     .batch_recovery, dots) {
+                                     .rows_per_prompt, .rowpack_payload,
+                                     .rowpack_recovery, dots) {
   n <- nrow(.data)
   # determine the output column name
   out_name <- if (is.null(output)) "llm_tags" else rlang::as_name(output)
@@ -928,8 +928,8 @@ llm_parse_batch_tags <- function(text, tags, m) {
 
   res <- .run_batched(
     config = .config, per_row_texts = per_row, system_text = sys_shared,
-    mode = "tags", tags = tags, batch_size = .batch_size,
-    batch_payload = .batch_payload, batch_recovery = .batch_recovery, dots = dots)
+    mode = "tags", tags = tags, rows_per_prompt = .rows_per_prompt,
+    rowpack_payload = .rowpack_payload, rowpack_recovery = .rowpack_recovery, dots = dots)
 
   out_sym <- rlang::sym(out_name)
   res_df <- .assemble_mutate_columns(
@@ -957,12 +957,12 @@ llm_parse_batch_tags <- function(text, tags, m) {
 #' @keywords internal
 #' @noRd
 .terminal_reason <- function(res_b) {
-  if (is.null(res_b)) return("error:batch_call")
+  if (is.null(res_b)) return("error:rowpack_call")
   if (!isTRUE(res_b$success[1])) {
-    return(res_b$finish_reason[1] %||% "error:batch_call")
+    return(res_b$finish_reason[1] %||% "error:rowpack_call")
   }
-  if (identical(res_b$finish_reason[1], "length")) return("error:batch_truncated")
-  "error:batch_missing_row"
+  if (identical(res_b$finish_reason[1], "length")) return("error:rowpack_truncated")
+  "error:rowpack_missing_row"
 }
 
 #' Assemble the per-row result tibble in original order
@@ -1003,9 +1003,9 @@ llm_parse_batch_tags <- function(text, tags, m) {
     response          = replicate(n, NULL, simplify = FALSE)
   )
   if (isTRUE(grouped)) {
-    res$batch_id   <- bid_col
-    res$batch_size <- bsz_col
-    res$batch_row  <- bri_col
+    res$rowpack_id   <- bid_col
+    res$rows_per_prompt <- bsz_col
+    res$rowpack_row  <- bri_col
   }
   res
 }

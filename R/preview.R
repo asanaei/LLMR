@@ -72,7 +72,7 @@ llm_render_messages <- function(.data,
 #' no file I/O), then reports a tidy, row-level summary: the rendered text, the
 #' roles, character counts, file presence and existence, the batch plan, and a
 #' list-column of `issues`. Problems that would only surface mid-run (a missing
-#' file, a `"file"` role combined with `.batch_size > 1`, an embedding config
+#' file, a `"file"` role combined with `.rows_per_prompt > 1`, an embedding config
 #' with row batching, `.return = "object"` with batching, a schema supplied
 #' without `.structured`, a template that references `NA` values or renders an
 #' empty prompt, a file part with no accompanying user text, or a tag name that
@@ -80,8 +80,8 @@ llm_render_messages <- function(.data,
 #' see all of them at once rather than hitting the first error.
 #'
 #' Batched data travels inside numbered `<row_i>...</row_i>` tags; the
-#' `batch_id` / `batch_size` / `batch_row` columns show how rows would be
-#' grouped into calls at the given `.batch_size`.
+#' `rowpack_id` / `rows_per_prompt` / `rowpack_row` columns show how rows would be
+#' grouped into calls at the given `.rows_per_prompt`.
 #'
 #' @inheritParams llm_render_messages
 #' @param .config Optional [llm_config()]. When supplied, preview checks the
@@ -95,21 +95,21 @@ llm_render_messages <- function(.data,
 #'   `.structured = TRUE` (structured takes precedence).
 #' @param .return One of `"columns"`, `"text"`, `"object"`. Only used to flag
 #'   the unsupported `"object"` + batching combination.
-#' @param .batch_size Rows per call. `1` (default) means one call per row;
+#' @param .rows_per_prompt Rows per call. `1` (default) means one call per row;
 #'   `> 1` or `Inf` packs rows into batched calls.
 #' @param max_chars Truncate each row's rendered preview to this many characters
 #'   (default 500). Set higher to see full prompts.
 #'
 #' @return A tibble of class `llmr_preview`, one row per previewed input row,
 #'   with columns: `row`, `ok` (no issues), `roles`, `rendered_preview`,
-#'   `chars`, `has_file`, `file_ok`, `batch_id`, `batch_size`, `batch_row`, and
+#'   `chars`, `has_file`, `file_ok`, `rowpack_id`, `rows_per_prompt`, `rowpack_row`, and
 #'   `issues` (a list-column of character vectors).
 #'
 #' @seealso [llm_render_messages()], [llm_usage()], [llm_failures()].
 #'
 #' @examples
 #' df <- data.frame(text = c("a", "b", "c"), stringsAsFactors = FALSE)
-#' llm_preview(df, prompt = "Classify: {text}", .batch_size = 2)
+#' llm_preview(df, prompt = "Classify: {text}", .rows_per_prompt = 2)
 #' @export
 llm_preview <- function(.data,
                         prompt = NULL,
@@ -120,7 +120,7 @@ llm_preview <- function(.data,
                         .schema = NULL,
                         .tags = NULL,
                         .return = c("columns", "text", "object"),
-                        .batch_size = 1L,
+                        .rows_per_prompt = 1L,
                         rows = NULL,
                         max_chars = 500L) {
   if (!is.data.frame(.data)) {
@@ -132,21 +132,21 @@ llm_preview <- function(.data,
     stop("`.config` must be an `llm_config` object (or NULL).", call. = FALSE)
   }
 
-  # Same activation rule as the real path (Inf-safe; see .validate_batch_size).
-  batch_active <- .validate_batch_size(.batch_size)
+  # Same activation rule as the real path (Inf-safe; see .validate_rows_per_prompt).
+  batch_active <- .validate_rows_per_prompt(.rows_per_prompt)
 
   msgs <- .llm_build_messages_df(.data, prompt, .messages, .system_prompt)
   n <- length(msgs)
 
   # Deterministic batch plan: identical partition the engine would use.
-  parts <- .batch_partition(n, .batch_size)
-  batch_id  <- rep(NA_integer_, n)
-  batch_row <- rep(NA_integer_, n)
+  parts <- .batch_partition(n, .rows_per_prompt)
+  rowpack_id  <- rep(NA_integer_, n)
+  rowpack_row <- rep(NA_integer_, n)
   batch_n   <- rep(NA_integer_, n)
   for (j in seq_along(parts)) {
     idx <- parts[[j]]
-    batch_id[idx]  <- j
-    batch_row[idx] <- seq_along(idx)
+    rowpack_id[idx]  <- j
+    rowpack_row[idx] <- seq_along(idx)
     batch_n[idx]   <- length(idx)
   }
 
@@ -177,17 +177,17 @@ llm_preview <- function(.data,
     issues <- character(0)
     if (has_file && isTRUE(batch_active)) {
       issues <- c(issues,
-                  "file/multimodal rows are not supported with .batch_size > 1 (use .batch_size = 1)")
+                  "file/multimodal rows are not supported with .rows_per_prompt > 1 (use .rows_per_prompt = 1)")
     }
     if (is_embedding && isTRUE(batch_active)) {
       issues <- c(issues,
-                  ".batch_size controls generative row batching and does not apply to embeddings; use get_batched_embeddings(batch_size = )")
+                  ".rows_per_prompt controls generative row batching and does not apply to embeddings; use get_batched_embeddings(batch_size = )")
     }
     # Plain and structured batched paths reject .return = "object"; the tag path
     # (when .tags is supplied) supports it by returning parsed tag data per row.
     if (identical(.return, "object") && isTRUE(batch_active) && is.null(.tags)) {
       issues <- c(issues,
-                  ".return = \"object\" is not supported with .batch_size > 1 (except in tag mode)")
+                  ".return = \"object\" is not supported with .rows_per_prompt > 1 (except in tag mode)")
     }
     if (has_file && !isTRUE(file_ok)) {
       issues <- c(issues, "one or more file paths do not exist on disk")
@@ -230,9 +230,9 @@ llm_preview <- function(.data,
       chars            = sum(nchar(unname(m))),
       has_file         = has_file,
       file_ok          = file_ok,
-      batch_id         = batch_id[i],
-      batch_size       = batch_n[i],
-      batch_row        = batch_row[i],
+      rowpack_id         = rowpack_id[i],
+      rows_per_prompt       = batch_n[i],
+      rowpack_row        = rowpack_row[i],
       issues           = list(issues)
     )
   }
@@ -244,8 +244,8 @@ llm_preview <- function(.data,
       row = integer(0), ok = logical(0), roles = character(0),
       rendered_preview = character(0), chars = integer(0),
       has_file = logical(0), file_ok = logical(0),
-      batch_id = integer(0), batch_size = integer(0),
-      batch_row = integer(0), issues = list()
+      rowpack_id = integer(0), rows_per_prompt = integer(0),
+      rowpack_row = integer(0), issues = list()
     )
   }
   class(out) <- unique(c("llmr_preview", class(out)))
@@ -256,7 +256,7 @@ llm_preview <- function(.data,
 print.llmr_preview <- function(x, ...) {
   n_rows  <- nrow(x)
   n_bad   <- sum(!x$ok)
-  n_calls <- length(unique(stats::na.omit(x$batch_id)))
+  n_calls <- length(unique(stats::na.omit(x$rowpack_id)))
   cat(sprintf("# llmr_preview: %d row%s, %d call%s, %d row%s with issues\n",
               n_rows, if (n_rows == 1L) "" else "s",
               n_calls, if (n_calls == 1L) "" else "s",

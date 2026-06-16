@@ -14,9 +14,9 @@ llm_fn_structured(
   .fields = NULL,
   .local_only = FALSE,
   .validate_local = TRUE,
-  .batch_size = 1L,
-  .batch_payload = c("user", "system"),
-  .batch_recovery = c("halve_recursive", "halve_once", "singletons", "retry_same",
+  .rows_per_prompt = 1L,
+  .rowpack_payload = c("user", "system"),
+  .rowpack_recovery = c("halve_recursive", "halve_once", "singletons", "retry_same",
     "none")
 )
 }
@@ -41,7 +41,7 @@ columns (\code{{col}}); with a vector the placeholder is \code{{x}}.}
 
 \item{.validate_local}{If TRUE and \code{.schema} provided, validate locally.}
 
-\item{.batch_size}{Integer scalar, or \code{Inf}. Number of input elements packed
+\item{.rows_per_prompt}{Integer scalar, or \code{Inf}. Number of input elements packed
 into a single generative request. The default, \code{1}, sends one request per
 element (the historical behaviour). When greater than \code{1}, elements are
 grouped and transmitted in one call wrapped in numbered
@@ -49,13 +49,13 @@ grouped and transmitted in one call wrapped in numbered
 elements in a single call. Ignored for embedding configurations, which use
 \code{\link[=get_batched_embeddings]{get_batched_embeddings()}} instead.}
 
-\item{.batch_payload}{One of \code{c("user","system")}. Channel to which the
+\item{.rowpack_payload}{One of \code{c("user","system")}. Channel to which the
 \verb{<row_i>} data block is appended when batching. The imperative instruction
 is always placed in the system message; this argument controls only where
 the data goes. The default, \code{"user"}, keeps a static system prompt
 cacheable.}
 
-\item{.batch_recovery}{How to handle rows that a batched call leaves
+\item{.rowpack_recovery}{How to handle rows that a batched call leaves
 unresolved (dropped, malformed, or truncated). One of:
 \describe{
 \item{\code{"halve_recursive"}}{(default) re-issue the unresolved rows at half

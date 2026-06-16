@@ -100,9 +100,9 @@ test_that(".batch_split_rows handles the adversarial corpus", {
                    "first")
 })
 
-test_that("llm_parse_batch_tags equals per-row flat parse", {
+test_that("llm_parse_rowpack_tags equals per-row flat parse", {
   txt <- "<row_1><age>21</age><job>barista</job></row_1>\n<row_2><age>34</age><job>welder</job></row_2>"
-  pp <- llm_parse_batch_tags(txt, c("age", "job"), 2)
+  pp <- llm_parse_rowpack_tags(txt, c("age", "job"), 2)
   f1 <- LLMR:::llm_parse_tags("<age>21</age><job>barista</job>", c("age", "job"))
   expect_identical(pp[[1]], f1)
   expect_identical(pp[[2]]$age, "34")
@@ -113,8 +113,8 @@ test_that("llm_parse_batch_tags equals per-row flat parse", {
 test_that("engine returns n rows, original order, correct global remap", {
   for (k in c(2, 3, 5, Inf)) {
     res <- LLMR:::.run_batched(CFG, TXT, NULL, mode = "tags",
-      tags = c("age", "job"), batch_size = k, batch_payload = "user",
-      batch_recovery = "halve_recursive", .broadcast = echo_tags)
+      tags = c("age", "job"), rows_per_prompt = k, rowpack_payload = "user",
+      rowpack_recovery = "halve_recursive", .broadcast = echo_tags)
     expect_identical(nrow(res), 5L)
     p <- LLMR:::llm_parse_tags_col(res, tags = c("age", "job"),
                                    tags_col = "response_text")
@@ -125,23 +125,23 @@ test_that("engine returns n rows, original order, correct global remap", {
 
 test_that("token totals attributed once per batch (no k-times overcount)", {
   res <- LLMR:::.run_batched(CFG, TXT, NULL, mode = "tags",
-    tags = c("age", "job"), batch_size = 2, batch_payload = "user",
-    batch_recovery = "halve_recursive", .broadcast = echo_tags)
-  per_batch <- tapply(res$total_tokens, res$batch_id,
+    tags = c("age", "job"), rows_per_prompt = 2, rowpack_payload = "user",
+    rowpack_recovery = "halve_recursive", .broadcast = echo_tags)
+  per_batch <- tapply(res$total_tokens, res$rowpack_id,
                       function(x) sum(!is.na(x)))
   expect_true(all(per_batch == 1L))
 })
 
 test_that("result column set matches call_llm_par plus batch columns", {
   res <- LLMR:::.run_batched(CFG, TXT, NULL, mode = "tags",
-    tags = c("age", "job"), batch_size = 2, batch_payload = "user",
-    batch_recovery = "halve_recursive", .broadcast = echo_tags)
+    tags = c("age", "job"), rows_per_prompt = 2, rowpack_payload = "user",
+    rowpack_recovery = "halve_recursive", .broadcast = echo_tags)
   core <- c("response_text", "raw_response_json", "success", "error_message",
             "finish_reason", "sent_tokens", "rec_tokens", "total_tokens",
             "reasoning_tokens", "response_id", "duration", "status_code",
             "error_code", "bad_param", "response")
   expect_true(all(core %in% names(res)))
-  expect_true(all(c("batch_id", "batch_size", "batch_row") %in% names(res)))
+  expect_true(all(c("rowpack_id", "rows_per_prompt", "rowpack_row") %in% names(res)))
 })
 
 # ---- recovery -------------------------------------------------------------
@@ -161,10 +161,10 @@ test_that("partial batch recovers the dropped rows", {
     }
   }
   res <- LLMR:::.run_batched(CFG, TXT, NULL, mode = "tags",
-    tags = c("age", "job"), batch_size = 2, batch_payload = "user",
-    batch_recovery = "halve_recursive", .broadcast = drop_local2)
+    tags = c("age", "job"), rows_per_prompt = 2, rowpack_payload = "user",
+    rowpack_recovery = "halve_recursive", .broadcast = drop_local2)
   expect_true(all(res$success))
-  expect_true(any(grepl("\\.", res$batch_id)))  # split lineage present
+  expect_true(any(grepl("\\.", res$rowpack_id)))  # split lineage present
 })
 
 test_that("recovery = none leaves dropped rows failed", {
@@ -176,8 +176,8 @@ test_that("recovery = none leaves dropped rows failed", {
                   collapse = "\n"))
   }
   res <- LLMR:::.run_batched(CFG, TXT, NULL, mode = "tags",
-    tags = c("age", "job"), batch_size = 5, batch_payload = "user",
-    batch_recovery = "none", .broadcast = drop_local2)
+    tags = c("age", "job"), rows_per_prompt = 5, rowpack_payload = "user",
+    rowpack_recovery = "none", .broadcast = drop_local2)
   expect_equal(sum(!res$success), 1L)
   expect_match(res$finish_reason[!res$success], "^error:")
 })
@@ -192,8 +192,8 @@ test_that("whole-batch transport failure recovers via split", {
     mk_res(paste0("<age>", 20 + g, "</age><job>j", g, "</job>"))
   }
   res <- LLMR:::.run_batched(CFG, TXT, NULL, mode = "tags",
-    tags = c("age", "job"), batch_size = 5, batch_payload = "user",
-    batch_recovery = "halve_recursive", .broadcast = fail_big)
+    tags = c("age", "job"), rows_per_prompt = 5, rowpack_payload = "user",
+    rowpack_recovery = "halve_recursive", .broadcast = fail_big)
   expect_true(all(res$success))
 })
 
@@ -213,7 +213,7 @@ test_that("call budget bounds pathological recursion", {
     }
   }
   res <- LLMR:::.run_batched(CFG, TXT, NULL, mode = "tags", tags = c("age"),
-    batch_size = 5, batch_payload = "user", batch_recovery = "halve_recursive",
+    rows_per_prompt = 5, rowpack_payload = "user", rowpack_recovery = "halve_recursive",
     .broadcast = always_drop)
   expect_identical(nrow(res), 5L)
   expect_lte(spy$calls, 3L * 5L)   # <= 3n budget
@@ -234,7 +234,7 @@ test_that("finish_reason length distrusts the last present block", {
     }
   }
   res <- LLMR:::.run_batched(CFG, TXT, NULL, mode = "tags", tags = c("age"),
-    batch_size = 5, batch_payload = "user", batch_recovery = "halve_recursive",
+    rows_per_prompt = 5, rowpack_payload = "user", rowpack_recovery = "halve_recursive",
     .broadcast = trunc_echo)
   # all rows eventually resolve (last block recovered as a singleton)
   expect_true(all(res$success))
@@ -256,7 +256,7 @@ test_that("structured batch de-multiplexes by integer row", {
     }
   }
   res <- LLMR:::.run_batched(CFG, TXT, NULL, mode = "structured",
-    batch_size = 3, batch_payload = "user", batch_recovery = "halve_recursive",
+    rows_per_prompt = 3, rowpack_payload = "user", rowpack_recovery = "halve_recursive",
     .broadcast = echo_struct)
   expect_identical(nrow(res), 5L)
   expect_true(all(res$success))
@@ -269,27 +269,27 @@ test_that("structured batch de-multiplexes by integer row", {
 
 test_that("n = 0 returns an empty frame without error", {
   res <- LLMR:::.run_batched(CFG, character(0), NULL, mode = "tags",
-    tags = c("age"), batch_size = 3, batch_payload = "user",
-    batch_recovery = "halve_recursive", .broadcast = echo_tags)
+    tags = c("age"), rows_per_prompt = 3, rowpack_payload = "user",
+    rowpack_recovery = "halve_recursive", .broadcast = echo_tags)
   expect_identical(nrow(res), 0L)
 })
 
 # ---- argument guards ------------------------------------------------------
 
-test_that(".batch_size validation rejects bad values", {
-  expect_false(LLMR:::.validate_batch_size(1))
-  expect_true(LLMR:::.validate_batch_size(2))
-  expect_true(LLMR:::.validate_batch_size(Inf))
-  expect_error(LLMR:::.validate_batch_size(0), ">= 1")
-  expect_error(LLMR:::.validate_batch_size(c(1, 2)), ">= 1")
-  expect_error(LLMR:::.validate_batch_size(NA), ">= 1")
-  expect_error(LLMR:::.validate_batch_size("x"), ">= 1")
+test_that(".rows_per_prompt validation rejects bad values", {
+  expect_false(LLMR:::.validate_rows_per_prompt(1))
+  expect_true(LLMR:::.validate_rows_per_prompt(2))
+  expect_true(LLMR:::.validate_rows_per_prompt(Inf))
+  expect_error(LLMR:::.validate_rows_per_prompt(0), ">= 1")
+  expect_error(LLMR:::.validate_rows_per_prompt(c(1, 2)), ">= 1")
+  expect_error(LLMR:::.validate_rows_per_prompt(NA), ">= 1")
+  expect_error(LLMR:::.validate_rows_per_prompt("x"), ">= 1")
 })
 
 test_that("embedding config + batching is a hard error", {
   ecfg <- llm_config("openai", "text-embedding-3-small")
   expect_error(LLMR:::.assert_batch_not_embedding(ecfg), "embedding")
-  expect_error(llm_fn(c("a", "b"), "{x}", .config = ecfg, .batch_size = 2),
+  expect_error(llm_fn(c("a", "b"), "{x}", .config = ecfg, .rows_per_prompt = 2),
                "embedding")
 })
 
@@ -307,7 +307,7 @@ with_stub_broadcast <- function(stub, expr) {
   force(expr)
 }
 
-test_that("default .batch_size = 1 keeps the legacy llm_mutate columns", {
+test_that("default .rows_per_prompt = 1 keeps the legacy llm_mutate columns", {
   mk <- function(config, messages, ...) {
     n <- length(messages)
     tibble::tibble(message_index = seq_len(n), provider = "mock", model = "mock",
@@ -325,7 +325,7 @@ test_that("default .batch_size = 1 keeps the legacy llm_mutate columns", {
     c("ans", "ans_finish", "ans_sent", "ans_rec", "ans_tot", "ans_reason",
       "ans_cached", "ans_ok", "ans_err", "ans_id", "ans_status", "ans_ecode",
       "ans_param", "ans_t"))
-  expect_false(any(grepl("_batch|_bn|_bi", names(out))))
+  expect_false(any(grepl("_rowpack|_rpn|_rpi", names(out))))
 })
 
 test_that("batched llm_mutate adds batch columns and resolves rows", {
@@ -349,10 +349,10 @@ test_that("batched llm_mutate adds batch columns and resolves rows", {
   df <- tibble::tibble(city = paste0("C", 1:5))
   cfg <- llm_config("openai", "gpt-4.1-nano")
   out <- with_stub_broadcast(stub,
-    llm_mutate(df, ans, prompt = "{city}", .config = cfg, .batch_size = 2))
+    llm_mutate(df, ans, prompt = "{city}", .config = cfg, .rows_per_prompt = 2))
   expect_identical(out$ans, paste0("ANS", 1:5))
-  expect_true(all(c("ans_batch", "ans_bn", "ans_bi") %in% names(out)))
+  expect_true(all(c("ans_rowpack", "ans_rpn", "ans_rpi") %in% names(out)))
   # token totals attributed once per batch
-  per_batch <- tapply(out$ans_tot, out$ans_batch, function(x) sum(!is.na(x)))
+  per_batch <- tapply(out$ans_tot, out$ans_rowpack, function(x) sum(!is.na(x)))
   expect_true(all(per_batch == 1L))
 })

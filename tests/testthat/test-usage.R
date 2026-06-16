@@ -118,20 +118,20 @@ test_that("llm_usage sums batched tokens correctly (tokens on first row, NA rest
     total_tokens     = c(90L, NA_integer_, NA_integer_),
     reasoning_tokens = c(NA_integer_, NA_integer_, NA_integer_),
     duration         = c(1.0, NA_real_, NA_real_),
-    batch_id         = c(1L, 1L, 1L),
-    batch_size       = c(3L, 3L, 3L),
-    batch_row        = c(1L, 2L, 3L)
+    rowpack_id         = c(1L, 1L, 1L),
+    rows_per_prompt       = c(3L, 3L, 3L),
+    rowpack_row        = c(1L, 2L, 3L)
   )
   u <- llm_usage(batched)
   expect_equal(u$total_tokens, 90L)         # not corrupted by the NAs
-  expect_equal(u$batch_calls, 1L)
-  expect_equal(u$rows_per_batch_call, 3)
+  expect_equal(u$rowpack_calls, 1L)
+  expect_equal(u$rows_per_rowpack, 3)
 })
 
 test_that("non-batched usage reports NA batch fields", {
   u <- llm_usage(par_res)
-  expect_true(is.na(u$batch_calls))
-  expect_true(is.na(u$rows_per_batch_call))
+  expect_true(is.na(u$rowpack_calls))
+  expect_true(is.na(u$rows_per_rowpack))
 })
 
 test_that("token sums report only tokens, never dollars (no cost columns)", {

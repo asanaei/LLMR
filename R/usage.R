@@ -37,9 +37,9 @@
     ecode     = "error_code",
     param     = "bad_param",
     duration  = "duration",
-    batch     = "batch_id",
+    batch     = "rowpack_id",
     batch_n   = "batch_size",
-    batch_i   = "batch_row"
+    batch_i   = "rowpack_row"
   )
 
   # Collision-renamed call_llm_par() result: when the input frame already had a
@@ -105,9 +105,9 @@
     ecode     = paste0(prefix, "_ecode"),
     param     = paste0(prefix, "_param"),
     duration  = paste0(prefix, "_t"),
-    batch     = paste0(prefix, "_batch"),
-    batch_n   = paste0(prefix, "_bn"),
-    batch_i   = paste0(prefix, "_bi")
+    batch     = paste0(prefix, "_rowpack"),
+    batch_n   = paste0(prefix, "_rpn"),
+    batch_i   = paste0(prefix, "_rpi")
   )
   pref[!(pref %in% nm)] <- NA_character_
   pref
@@ -153,7 +153,7 @@
 #'   `n_unknown_tokens`
 #'   (successful rows for which the provider reported no token usage, so the
 #'   token sums above understate the truth), `duration_s`, (when a batch id
-#'   column is present) `batch_calls` and `rows_per_batch_call`, and (when
+#'   column is present) `rowpack_calls` and `rows_per_rowpack`, and (when
 #'   `price_table` is supplied) `cost_estimate` in the table's currency.
 #'
 #' @seealso [llm_failures()], [llm_preview()], [llm_par_resume()].
@@ -213,8 +213,8 @@ llm_usage <- function(x, prefix = NULL, price_table = NULL) {
     cached_tokens    = sum(cached,    na.rm = TRUE),
     n_unknown_tokens = n_unknown_tokens,
     duration_s       = sum(duration,  na.rm = TRUE),
-    batch_calls         = if (has_batch) uniq_batches else NA_integer_,
-    rows_per_batch_call = if (has_batch) n / uniq_batches else NA_real_
+    rowpack_calls         = if (has_batch) uniq_batches else NA_integer_,
+    rows_per_rowpack = if (has_batch) n / uniq_batches else NA_real_
   )
   if (!is.null(price_table)) {
     out$cost_estimate <- .llm_cost_estimate(x, m, price_table)

@@ -252,7 +252,7 @@ test_that("preview flags NA templates and empty prompts", {
 
 test_that("preview flags row-like tags under batching", {
   df <- tibble::tibble(x = "a")
-  pv <- llm_preview(df, prompt = "{x}", .tags = c("row_1"), .batch_size = 2)
+  pv <- llm_preview(df, prompt = "{x}", .tags = c("row_1"), .rows_per_prompt = 2)
   expect_match(paste(pv$issues[[1]], collapse = " "), "row_N|<row_N>")
 })
 

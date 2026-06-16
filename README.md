@@ -8,7 +8,7 @@
 [![R-CMD-check](https://github.com/asanaei/LLMR/workflows/R-CMD-check/badge.svg)](https://github.com/asanaei/LLMR/actions)
 [![Website](https://img.shields.io/badge/docs-pkgdown-blue.svg)](https://asanaei.github.io/LLMR/)
 
-LLMR gives R a single interface to hosted and local language models.
+LLMR gives R a single tidy-friendly interface to hosted and local language models.
 One `llm_config()` object selects the provider; every other function works the same regardless of which model is behind it.
 
 **Providers:** OpenAI, Anthropic, Gemini (incl. Vertex AI), Groq, Together AI, DeepSeek, xAI, Voyage AI, Ollama, Xiaomi MiMo, Alibaba (Qwen), Zhipu, Moonshot.

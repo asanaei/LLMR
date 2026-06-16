@@ -1,7 +1,7 @@
 # batch_api.R -----------------------------------------------------------------
 # Provider batch APIs: submit many requests as one asynchronous job, typically
 # at half the per-token price, with results ready within minutes to 24 hours.
-# This is DIFFERENT from row batching (.batch_size, several rows in one live
+# This is DIFFERENT from row batching (.rows_per_prompt, several rows in one live
 # request) and from call_llm_par() (many live requests in parallel): here the
 # provider queues the job server-side and you fetch results later, so a session
 # can be closed and resumed between submission and retrieval.
@@ -191,7 +191,10 @@ print.llmr_batch_job <- function(x, ...) {
 #' # ... later, possibly in a new session:
 #' res <- llm_batch_fetch("my_batch.rds")
 #' }
-#' @seealso [llm_batch_status()], [llm_batch_fetch()], [llm_batch_cancel()]
+#' @inheritSection llm_fn Batching, chunking, and row packing
+#' @seealso [llm_batch_status()], [llm_batch_fetch()], [llm_batch_cancel()];
+#'   and, for the two synchronous senses of "batch", [get_batched_embeddings()]
+#'   (embedding chunking) and [llm_mutate()] (`.rows_per_prompt` row packing).
 #' @export
 llm_batch_submit <- function(config, messages, state_path = NULL) {
   stopifnot(inherits(config, "llm_config"))

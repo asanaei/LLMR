@@ -171,11 +171,11 @@ Use `llm_parse_tags_col()` to parse an existing response column.
 
 ## Row batching: many rows per call
 
-By default LLMR sends one request per row. With `.batch_size > 1`, several rows
+By default LLMR sends one request per row. With `.rows_per_prompt > 1`, several rows
 are packed into a single request: each row's prompt is wrapped in a numbered tag
 (`<row_1>...</row_1>`, `<row_2>...</row_2>`, ...), the block is appended to the
 message, and the model is asked to answer each item inside a matching numbered
-tag. LLMR splits the reply back into the original rows. `.batch_size = Inf` sends
+tag. LLMR splits the reply back into the original rows. `.rows_per_prompt = Inf` sends
 the whole frame in one call.
 
 ```{r}
@@ -184,7 +184,7 @@ cities |>
     geo = "Where is {city}? Give country and continent in their own tags.",
     .config = cfg_groq1,
     .tags = c("country", "continent"),
-    .batch_size = 3
+    .rows_per_prompt = 3
   )
 ```
 
@@ -192,18 +192,18 @@ A few points worth keeping in mind:
 
 - **Two notions of "batch".** This generative row batching is unrelated to
   `get_batched_embeddings()`, which splits many texts across several *embedding*
-  calls. The `.batch_size` argument applies only to generative calls.
+  calls. The `.rows_per_prompt` argument applies only to generative calls.
 - **One level of nesting in tag mode.** Inside each `<row_i>` block the model
   emits the requested field tags, so batched tag output is intentionally nested
   one level. This is the opposite of the flat-tag guidance for single-row calls;
   LLMR adjusts the instruction automatically.
-- **Structured output.** `.structured = TRUE` together with `.batch_size > 1`
+- **Structured output.** `.structured = TRUE` together with `.rows_per_prompt > 1`
   asks for a single JSON object `{"results":[{"row":i, ...}]}` and maps each
   element back by its integer `row`. It emits a one-time warning, because it
   relies on the model following the protocol and replaces strict provider-side
   schema validation with local parsing.
 - **Fault tolerance.** Rows that the model drops, reorders, duplicates, or
-  truncates are detected and re-issued according to `.batch_recovery` (by default
+  truncates are detected and re-issued according to `.rowpack_recovery` (by default
   the unresolved rows are retried at half the batch size, recursively, down to
   single rows). Unrecoverable rows are returned as `NA` with a diagnostic finish
   reason.
@@ -223,13 +223,13 @@ A few points worth keeping in mind:
 
 `llm_preview()` renders exactly what `llm_fn()` / `llm_mutate()` would send,
 without any API call and without reading or encoding files. It flags problems
-up front: missing files, a `"file"` role combined with `.batch_size > 1`, an
+up front: missing files, a `"file"` role combined with `.rows_per_prompt > 1`, an
 embedding config with row batching, and so on. The batch plan columns show how
 rows would be grouped into calls.
 
 ```{r}
 df <- data.frame(text = c("good", "bad", "fine"), stringsAsFactors = FALSE)
-LLMR::llm_preview(df, prompt = "Sentiment of: {text}", .batch_size = 2)
+LLMR::llm_preview(df, prompt = "Sentiment of: {text}", .rows_per_prompt = 2)
 ```
 
 After a run, `llm_usage()` summarizes outcomes and token totals, and

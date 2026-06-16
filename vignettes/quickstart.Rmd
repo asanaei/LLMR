@@ -119,7 +119,7 @@ Switching to a different provider or model is a one-line change to
 ## 6. Tagged fields and row batching
 
 When you want several fields per row, ask the model to wrap each in a named tag
-and pass `.tags`; LLMR parses them into columns. Add `.batch_size` to pack
+and pass `.tags`; LLMR parses them into columns. Add `.rows_per_prompt` to pack
 multiple rows into one request (sent as numbered `<row_i>` blocks and split back
 apart), which cuts the number of calls and the repeated instruction overhead.
 
@@ -131,7 +131,7 @@ films |>
     info       = "For the film {title}, give its director and release year.",
     .config    = cfg,
     .tags      = c("director", "year"),
-    .batch_size = 2
+    .rows_per_prompt = 2
   )
 ```
 

@@ -15,9 +15,9 @@ llm_mutate_tags(
   .after = NULL,
   .tags,
   .fields = NULL,
-  .batch_size = 1L,
-  .batch_payload = c("user", "system"),
-  .batch_recovery = c("halve_recursive", "halve_once", "singletons", "retry_same",
+  .rows_per_prompt = 1L,
+  .rowpack_payload = c("user", "system"),
+  .rowpack_recovery = c("halve_recursive", "halve_once", "singletons", "retry_same",
     "none"),
   ...
 )
@@ -52,19 +52,19 @@ generated column(s) are placed.}
 \item{.fields}{\code{NULL} to extract all tags, a character vector of tags, a named
 vector such as \code{c(person_age = "age")}, or \code{FALSE} to keep only \code{tags_data}.}
 
-\item{.batch_size}{Integer scalar, or \code{Inf}. Number of rows packed into a
+\item{.rows_per_prompt}{Integer scalar, or \code{Inf}. Number of rows packed into a
 single generative request. The default, \code{1}, sends one request per row (the
 historical behaviour). When greater than \code{1}, rows are grouped and sent in
 one call wrapped in numbered \verb{<row_1>...</row_1>} tags (see \emph{Row batching}
 below); \code{Inf} sends all rows at once. Works in generative, tag, and
 structured modes; not applicable to embedding configurations.}
 
-\item{.batch_payload}{One of \code{c("user","system")}. Channel to which the
+\item{.rowpack_payload}{One of \code{c("user","system")}. Channel to which the
 \verb{<row_i>} data block is appended when batching. The default \code{"user"} keeps a
 static system prompt cacheable; the imperative instruction is always placed
 in the system message.}
 
-\item{.batch_recovery}{How to handle rows a batched call leaves unresolved.
+\item{.rowpack_recovery}{How to handle rows a batched call leaves unresolved.
 One of \code{"halve_recursive"} (default), \code{"halve_once"}, \code{"singletons"},
 \code{"retry_same"}, or \code{"none"}; see \code{\link[=llm_fn]{llm_fn()}} for the precise meaning of each.}
 

@@ -35,22 +35,22 @@ test_that("llm_preview returns one row per input row with ok=TRUE on clean input
 })
 
 test_that("llm_preview shows the batch plan (contiguous, deterministic)", {
-  p <- llm_preview(df, prompt = "{text}", .batch_size = 2)
-  expect_equal(p$batch_id, c(1L, 1L, 2L))
-  expect_equal(p$batch_size, c(2L, 2L, 1L))
-  expect_equal(p$batch_row, c(1L, 2L, 1L))
+  p <- llm_preview(df, prompt = "{text}", .rows_per_prompt = 2)
+  expect_equal(p$rowpack_id, c(1L, 1L, 2L))
+  expect_equal(p$rows_per_prompt, c(2L, 2L, 1L))
+  expect_equal(p$rowpack_row, c(1L, 2L, 1L))
 })
 
 test_that("llm_preview Inf batch => single call", {
-  p <- llm_preview(df, prompt = "{text}", .batch_size = Inf)
-  expect_true(all(p$batch_id == 1L))
-  expect_equal(p$batch_size, c(3L, 3L, 3L))
+  p <- llm_preview(df, prompt = "{text}", .rows_per_prompt = Inf)
+  expect_true(all(p$rowpack_id == 1L))
+  expect_equal(p$rows_per_prompt, c(3L, 3L, 3L))
 })
 
-test_that("llm_preview batch_size=1 => no grouping (each its own call)", {
-  p <- llm_preview(df, prompt = "{text}", .batch_size = 1)
-  expect_equal(p$batch_id, 1:3)
-  expect_equal(p$batch_size, c(1L, 1L, 1L))
+test_that("llm_preview rows_per_prompt=1 => no grouping (each its own call)", {
+  p <- llm_preview(df, prompt = "{text}", .rows_per_prompt = 1)
+  expect_equal(p$rowpack_id, 1:3)
+  expect_equal(p$rows_per_prompt, c(1L, 1L, 1L))
 })
 
 test_that("llm_preview flags missing files (with and without batching)", {
@@ -62,10 +62,10 @@ test_that("llm_preview flags missing files (with and without batching)", {
   expect_false(p$ok[[1]])
 })
 
-test_that("llm_preview flags file + .batch_size>1 as unsupported", {
+test_that("llm_preview flags file + .rows_per_prompt>1 as unsupported", {
   d <- tibble::tibble(img = "x.png", prompt = "Describe")
   p <- llm_preview(d, .messages = c(user = "{prompt}", file = "{img}"),
-                   .batch_size = 2)
+                   .rows_per_prompt = 2)
   expect_true(any(grepl("file/multimodal", p$issues[[1]])))
   expect_false(p$ok[[1]])
 })
@@ -79,13 +79,13 @@ test_that("llm_preview file role kept as path string, no base64/IO", {
 
 test_that("llm_preview flags embedding config + batching", {
   cfg <- llm_config("voyage", "voyage-3", embedding = TRUE)
-  p <- llm_preview(df, prompt = "{text}", .config = cfg, .batch_size = 3)
+  p <- llm_preview(df, prompt = "{text}", .config = cfg, .rows_per_prompt = 3)
   expect_true(any(grepl("embedding", p$issues[[1]])))
   expect_false(p$ok[[1]])
 })
 
 test_that("llm_preview flags .return=object + batching", {
-  p <- llm_preview(df, prompt = "{text}", .return = "object", .batch_size = 2)
+  p <- llm_preview(df, prompt = "{text}", .return = "object", .rows_per_prompt = 2)
   expect_true(any(grepl("object", p$issues[[1]])))
 })
 
@@ -116,7 +116,7 @@ test_that("llm_preview errors without prompt or .messages", {
 })
 
 test_that("llm_preview prints a summary header", {
-  p <- llm_preview(df, prompt = "{text}", .batch_size = 2)
+  p <- llm_preview(df, prompt = "{text}", .rows_per_prompt = 2)
   out <- capture.output(print(p))
   expect_true(any(grepl("llmr_preview", out)))
 })

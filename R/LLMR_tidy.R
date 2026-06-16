@@ -102,19 +102,19 @@
 #'   returns `NA` for them (`finish_reason = "skipped"` in column mode);
 #'   `"error"` stops before any call is made. `"skip"`/`"error"` are not
 #'   available together with `.tags`.
-#' @param .batch_size Integer scalar, or `Inf`. Number of input elements packed
+#' @param .rows_per_prompt Integer scalar, or `Inf`. Number of input elements packed
 #'   into a single generative request. The default, `1`, sends one request per
 #'   element (the historical behaviour). When greater than `1`, elements are
 #'   grouped and transmitted in one call wrapped in numbered
 #'   `<row_1>...</row_1>` tags (see *Row batching* below); `Inf` sends all
 #'   elements in a single call. Ignored for embedding configurations, which use
 #'   [get_batched_embeddings()] instead.
-#' @param .batch_payload One of `c("user","system")`. Channel to which the
+#' @param .rowpack_payload One of `c("user","system")`. Channel to which the
 #'   `<row_i>` data block is appended when batching. The imperative instruction
 #'   is always placed in the system message; this argument controls only where
 #'   the data goes. The default, `"user"`, keeps a static system prompt
 #'   cacheable.
-#' @param .batch_recovery How to handle rows that a batched call leaves
+#' @param .rowpack_recovery How to handle rows that a batched call leaves
 #'   unresolved (dropped, malformed, or truncated). One of:
 #'   \describe{
 #'     \item{`"halve_recursive"`}{(default) re-issue the unresolved rows at half
@@ -131,14 +131,26 @@
 #' - `.return = "text"`: character vector
 #' - `.return = "columns"`: tibble with diagnostics
 #' - `.return = "object"`: list of `llmr_response` (or `NA` on failure;
-#'   unavailable when `.batch_size > 1`)
+#'   unavailable when `.rows_per_prompt > 1`)
 #' For embedding mode, always a numeric matrix.
 #'
-#' @section Row batching:
-#' With `.batch_size > 1`, several input elements travel in one generative
+#' @section Batching, chunking, and row packing:
+#' "Batch" appears in three distinct senses in LLMR, and they are easy to keep
+#' apart once you note which path each belongs to. (1) The asynchronous provider
+#' Batch API ([llm_batch_submit()] and friends) defers a whole job for later
+#' delivery at a reduced price; it is the only deferred path. (2) In the
+#' embedding path, [get_batched_embeddings()]'s `batch_size` sets how many texts
+#' go in one synchronous embedding request, bounded by the provider's per-call
+#' limit. (3) In the generative path, the `.rows_per_prompt` argument here packs
+#' several data rows into one generative prompt and parses them back into rows.
+#' Senses (2) and (3) are synchronous and carry no discount; only (1) defers and
+#' costs less.
+#'
+#' @section Row packing:
+#' With `.rows_per_prompt > 1`, several input elements travel in one generative
 #' request: LLMR wraps each element's prompt in a numbered tag,
 #' `<row_1>...</row_1>`, `<row_2>...</row_2>`, and so on, appends that block to
-#' the message (see `.batch_payload`), and instructs the model to answer each
+#' the message (see `.rowpack_payload`), and instructs the model to answer each
 #' item inside a matching numbered tag. The reply is split back into the
 #' original elements by those numbers. Batching trades a smaller number of
 #' (larger) requests for some dependence on the model following the protocol; it
@@ -146,7 +158,7 @@
 #' when the model ignores the wrapping. Results are deterministic given the
 #' model's outputs: partitioning and parsing add no randomness. Rows the model
 #' drops, reorders, duplicates, or truncates are detected and re-issued
-#' according to `.batch_recovery`. Because a batch shares one underlying call,
+#' according to `.rowpack_recovery`. Because a batch shares one underlying call,
 #' token counts are reported once per batch (on its first resolved row, `NA`
 #' elsewhere), as is the wall-clock duration, so that summing those columns is
 #' correct. When a batch reply is entirely unusable and its rows succeed only
@@ -154,7 +166,7 @@
 #' land on, so sums can slightly undercount in heavy-recovery runs.
 #'
 #' @seealso [llm_mutate()], [llm_fn_structured()], [llm_fn_tags()],
-#'   [llm_parse_batch_tags()], [setup_llm_parallel()], [call_llm_broadcast()],
+#'   [llm_parse_rowpack_tags()], [setup_llm_parallel()], [call_llm_broadcast()],
 #'   [get_batched_embeddings()]
 #'
 #' @examples
@@ -175,17 +187,17 @@ llm_fn <- function(x,
                    .fields = NULL,
                    .return = c("text","columns","object"),
                    .na_action = c("send", "skip", "error"),
-                   .batch_size = 1L,
-                   .batch_payload = c("user", "system"),
-                   .batch_recovery = c("halve_recursive", "halve_once",
+                   .rows_per_prompt = 1L,
+                   .rowpack_payload = c("user", "system"),
+                   .rowpack_recovery = c("halve_recursive", "halve_once",
                                        "singletons", "retry_same", "none")) {
 
   stopifnot(inherits(.config, "llm_config"))
   .return <- match.arg(.return)
   .na_action <- match.arg(.na_action)
-  .batched <- .validate_batch_size(.batch_size)
-  .batch_payload  <- match.arg(.batch_payload)
-  .batch_recovery <- match.arg(.batch_recovery)
+  .batched <- .validate_rows_per_prompt(.rows_per_prompt)
+  .rowpack_payload  <- match.arg(.rowpack_payload)
+  .rowpack_recovery <- match.arg(.rowpack_recovery)
   if (.batched) .assert_batch_not_embedding(.config)
 
   row_df0 <- if (is.data.frame(x)) x else data.frame(x = x, stringsAsFactors = FALSE)
@@ -211,9 +223,9 @@ llm_fn <- function(x,
                        .tags = .tags,
                        .fields = .fields,
                        .return = .return,
-                       .batch_size = .batch_size,
-                       .batch_payload = .batch_payload,
-                       .batch_recovery = .batch_recovery))
+                       .rows_per_prompt = .rows_per_prompt,
+                       .rowpack_payload = .rowpack_payload,
+                       .rowpack_recovery = .rowpack_recovery))
   }
 
   user_txt <- as.character(glue::glue_data(row_df0, prompt, .na = ""))
@@ -235,16 +247,16 @@ llm_fn <- function(x,
 
   if (.batched) {
     if (.return == "object")
-      stop(".return = \"object\" is not supported with .batch_size > 1.",
+      stop(".return = \"object\" is not supported with .rows_per_prompt > 1.",
            call. = FALSE)
     res <- .run_batched(
       config         = .config,
       per_row_texts  = user_txt[keep],
       system_text    = .system_prompt,
       mode           = "plain",
-      batch_size     = .batch_size,
-      batch_payload  = .batch_payload,
-      batch_recovery = .batch_recovery,
+      rows_per_prompt     = .rows_per_prompt,
+      rowpack_payload  = .rowpack_payload,
+      rowpack_recovery = .rowpack_recovery,
       dots           = rlang::dots_list(...)
     )
     res <- .llm_expand_skipped(res, keep, n_rows)
@@ -256,7 +268,7 @@ llm_fn <- function(x,
       "sent_tokens","rec_tokens","total_tokens","reasoning_tokens","cached_tokens",
       "success","error_message","status_code","error_code","bad_param",
       "response_id","duration","raw_response_json",
-      "batch_id","batch_size","batch_row"), names(res))]))
+      "rowpack_id","rows_per_prompt","rowpack_row"), names(res))]))
   }
 
   # Build messages through the shared renderer (R/render_messages.R) so llm_fn(),
@@ -344,17 +356,17 @@ llm_fn <- function(x,
 #'   such as `c("age", "job")`. When supplied, [llm_mutate()] delegates to
 #'   [llm_mutate_tags()] and adds `tags_ok`, `tags_data`, and one column per tag
 #'   unless `.fields = FALSE`.
-#' @param .batch_size Integer scalar, or `Inf`. Number of rows packed into a
+#' @param .rows_per_prompt Integer scalar, or `Inf`. Number of rows packed into a
 #'   single generative request. The default, `1`, sends one request per row (the
 #'   historical behaviour). When greater than `1`, rows are grouped and sent in
 #'   one call wrapped in numbered `<row_1>...</row_1>` tags (see *Row batching*
 #'   below); `Inf` sends all rows at once. Works in generative, tag, and
 #'   structured modes; not applicable to embedding configurations.
-#' @param .batch_payload One of `c("user","system")`. Channel to which the
+#' @param .rowpack_payload One of `c("user","system")`. Channel to which the
 #'   `<row_i>` data block is appended when batching. The default `"user"` keeps a
 #'   static system prompt cacheable; the imperative instruction is always placed
 #'   in the system message.
-#' @param .batch_recovery How to handle rows a batched call leaves unresolved.
+#' @param .rowpack_recovery How to handle rows a batched call leaves unresolved.
 #'   One of `"halve_recursive"` (default), `"halve_once"`, `"singletons"`,
 #'   `"retry_same"`, or `"none"`; see [llm_fn()] for the precise meaning of each.
 #' @param ... Passed to the underlying calls: [call_llm_broadcast()] in
@@ -373,18 +385,18 @@ llm_fn <- function(x,
 #'   Result expands to numeric columns named `paste0(<output>, 1:N)`. If all rows
 #'   fail to embed, a single `<output>1` column of `NA` is returned.
 #' - Diagnostic columns use suffixes: `_finish`, `_sent`, `_rec`, `_tot`, `_reason`, `_ok`, `_err`, `_id`, `_status`, `_ecode`, `_param`, `_t`.
-#' - **Row batching:** with `.batch_size > 1`, three further columns are added
+#' - **Row batching:** with `.rows_per_prompt > 1`, three further columns are added
 #'   (`_batch`, `_bn`, `_bi`: the batch identifier, the size of the resolving
 #'   call, and the within-call position). They appear only when batching
-#'   actually groups rows, so the default schema is unchanged at `.batch_size = 1`.
+#'   actually groups rows, so the default schema is unchanged at `.rows_per_prompt = 1`.
 #'
 #' @return `.data` with the new column(s) appended.
 #'
 #' @section Row batching:
-#' With `.batch_size > 1`, several rows travel in one generative request. LLMR
+#' With `.rows_per_prompt > 1`, several rows travel in one generative request. LLMR
 #' wraps each row's prompt in a numbered tag, `<row_1>...</row_1>`,
 #' `<row_2>...</row_2>`, and so on, appends that block to the message (see
-#' `.batch_payload`), and instructs the model to answer each item inside a
+#' `.rowpack_payload`), and instructs the model to answer each item inside a
 #' matching numbered tag; the reply is split back into rows by those numbers.
 #' This also composes with `.tags` (each `<row_i>` then wraps the requested field
 #' tags) and with `.structured = TRUE` (rows are returned as one JSON object
@@ -393,7 +405,7 @@ llm_fn <- function(x,
 #' and that strict provider-side schema validation is replaced by local parsing).
 #' Batching is most useful with capable models at `temperature = 0` and is a net
 #' loss when the model ignores the wrapping. Dropped, reordered, duplicated, or
-#' truncated rows are detected and re-issued per `.batch_recovery`; token counts
+#' truncated rows are detected and re-issued per `.rowpack_recovery`; token counts
 #' are reported once per batch so that summing token columns stays correct.
 #'
 #' @section Shorthand:
@@ -418,7 +430,7 @@ llm_fn <- function(x,
 #'
 #' @seealso [llm_fn()], [llm_mutate_structured()], [llm_mutate_tags()],
 #'   [llm_parse_structured_col()], [llm_parse_tags_col()],
-#'   [llm_parse_batch_tags()], [call_llm_broadcast()], [setup_llm_parallel()]
+#'   [llm_parse_rowpack_tags()], [call_llm_broadcast()], [setup_llm_parallel()]
 #' @examples
 #' \dontrun{
 #' library(dplyr)
@@ -539,9 +551,9 @@ llm_mutate <- function(.data,
                        .schema = NULL,
                        .fields = NULL,
                        .tags = NULL,
-                       .batch_size = 1L,
-                       .batch_payload = c("user", "system"),
-                       .batch_recovery = c("halve_recursive", "halve_once",
+                       .rows_per_prompt = 1L,
+                       .rowpack_payload = c("user", "system"),
+                       .rowpack_recovery = c("halve_recursive", "halve_once",
                                            "singletons", "retry_same", "none"),
                        ...) {
 
@@ -549,9 +561,9 @@ llm_mutate <- function(.data,
   roles_allowed <- c("system", "user", "assistant", "file")
   .na_action <- match.arg(.na_action)
   .ret_requested <- match.arg(.return)
-  .batched <- .validate_batch_size(.batch_size)
-  .batch_payload  <- match.arg(.batch_payload)
-  .batch_recovery <- match.arg(.batch_recovery)
+  .batched <- .validate_rows_per_prompt(.rows_per_prompt)
+  .rowpack_payload  <- match.arg(.rowpack_payload)
+  .rowpack_recovery <- match.arg(.rowpack_recovery)
   if (.batched) .assert_batch_not_embedding(.config)
 
   out_missing <- missing(output)  # shorthand may supply it; final check happens later
@@ -617,9 +629,9 @@ llm_mutate <- function(.data,
       .system_prompt = .system_prompt,
       .schema = .schema,
       .fields = .fields,
-      .batch_size = .batch_size,
-      .batch_payload = .batch_payload,
-      .batch_recovery = .batch_recovery
+      .rows_per_prompt = .rows_per_prompt,
+      .rowpack_payload = .rowpack_payload,
+      .rowpack_recovery = .rowpack_recovery
     )
     if (!before_missing) args$.before <- .before
     if (!after_missing)  args$.after  <- .after
@@ -648,9 +660,9 @@ llm_mutate <- function(.data,
       .system_prompt = .system_prompt,
       .tags = .tags,
       .fields = .fields,
-      .batch_size = .batch_size,
-      .batch_payload = .batch_payload,
-      .batch_recovery = .batch_recovery
+      .rows_per_prompt = .rows_per_prompt,
+      .rowpack_payload = .rowpack_payload,
+      .rowpack_recovery = .rowpack_recovery
     )
     if (!before_missing) args$.before <- .before
     if (!after_missing)  args$.after  <- .after
@@ -761,7 +773,7 @@ llm_mutate <- function(.data,
 
   if (.batched) {
     if (.ret == "object")
-      stop(".return = \"object\" is not supported with .batch_size > 1.",
+      stop(".return = \"object\" is not supported with .rows_per_prompt > 1.",
            call. = FALSE)
     .assert_batchable(msgs)
     # extract one shared system prompt and one user text per row
@@ -777,8 +789,8 @@ llm_mutate <- function(.data,
 
     res <- .run_batched(
       config = .config, per_row_texts = per_row[keep], system_text = sys_shared,
-      mode = "plain", batch_size = .batch_size, batch_payload = .batch_payload,
-      batch_recovery = .batch_recovery, dots = dots)
+      mode = "plain", rows_per_prompt = .rows_per_prompt, rowpack_payload = .rowpack_payload,
+      rowpack_recovery = .rowpack_recovery, dots = dots)
     res <- .llm_expand_skipped(res, keep, n_rows)
     .llm_outcome_note(res)
 

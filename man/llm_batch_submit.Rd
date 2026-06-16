@@ -41,6 +41,20 @@ environment-variable reference, not the key), so it can be saved to disk,
 shared, and fetched later or from another machine with the same
 environment variables set. Pass \code{state_path} to save it automatically.
 }
+\section{Batching, chunking, and row packing}{
+
+"Batch" appears in three distinct senses in LLMR, and they are easy to keep
+apart once you note which path each belongs to. (1) The asynchronous provider
+Batch API (\code{\link[=llm_batch_submit]{llm_batch_submit()}} and friends) defers a whole job for later
+delivery at a reduced price; it is the only deferred path. (2) In the
+embedding path, \code{\link[=get_batched_embeddings]{get_batched_embeddings()}}'s \code{batch_size} sets how many texts
+go in one synchronous embedding request, bounded by the provider's per-call
+limit. (3) In the generative path, the \code{.rows_per_prompt} argument here packs
+several data rows into one generative prompt and parses them back into rows.
+Senses (2) and (3) are synchronous and carry no discount; only (1) defers and
+costs less.
+}
+
 \examples{
 \dontrun{
 cfg <- llm_config("groq", "openai/gpt-oss-20b", temperature = 0)
@@ -52,5 +66,7 @@ res <- llm_batch_fetch("my_batch.rds")
 }
 }
 \seealso{
-\code{\link[=llm_batch_status]{llm_batch_status()}}, \code{\link[=llm_batch_fetch]{llm_batch_fetch()}}, \code{\link[=llm_batch_cancel]{llm_batch_cancel()}}
+\code{\link[=llm_batch_status]{llm_batch_status()}}, \code{\link[=llm_batch_fetch]{llm_batch_fetch()}}, \code{\link[=llm_batch_cancel]{llm_batch_cancel()}};
+and, for the two synchronous senses of "batch", \code{\link[=get_batched_embeddings]{get_batched_embeddings()}}
+(embedding chunking) and \code{\link[=llm_mutate]{llm_mutate()}} (\code{.rows_per_prompt} row packing).
 }

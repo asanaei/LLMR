@@ -1857,9 +1857,13 @@ bind_tools <- function(config, tools, tool_choice = NULL) {
 #'   The matrix will always have the same number of rows as the input texts.
 #'   Returns NULL if no embeddings were successfully generated.
 #'
+#' @inheritSection llm_fn Batching, chunking, and row packing
 #' @seealso
 #' \code{\link{llm_config}} to create the embedding configuration.
 #' \code{\link{parse_embeddings}} to convert the raw response to a numeric matrix.
+#' Here `batch_size` is embedding chunking, the synchronous sense; it is not the
+#' asynchronous provider Batch API (\code{\link{llm_batch_submit}}) nor the
+#' generative row packing of \code{\link{llm_mutate}} (`.rows_per_prompt`).
 #' @export
 #'
 #' @examples

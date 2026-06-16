@@ -98,9 +98,9 @@ test_that("llm_usage does not over-count batch follow-on NA rows as unknown", {
     sent_tokens = c(60L, NA_integer_, NA_integer_),
     rec_tokens = c(30L, NA_integer_, NA_integer_),
     total_tokens = c(90L, NA_integer_, NA_integer_),
-    batch_id = c(1L, 1L, 1L),
-    batch_size = c(3L, 3L, 3L),
-    batch_row = c(1L, 2L, 3L)
+    rowpack_id = c(1L, 1L, 1L),
+    rows_per_prompt = c(3L, 3L, 3L),
+    rowpack_row = c(1L, 2L, 3L)
   )
   u <- llm_usage(x)
   expect_equal(u$total_tokens, 90L)

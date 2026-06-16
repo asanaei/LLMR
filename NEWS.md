@@ -1,5 +1,23 @@
 # LLMR 0.8.6
 
+## Renames
+
+* The generative row-packing controls on `llm_mutate()`, `llm_fn()`, and their
+  `_structured`/`_tags` variants are renamed to remove a clash with the word
+  "batch": `.batch_size` -> `.rows_per_prompt`, `.batch_payload` ->
+  `.rowpack_payload`, `.batch_recovery` -> `.rowpack_recovery`. The diagnostic
+  output columns follow (`_batch`/`_bn`/`_bi` -> `_rowpack`/`_rpn`/`_rpi`), as do
+  the `llm_usage()` summary fields (`batch_calls` -> `rowpack_calls`,
+  `rows_per_batch_call` -> `rows_per_rowpack`), the `error:batch_*` finish
+  reasons (-> `error:rowpack_*`), and the exported helper `llm_parse_batch_tags()`
+  -> `llm_parse_rowpack_tags()`. The word "batch" is now reserved for the
+  asynchronous provider Batch API (`llm_batch_submit()` and friends); embedding
+  request chunking keeps `get_batched_embeddings(batch_size)`. These row-packing
+  names were added after the last CRAN release and are renamed without aliases.
+  A new shared documentation section, "Batching, chunking, and row packing,"
+  appears on `llm_batch_submit()`, `get_batched_embeddings()`, and `llm_mutate()`
+  to keep the three senses apart.
+
 ## New features
 
 * Added `llm_log_read()`, which parses a JSONL audit log (written by

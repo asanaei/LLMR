@@ -57,7 +57,7 @@ reference:
   - llm_parse_structured_col
   - llm_parse_tags
   - llm_parse_tags_col
-  - llm_parse_batch_tags
+  - llm_parse_rowpack_tags
   - llm_validate_structured_col
   - llm_fn_structured
   - llm_mutate_structured
@@ -73,15 +73,26 @@ reference:
   - llm_failures
   - llm_methods_text
   - llm_log_enable
+  - llm_log_read
   - llm_logprobs
   - llm_hash
+- title: Provenance and replay
+  desc: >
+    Turning an audit log back into a reproducible request: a content hash of a
+    request, the response record it produced, and the reconstruction of a
+    request from a logged call.
+  contents:
+  - llm_request_hash
+  - llm_request_from_log
+  - llm_response_record
 - title: Method-package generics
   desc: >
-    Shared generics implemented by the LLMR method packages (LLMRcoder,
-    LLMRvalid, LLMRpanel, LLMRarchive) on their result objects.
+    Shared generics implemented by the LLMR method packages (LLMRcontent,
+    LLMRpanel, FocusGroup) on their result objects.
   contents:
   - diagnostics
   - report
+  - reset
 - title: Tidy helpers and parallel
   contents:
   - llm_fn

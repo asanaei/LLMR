@@ -14,7 +14,7 @@ llm_preview(
   .schema = NULL,
   .tags = NULL,
   .return = c("columns", "text", "object"),
-  .batch_size = 1L,
+  .rows_per_prompt = 1L,
   rows = NULL,
   max_chars = 500L
 )
@@ -48,7 +48,7 @@ JSON output. Used only to validate \code{.schema}/\code{.tags} combinations.}
 \item{.return}{One of \code{"columns"}, \code{"text"}, \code{"object"}. Only used to flag
 the unsupported \code{"object"} + batching combination.}
 
-\item{.batch_size}{Rows per call. \code{1} (default) means one call per row;
+\item{.rows_per_prompt}{Rows per call. \code{1} (default) means one call per row;
 \verb{> 1} or \code{Inf} packs rows into batched calls.}
 
 \item{rows}{Optional integer vector selecting which rows to render (default:
@@ -60,7 +60,7 @@ all rows).}
 \value{
 A tibble of class \code{llmr_preview}, one row per previewed input row,
 with columns: \code{row}, \code{ok} (no issues), \code{roles}, \code{rendered_preview},
-\code{chars}, \code{has_file}, \code{file_ok}, \code{batch_id}, \code{batch_size}, \code{batch_row}, and
+\code{chars}, \code{has_file}, \code{file_ok}, \code{rowpack_id}, \code{rows_per_prompt}, \code{rowpack_row}, and
 \code{issues} (a list-column of character vectors).
 }
 \description{
@@ -68,7 +68,7 @@ Renders every row exactly as \code{\link[=llm_fn]{llm_fn()}} / \code{\link[=llm_
 no file I/O), then reports a tidy, row-level summary: the rendered text, the
 roles, character counts, file presence and existence, the batch plan, and a
 list-column of \code{issues}. Problems that would only surface mid-run (a missing
-file, a \code{"file"} role combined with \code{.batch_size > 1}, an embedding config
+file, a \code{"file"} role combined with \code{.rows_per_prompt > 1}, an embedding config
 with row batching, \code{.return = "object"} with batching, a schema supplied
 without \code{.structured}, a template that references \code{NA} values or renders an
 empty prompt, a file part with no accompanying user text, or a tag name that
@@ -77,12 +77,12 @@ see all of them at once rather than hitting the first error.
 }
 \details{
 Batched data travels inside numbered \verb{<row_i>...</row_i>} tags; the
-\code{batch_id} / \code{batch_size} / \code{batch_row} columns show how rows would be
-grouped into calls at the given \code{.batch_size}.
+\code{rowpack_id} / \code{rows_per_prompt} / \code{rowpack_row} columns show how rows would be
+grouped into calls at the given \code{.rows_per_prompt}.
 }
 \examples{
 df <- data.frame(text = c("a", "b", "c"), stringsAsFactors = FALSE)
-llm_preview(df, prompt = "Classify: {text}", .batch_size = 2)
+llm_preview(df, prompt = "Classify: {text}", .rows_per_prompt = 2)
 }
 \seealso{
 \code{\link[=llm_render_messages]{llm_render_messages()}}, \code{\link[=llm_usage]{llm_usage()}}, \code{\link[=llm_failures]{llm_failures()}}.

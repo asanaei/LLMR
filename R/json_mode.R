@@ -623,20 +623,20 @@ llm_fn_structured <- function(x,
                         .fields = NULL,
                               .local_only = FALSE,
                               .validate_local = TRUE,
-                              .batch_size = 1L,
-                              .batch_payload = c("user", "system"),
-                              .batch_recovery = c("halve_recursive", "halve_once",
+                              .rows_per_prompt = 1L,
+                              .rowpack_payload = c("user", "system"),
+                              .rowpack_recovery = c("halve_recursive", "halve_once",
                                                   "singletons", "retry_same", "none")) {
-  .batched <- .validate_batch_size(.batch_size)
-  .batch_payload  <- match.arg(.batch_payload)
-  .batch_recovery <- match.arg(.batch_recovery)
+  .batched <- .validate_rows_per_prompt(.rows_per_prompt)
+  .rowpack_payload  <- match.arg(.rowpack_payload)
+  .rowpack_recovery <- match.arg(.rowpack_recovery)
 
   if (.batched) {
     out2 <- .llm_structured_batched(
       x = x, prompt = prompt, .config = .config, .system_prompt = .system_prompt,
       .schema = .schema, .fields = .fields, .validate_local = .validate_local,
-      .batch_size = .batch_size, .batch_payload = .batch_payload,
-      .batch_recovery = .batch_recovery, dots = rlang::dots_list(...))
+      .rows_per_prompt = .rows_per_prompt, .rowpack_payload = .rowpack_payload,
+      .rowpack_recovery = .rowpack_recovery, dots = rlang::dots_list(...))
     if (requireNamespace("tibble", quietly = TRUE)) return(tibble::as_tibble(out2))
     return(out2)
   }
@@ -700,9 +700,9 @@ llm_mutate_structured <- function(.data,
                             .schema = NULL,
                             .fields = NULL,
                             .validate_local = TRUE,
-                            .batch_size = 1L,
-                            .batch_payload = c("user", "system"),
-                            .batch_recovery = c("halve_recursive", "halve_once",
+                            .rows_per_prompt = 1L,
+                            .rowpack_payload = c("user", "system"),
+                            .rowpack_recovery = c("halve_recursive", "halve_once",
                                                 "singletons", "retry_same", "none"),
                             ...) {
   # Capture whether output was actually provided
@@ -712,19 +712,19 @@ llm_mutate_structured <- function(.data,
   after_missing  <- missing(.after)
   # Capture dots for safe forwarding
   dots <- rlang::dots_list(...)
-  .batched <- .validate_batch_size(.batch_size)
-  .batch_payload  <- match.arg(.batch_payload)
-  .batch_recovery <- match.arg(.batch_recovery)
+  .batched <- .validate_rows_per_prompt(.rows_per_prompt)
+  .rowpack_payload  <- match.arg(.rowpack_payload)
+  .rowpack_recovery <- match.arg(.rowpack_recovery)
 
   if (.batched) {
     if (!is.null(.messages))
       stop("Structured batched mode supports `prompt`, not `.messages`, yet. ",
-           "Use .batch_size = 1, or pass a single `prompt`.", call. = FALSE)
+           "Use .rows_per_prompt = 1, or pass a single `prompt`.", call. = FALSE)
     out2 <- .llm_structured_batched(
       prompt = prompt, .config = .config, .system_prompt = .system_prompt,
       .schema = .schema, .fields = .fields, .validate_local = isTRUE(.validate_local),
-      .batch_size = .batch_size, .batch_payload = .batch_payload,
-      .batch_recovery = .batch_recovery, dots = dots,
+      .rows_per_prompt = .rows_per_prompt, .rowpack_payload = .rowpack_payload,
+      .rowpack_recovery = .rowpack_recovery, dots = dots,
       data_df = .data,
       output = if (output_missing) NULL else rlang::ensym(output),
       .before = if (before_missing) NULL else .before,
