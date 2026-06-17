@@ -7,20 +7,20 @@
 ensure_alternating_messages(messages)
 }
 \arguments{
-\item{messages}{A list of message objects, each \code{list(role=, content=)}.
-A single leading \code{system} message is allowed and preserved. (Multiple
-leading system messages are merged like any other same-role run.)}
+\item{messages}{A list of message objects, each \code{list(role=, content=)}. Any
+number of leading \code{system} messages is allowed; they are merged into one
+system block (most providers take system as a single top-level field).}
 }
 \value{
-A list of message objects that strictly alternates roles after any
-leading \code{system}, beginning with \code{user}.
+A list of message objects that strictly alternates roles after the
+merged leading \code{system} block, beginning with \code{user}.
 }
 \description{
 Some providers (Anthropic, Gemini) reject a message array whose first
 non-system turn is not \code{user}, or that contains two consecutive turns of the
 same role. \code{ensure_alternating_messages()} repairs an assembled array so it
-satisfies both constraints: it keeps a single leading \code{system} message
-untouched, merges any run of adjacent same-role messages into one (joining
+satisfies both constraints: it merges all leading \code{system} messages into one
+system block, merges any run of adjacent same-role messages into one (joining
 their content), and guarantees the first non-system message has role
 \code{"user"}.
 }
@@ -28,6 +28,11 @@ their content), and guarantees the first non-system message has role
 This is the normalizer that makes hand-built multi-turn arrays (for example
 from \code{\link[=transcript_as_messages]{transcript_as_messages()}}) safe to send to any supported provider. It
 is a pure transformation: no network or file I/O.
+
+Merging assumes scalar character content: if two adjacent same-role messages
+carry non-scalar content (for example multimodal/list content), they cannot
+be concatenated and the function errors rather than corrupt them. Supply an
+array that is already alternating in that case.
 }
 \examples{
 msgs <- list(

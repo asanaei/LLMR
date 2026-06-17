@@ -123,9 +123,9 @@ count explicitly.
 Result expands to numeric columns named \verb{paste0(<output>, 1:N)}. If all rows
 fail to embed, a single \verb{<output>1} column of \code{NA} is returned.
 \item Diagnostic columns use suffixes: \verb{_finish}, \verb{_sent}, \verb{_rec}, \verb{_tot}, \verb{_reason}, \verb{_ok}, \verb{_err}, \verb{_id}, \verb{_status}, \verb{_ecode}, \verb{_param}, \verb{_t}.
-\item \strong{Row batching:} with \code{.rows_per_prompt > 1}, three further columns are added
-(\verb{_batch}, \verb{_bn}, \verb{_bi}: the batch identifier, the size of the resolving
-call, and the within-call position). They appear only when batching
+\item \strong{Row packing:} with \code{.rows_per_prompt > 1}, three further columns are added
+(\verb{_rowpack}, \verb{_rpn}, \verb{_rpi}: the row-pack identifier, the size of the
+resolving call, and the within-call position). They appear only when packing
 actually groups rows, so the default schema is unchanged at \code{.rows_per_prompt = 1}.
 }
 }

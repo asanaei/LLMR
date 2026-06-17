@@ -10,7 +10,8 @@ transcript_as_messages(
   system = NULL,
   instruction = NULL,
   label = function(id) paste0(id, ": "),
-  sanitize = TRUE
+  sanitize = TRUE,
+  ensure_final_user = TRUE
 )
 }
 \arguments{
@@ -33,6 +34,12 @@ speaker's own turns are never labeled.}
 
 \item{sanitize}{If \code{TRUE} (default), strip forged role headers and chat
 control tokens from other speakers' text before embedding.}
+
+\item{ensure_final_user}{If \code{TRUE} (default) and no \code{instruction} is supplied
+and the last turn is the speaker's own (an \code{assistant} turn), append a
+minimal \code{user} cue so the array ends on a user turn (a sound next-turn
+generation boundary). Set \code{FALSE} for verbatim archival conversion. Missing
+\code{text} is coerced to \code{""}; a missing \code{speaker} is an error.}
 }
 \value{
 A list of message objects (\code{list(role=, content=)}) suitable for

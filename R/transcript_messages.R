@@ -27,8 +27,8 @@
 #' Some providers (Anthropic, Gemini) reject a message array whose first
 #' non-system turn is not `user`, or that contains two consecutive turns of the
 #' same role. `ensure_alternating_messages()` repairs an assembled array so it
-#' satisfies both constraints: it keeps a single leading `system` message
-#' untouched, merges any run of adjacent same-role messages into one (joining
+#' satisfies both constraints: it merges all leading `system` messages into one
+#' system block, merges any run of adjacent same-role messages into one (joining
 #' their content), and guarantees the first non-system message has role
 #' `"user"`.
 #'
@@ -36,11 +36,16 @@
 #' from [transcript_as_messages()]) safe to send to any supported provider. It
 #' is a pure transformation: no network or file I/O.
 #'
-#' @param messages A list of message objects, each `list(role=, content=)`.
-#'   A single leading `system` message is allowed and preserved. (Multiple
-#'   leading system messages are merged like any other same-role run.)
-#' @return A list of message objects that strictly alternates roles after any
-#'   leading `system`, beginning with `user`.
+#' Merging assumes scalar character content: if two adjacent same-role messages
+#' carry non-scalar content (for example multimodal/list content), they cannot
+#' be concatenated and the function errors rather than corrupt them. Supply an
+#' array that is already alternating in that case.
+#'
+#' @param messages A list of message objects, each `list(role=, content=)`. Any
+#'   number of leading `system` messages is allowed; they are merged into one
+#'   system block (most providers take system as a single top-level field).
+#' @return A list of message objects that strictly alternates roles after the
+#'   merged leading `system` block, beginning with `user`.
 #' @seealso [transcript_as_messages()], [call_llm()]
 #' @examples
 #' msgs <- list(
@@ -55,21 +60,38 @@
 ensure_alternating_messages <- function(messages) {
   if (!is.list(messages) || length(messages) == 0L) return(messages)
 
-  # Peel a single leading system message; the rest is the alternating body.
-  sys <- NULL
-  body <- messages
-  if (identical(messages[[1]]$role, "system")) {
-    sys  <- messages[[1]]
-    body <- messages[-1]
+  # Content-merge helper: only scalar character content can be merged. Adjacent
+  # same-role messages with list/multimodal content cannot be concatenated with
+  # paste() without corruption, so error clearly rather than silently mangle.
+  merge_two <- function(a, b) {
+    if (!is.character(a) || length(a) != 1L || !is.character(b) || length(b) != 1L) {
+      stop("ensure_alternating_messages(): cannot merge adjacent same-role ",
+           "messages with non-scalar (e.g. multimodal/list) content. Supply a ",
+           "message array that is already alternating, or use scalar text content.",
+           call. = FALSE)
+    }
+    paste(a, b, sep = "\n")
   }
-  if (length(body) == 0L) return(messages)
+
+  # Peel ALL leading system messages and merge them into one system block (the
+  # roxygen promise). Multiple leading systems otherwise survive into the body
+  # and break Anthropic/Gemini, which take system as a single top-level field.
+  sys <- NULL
+  i <- 1L
+  while (i <= length(messages) && identical(messages[[i]]$role, "system")) i <- i + 1L
+  if (i > 1L) {
+    sys_content <- messages[[1L]]$content
+    if (i > 2L) for (j in 2L:(i - 1L)) sys_content <- merge_two(sys_content, messages[[j]]$content)
+    sys <- list(role = "system", content = sys_content)
+  }
+  body <- if (i > length(messages)) list() else messages[i:length(messages)]
+  if (length(body) == 0L) return(if (!is.null(sys)) list(sys) else messages)
 
   merge_runs <- function(msgs) {
     out <- list()
     for (m in msgs) {
       if (length(out) > 0L && identical(out[[length(out)]]$role, m$role)) {
-        out[[length(out)]]$content <-
-          paste(out[[length(out)]]$content, m$content, sep = "\n")
+        out[[length(out)]]$content <- merge_two(out[[length(out)]]$content, m$content)
       } else {
         out[[length(out) + 1L]] <- m
       }
@@ -121,6 +143,11 @@ ensure_alternating_messages <- function(messages) {
 #'   speaker's own turns are never labeled.
 #' @param sanitize If `TRUE` (default), strip forged role headers and chat
 #'   control tokens from other speakers' text before embedding.
+#' @param ensure_final_user If `TRUE` (default) and no `instruction` is supplied
+#'   and the last turn is the speaker's own (an `assistant` turn), append a
+#'   minimal `user` cue so the array ends on a user turn (a sound next-turn
+#'   generation boundary). Set `FALSE` for verbatim archival conversion. Missing
+#'   `text` is coerced to `""`; a missing `speaker` is an error.
 #' @return A list of message objects (`list(role=, content=)`) suitable for
 #'   [call_llm()], guaranteed alternating and user-leading after any system.
 #' @seealso [ensure_alternating_messages()], [call_llm()]
@@ -138,7 +165,8 @@ ensure_alternating_messages <- function(messages) {
 transcript_as_messages <- function(transcript, speaker,
                                    system = NULL, instruction = NULL,
                                    label = function(id) paste0(id, ": "),
-                                   sanitize = TRUE) {
+                                   sanitize = TRUE,
+                                   ensure_final_user = TRUE) {
   if (!is.data.frame(transcript))
     stop("`transcript` must be a data.frame/tibble with `speaker` and `text` columns.",
          call. = FALSE)
@@ -147,12 +175,19 @@ transcript_as_messages <- function(transcript, speaker,
   if (length(speaker) != 1L || is.na(speaker))
     stop("`speaker` must be a single non-NA value.", call. = FALSE)
 
+  spk <- as.character(transcript$speaker)
+  txt <- as.character(transcript$text)
+  # A missing speaker cannot be labeled or matched against `speaker`; reject it.
+  # Missing text is coerced to "" so it does not become the literal string "NA".
+  if (any(is.na(spk)))
+    stop("`transcript$speaker` has missing values; every turn needs a speaker.",
+         call. = FALSE)
+  txt[is.na(txt)] <- ""
+
   msgs <- list()
   if (!is.null(system) && nzchar(system))
     msgs[[length(msgs) + 1L]] <- list(role = "system", content = as.character(system))
 
-  spk <- as.character(transcript$speaker)
-  txt <- as.character(transcript$text)
   clean <- if (sanitize) .llm_sanitize_turn else identity
   for (i in seq_along(spk)) {
     if (identical(spk[i], as.character(speaker))) {
@@ -166,6 +201,16 @@ transcript_as_messages <- function(transcript, speaker,
 
   if (!is.null(instruction) && nzchar(instruction))
     msgs[[length(msgs) + 1L]] <- list(role = "user", content = as.character(instruction))
+
+  # For next-turn generation the array should end on a user turn. If no
+  # instruction was supplied and the last turn is the speaker's own (assistant),
+  # that is a poor generation boundary (the model is asked to continue after its
+  # own answer, not after a cue). Append a minimal user cue unless the caller
+  # opts out (e.g. archival conversion that wants the transcript verbatim).
+  if (isTRUE(ensure_final_user) && length(msgs) &&
+      identical(msgs[[length(msgs)]]$role, "assistant")) {
+    msgs[[length(msgs) + 1L]] <- list(role = "user", content = "(continue)")
+  }
 
   ensure_alternating_messages(msgs)
 }

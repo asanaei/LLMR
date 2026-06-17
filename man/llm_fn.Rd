@@ -94,13 +94,20 @@ Apply an LLM prompt over vectors/data frames
 "Batch" appears in three distinct senses in LLMR, and they are easy to keep
 apart once you note which path each belongs to. (1) The asynchronous provider
 Batch API (\code{\link[=llm_batch_submit]{llm_batch_submit()}} and friends) defers a whole job for later
-delivery at a reduced price; it is the only deferred path. (2) In the
+delivery at a reduced price; it is the only deferred path here. (2) In the
 embedding path, \code{\link[=get_batched_embeddings]{get_batched_embeddings()}}'s \code{batch_size} sets how many texts
 go in one synchronous embedding request, bounded by the provider's per-call
 limit. (3) In the generative path, the \code{.rows_per_prompt} argument here packs
 several data rows into one generative prompt and parses them back into rows.
-Senses (2) and (3) are synchronous and carry no discount; only (1) defers and
-costs less.
+Senses (2) and (3) are synchronous: \code{batch_size} and \code{.rows_per_prompt}
+control how work is grouped into requests, not the per-token rate, so the
+synchronous helpers do not themselves apply a provider discount. Pricing is a
+separate axis: several providers bill batched \emph{embeddings} at a reduced rate
+through a dedicated async/batch tier (the embedding analogue of (1)), so
+embeddings are not categorically full-price; that discount is a property of
+the endpoint, not of \code{batch_size}. Row packing (3) can still lower total
+tokens by amortizing shared prompt overhead across rows, again without
+changing the rate.
 }
 
 \section{Row packing}{

@@ -13,6 +13,15 @@
   that reject consecutive same-role or non-user-leading arrays. Other speakers' text
   is sanitized against forged role headers.
 
+## Documentation
+
+* Corrected the "Batching, chunking, and row packing" section's account of cost.
+  It previously implied that embeddings are categorically full-price; in fact
+  `batch_size` and `.rows_per_prompt` only control how work is grouped into
+  synchronous requests (not the per-token rate), while pricing is a separate axis:
+  several providers bill batched embeddings at a reduced rate through a dedicated
+  async/batch tier, so embeddings are not categorically full-price.
+
 # LLMR 0.8.6
 
 ## Renames

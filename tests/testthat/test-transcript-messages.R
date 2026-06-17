@@ -6,6 +6,8 @@ library(LLMR)
 # user-leading) across the tricky transcript shapes.
 
 roles_of <- function(m) vapply(m, function(x) x$role, character(1))
+content_of <- function(m) vapply(m, function(x) as.character(x$content %||% ""), character(1))
+`%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
 
 # body = messages after a single leading system
 body_of <- function(m) {
@@ -100,4 +102,38 @@ test_that("transcript_as_messages validates its input", {
                "single non-NA")
   expect_error(transcript_as_messages(data.frame(foo = 1), speaker = "x"),
                "speaker.*text")
+})
+
+test_that("ensure_alternating_messages merges ALL leading system messages", {
+  out <- ensure_alternating_messages(list(
+    list(role = "system", content = "a"),
+    list(role = "system", content = "b"),
+    list(role = "user",   content = "hi")))
+  expect_identical(roles_of(out), c("system", "user"))
+  expect_identical(out[[1]]$content, "a\nb")
+})
+
+test_that("ensure_alternating_messages errors on non-scalar adjacent content", {
+  expect_error(
+    ensure_alternating_messages(list(
+      list(role = "user", content = list(type = "image")),
+      list(role = "user", content = "x"))),
+    "non-scalar")
+})
+
+test_that("trailing assistant turn gets a user cue unless opted out", {
+  tx <- mk(c("Ana", "Ben"), c("hi", "my line"))
+  m  <- transcript_as_messages(tx, "Ben", system = "s", instruction = NULL)
+  expect_identical(m[[length(m)]]$role, "user")            # cue appended
+  m2 <- transcript_as_messages(tx, "Ben", system = "s", instruction = NULL,
+                               ensure_final_user = FALSE)
+  expect_identical(m2[[length(m2)]]$role, "assistant")     # verbatim
+})
+
+test_that("missing text becomes empty, missing speaker errors", {
+  m <- transcript_as_messages(mk(c("Ana", "Ben"), c(NA, "x")), "Ben",
+                              system = "s", instruction = "go")
+  expect_true(any(grepl("^Ana: $", content_of(m))))
+  expect_error(transcript_as_messages(mk(c(NA, "Ben"), c("a", "x")), "Ben"),
+               "missing")
 })
