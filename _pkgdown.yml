@@ -69,6 +69,8 @@ reference:
   contents:
   - llm_preview
   - llm_render_messages
+  - transcript_as_messages
+  - ensure_alternating_messages
   - llm_usage
   - llm_failures
   - llm_methods_text

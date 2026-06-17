@@ -1,3 +1,18 @@
+# LLMR 0.8.7
+
+## New features
+
+* `transcript_as_messages()` and `ensure_alternating_messages()`: generic helpers
+  for building a provider-safe message array from a multi-speaker transcript. In a
+  group conversation, `transcript_as_messages()` renders the transcript from one
+  speaker's perspective -- that speaker's own turns become `assistant` messages,
+  every other speaker's turns become labeled `user` messages -- which gives the
+  model a structural handle on "what I already said". `ensure_alternating_messages()`
+  repairs any assembled array so it strictly alternates roles after an optional
+  leading `system` and begins with `user`, satisfying providers (Anthropic, Gemini)
+  that reject consecutive same-role or non-user-leading arrays. Other speakers' text
+  is sanitized against forged role headers.
+
 # LLMR 0.8.6
 
 ## Renames
