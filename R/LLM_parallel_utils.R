@@ -528,8 +528,16 @@ call_llm_par <- function(experiments,
     max_workers <- min(future::availableCores(omit = 1L), nrow(experiments))
     max_workers <- max(1, max_workers)
   }
+
+  .llmr_log_file_capture <- getOption("llmr.log_file")
+  .llmr_log_msgs_capture <- isTRUE(getOption("llmr.log_messages", TRUE))
+  .llmr_parent_pid <- Sys.getpid()
+
   current_plan <- future::plan()
   on.exit(future::plan(current_plan), add = TRUE)
+  if (!is.null(.llmr_log_file_capture)) {
+    on.exit(try(.llmr_log_merge(.llmr_log_file_capture), silent = TRUE), add = TRUE)
+  }
   if (!inherits(current_plan, "FutureStrategy") || inherits(current_plan, "sequential")) {
     future::plan(future::multisession, workers = max_workers)
   }
@@ -541,6 +549,23 @@ call_llm_par <- function(experiments,
   }
 
   par_worker <- function(i_val) {
+    if (Sys.getpid() != .llmr_parent_pid) {
+      on.exit(options(llmr.log_file = NULL,
+                      llmr.log_messages = NULL,
+                      llmr.log_parallel = NULL), add = TRUE)
+      if (is.null(.llmr_log_file_capture)) {
+        options(llmr.log_file = NULL,
+                llmr.log_messages = NULL,
+                llmr.log_parallel = NULL)
+      } else {
+        options(
+          llmr.log_file     = .llmr_log_file_capture,
+          llmr.log_messages = .llmr_log_msgs_capture,
+          llmr.log_parallel = TRUE
+        )
+      }
+    }
+
     # small helpers to guarantee column types
     as_char_or_na <- function(x) {
       if (is.null(x) || length(x) == 0 || all(is.na(x))) return(NA_character_)
@@ -659,6 +684,10 @@ call_llm_par <- function(experiments,
       future.packages = "LLMR",
       future.globals  = TRUE
     )
+  }
+
+  if (!is.null(.llmr_log_file_capture)) {
+    try(.llmr_log_merge(.llmr_log_file_capture), silent = TRUE)
   }
 
   api_results_df <- dplyr::bind_rows(api_call_results_list)
@@ -1285,4 +1314,3 @@ summary.llmr_experiment <- function(object, ...) {
   }
   invisible(object)
 }
-

@@ -20,6 +20,62 @@ sample_log <- function() {
   path
 }
 
+test_that("audit logging writes directly unless parallel shard mode is enabled", {
+  log_file <- tempfile(fileext = ".jsonl")
+  shard <- paste0(log_file, ".", Sys.getpid())
+  old <- options(llmr.log_file = NULL,
+                 llmr.log_messages = TRUE,
+                 llmr.log_parallel = NULL)
+  on.exit({
+    options(old)
+    unlink(c(log_file, shard))
+  }, add = TRUE)
+
+  options(llmr.log_file = log_file, llmr.log_parallel = FALSE)
+  LLMR:::.llmr_log_event(kind = "call", provider = "p", model = "m", status = 200L)
+
+  expect_true(file.exists(log_file))
+  expect_false(file.exists(shard))
+  expect_length(readLines(log_file), 1L)
+})
+
+test_that("parallel audit shards merge back into the base log", {
+  log_file <- tempfile(fileext = ".jsonl")
+  shard <- paste0(log_file, ".", Sys.getpid())
+  old <- options(llmr.log_file = NULL,
+                 llmr.log_messages = TRUE,
+                 llmr.log_parallel = NULL)
+  on.exit({
+    options(old)
+    unlink(c(log_file, shard))
+  }, add = TRUE)
+
+  options(llmr.log_file = log_file, llmr.log_parallel = TRUE)
+  LLMR:::.llmr_log_event(kind = "call", provider = "p", model = "m", status = 200L)
+
+  expect_false(file.exists(log_file))
+  expect_true(file.exists(shard))
+  merged <- llm_log_merge(log_file)
+  expect_equal(merged, shard)
+  expect_false(file.exists(shard))
+  expect_true(file.exists(log_file))
+  expect_length(readLines(log_file), 1L)
+})
+
+test_that("llm_log_merge creates a missing base file and escapes regex basenames", {
+  log_file <- file.path(tempdir(), paste0("llmr.log+[", Sys.getpid(), "].jsonl"))
+  shard <- paste0(log_file, ".10001")
+  on.exit(unlink(c(log_file, shard)), add = TRUE)
+  unlink(c(log_file, shard))
+  writeLines('{"kind":"call","schema_version":"1.0"}', shard)
+
+  merged <- llm_log_merge(log_file)
+
+  expect_equal(merged, shard)
+  expect_false(file.exists(shard))
+  expect_identical(readLines(log_file), '{"kind":"call","schema_version":"1.0"}')
+})
+
 test_that("llm_log_read returns records and a manifest with the expected shape", {
   read <- llm_log_read(sample_log())
   expect_named(read, c("records", "manifest"))
