@@ -197,6 +197,35 @@ test_that("whole-batch transport failure recovers via split", {
   expect_true(all(res$success))
 })
 
+test_that("recovered tags singleton carries the field instruction, unwrapped (B4)", {
+  # Force a cascade to singletons (multi-row call fails), capture every call's
+  # messages, and assert the singleton ASKS for field tags (system-side) while
+  # its USER payload stays unwrapped (no <row_>). Pre-fix the singleton carried
+  # no field instruction at all.
+  seen <- new.env(); seen$msgs <- list()
+  spy <- function(config, messages, ...) {
+    seen$msgs[[length(seen$msgs) + 1L]] <- messages[[1]]
+    usr <- .get_user(messages[[1]])
+    if (grepl("<row_", usr))
+      return(mk_res(NA_character_, success = FALSE, finish = "error:server",
+                    error_message = "boom"))
+    g <- .global_ids(usr)[1]
+    mk_res(paste0("<age>", 20 + g, "</age>"))   # bare field content, no <row_1>
+  }
+  res <- LLMR:::.run_batched(CFG, TXT, NULL, mode = "tags", tags = c("age"),
+    rows_per_prompt = 5, rowpack_payload = "user",
+    rowpack_recovery = "halve_recursive", .broadcast = spy)
+  expect_true(all(res$success))
+  # the singleton calls are those whose user payload has no <row_> wrapper
+  singletons <- Filter(function(m) !grepl("<row_", .get_user(m)), seen$msgs)
+  expect_gt(length(singletons), 0L)
+  sys_of <- function(m) if (!is.null(names(m)) && "system" %in% names(m)) m[["system"]] else ""
+  # every singleton's SYSTEM side asks for XML-like field tags...
+  expect_true(all(vapply(singletons, function(m) grepl("tag", sys_of(m), ignore.case = TRUE), logical(1))))
+  # ...and no singleton USER payload was wrapped in <row_i>
+  expect_false(any(vapply(singletons, function(m) grepl("<row_", .get_user(m)), logical(1))))
+})
+
 test_that("call budget bounds pathological recursion", {
   spy <- new.env(); spy$calls <- 0L
   always_drop <- function(config, messages, ...) {

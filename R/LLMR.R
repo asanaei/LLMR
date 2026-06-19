@@ -196,14 +196,26 @@ perform_request <- function(req, verbose, provider = NULL, model = NULL, config 
   code <- httr2::resp_status(resp)
 
   if (code >= 400) {
-    err <- try(httr2::resp_body_json(resp), silent = TRUE)
+    # Parse the error body tolerantly. Some providers (e.g. DeepSeek) return a
+    # JSON error body under Content-Type: application/octet-stream, which
+    # resp_body_json() rejects by default; check_type = FALSE lets us read the
+    # real message instead of masking it. The happy-path 200 parse below stays
+    # strict. raw_err is the final fallback when the body has no error$message.
+    err <- try(httr2::resp_body_json(resp, check_type = FALSE), silent = TRUE)
+    raw_err <- try(httr2::resp_body_string(resp), silent = TRUE)
+    raw_err <- if (inherits(raw_err, "try-error")) NA_character_ else trimws(raw_err)
     category <- if (code >= 500) "server" else if (code == 429) "rate_limit"
     else if (code %in% c(401L, 403L)) "auth"
     else if (code == 408) "server"            # request timeout: transient, retried like a 5xx
     else if (code == 400) "param" else "unknown"
-    bad_param <- if (!inherits(err, "try-error")) err$error$param %||% NA_character_ else NA_character_
-    err_reason <- if (inherits(err, "try-error")) "No message supplied"
-                  else err$error$message %||% "No message supplied"
+    bad_param <- if (!inherits(err, "try-error")) err$error$param %||% err$param %||% NA_character_ else NA_character_
+    raw_tail <- if (!is.na(raw_err) && nzchar(raw_err)) substr(raw_err, 1L, 2000L) else NULL
+    err_reason <- if (!inherits(err, "try-error")) {
+      err$error$message %||% err$message %||% err$error$type %||% err$error$code %||%
+        raw_tail %||% "No message supplied"
+    } else {
+      raw_tail %||% "No message supplied"
+    }
     msg_lines <- c(
       "LLM API request failed.",
       paste0("HTTP status: ", code),
@@ -222,11 +234,12 @@ perform_request <- function(req, verbose, provider = NULL, model = NULL, config 
       provider    = provider %||% NA_character_,
       model       = model %||% NA_character_,
       param       = bad_param,
-      code        = if (!inherits(err, "try-error")) err$error$code %||% NA_character_ else NA_character_,
+      code        = if (!inherits(err, "try-error")) err$error$code %||% err$code %||% NA_character_ else NA_character_,
       request_id  = httr2::resp_header(resp, "x-request-id") %||%
         httr2::resp_header(resp, "request-id"),
       retry_after = suppressWarnings(as.numeric(httr2::resp_header(resp, "retry-after") %||% NA_real_)),
-      body        = if (!inherits(err, "try-error")) err else NULL
+      body        = if (!inherits(err, "try-error")) err
+                    else if (!is.null(raw_tail)) list(raw = raw_tail) else NULL
     )
   }
 
@@ -962,6 +975,9 @@ call_llm.openai <- function(config, messages, verbose = FALSE) {
       if (!is.null(mp$reasoning_effort)) body0$reasoning <- list(effort = mp$reasoning_effort)
 
   } else {
+      # json_object mode (OpenAI sets this when a schema is absent) needs "json"
+      # in the prompt; inject when absent (no-op for json_schema mode).
+      formatted_messages      <- .ensure_json_object_instruction(formatted_messages, mp$response_format)
       body0$messages          <- formatted_messages
       body0$temperature       <- mp$temperature
       body0$top_p             <- mp$top_p
@@ -1412,6 +1428,10 @@ call_llm.gemini <- function(config, messages, verbose = FALSE) {
       mp <- mp[setdiff(names(mp), bad)]
     }
   }
+
+  # json_object mode on DeepSeek/Alibaba/Zhipu/Moonshot/Xiaomi needs "json" in
+  # the prompt; inject a minimal instruction when absent (no-op otherwise).
+  formatted_messages <- .ensure_json_object_instruction(formatted_messages, mp$response_format)
 
   body0 <- list(model = config$model, messages = formatted_messages)
   body0$temperature        <- mp$temperature

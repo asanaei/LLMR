@@ -146,6 +146,42 @@ enable_structured_output <- function(config,
   config
 }
 
+# The canonical JSON-object instruction. Several OpenAI-compatible providers
+# (DeepSeek, Alibaba, Zhipu, Moonshot, Xiaomi) reject `response_format =
+# {type:"json_object"}` with HTTP 400 unless the word "json" appears somewhere in
+# the messages. Reused by the request builders and by batched singleton recovery.
+.llmr_json_object_instruction <- "Return only a valid JSON object. Do not include prose, Markdown, or code fences."
+
+#' Ensure a json_object request mentions JSON
+#'
+#' When `response_format` requests bare JSON-object mode, prepend a minimal system
+#' instruction so providers that require the word "json" in the prompt accept the
+#' request. No-op for json_schema mode, for any other response_format, and when
+#' the messages already mention json (so existing prompts and the batched path,
+#' which already says "JSON object", are untouched). `messages` is the list of
+#' `list(role=, content=)` objects the builder is about to send.
+#' @keywords internal
+#' @noRd
+.ensure_json_object_instruction <- function(messages, response_format) {
+  if (is.null(response_format) ||
+      !identical(response_format$type %||% "", "json_object")) {
+    return(messages)
+  }
+  text_of <- function(m) {
+    ct <- m$content
+    if (is.character(ct)) return(paste(ct, collapse = " "))
+    if (is.list(ct)) return(paste(vapply(ct, function(p)
+      if (!is.null(p$text)) as.character(p$text) else "", character(1)),
+      collapse = " "))
+    ""
+  }
+  if (any(vapply(messages, function(m) grepl("\\bjson\\b", text_of(m), ignore.case = TRUE),
+                 logical(1)))) {
+    return(messages)
+  }
+  c(list(list(role = "system", content = .llmr_json_object_instruction)), messages)
+}
+
 #' Disable Structured Output (clean provider toggles)
 #'
 #' Removes response_format/response_schema/response_mime_type and schema tool if present.

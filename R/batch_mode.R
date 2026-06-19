@@ -575,6 +575,18 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
       structured = .batch_struct_instruction(m))
   }
 
+  # Instruction for an UNWRAPPED singleton recovery (one row, no <row_i>). It is
+  # the SINGLE-ITEM form, NOT the batch <row_i> wrapper: tags reuse the exact
+  # non-batched tag instruction (.tag_prompt) so a recovered singleton is
+  # format-identical to the .rows_per_prompt = 1 path; structured reuses the
+  # canonical bare JSON-object instruction. plain needs none.
+  singleton_instruction <- function() {
+    switch(mode,
+      plain      = NULL,
+      tags       = .tag_prompt(tags),
+      structured = .llmr_json_object_instruction)
+  }
+
   call_budget <- 3L * n
   calls_made  <- 0L
   max_depth   <- ceiling(log2(max(if (is.infinite(rows_per_prompt)) n else rows_per_prompt, 2))) + 2L
@@ -626,12 +638,18 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
     m <- length(g_rows)
     if (!length(g_rows)) next
 
-    # m == 1 -> normal UNWRAPPED singleton (single parse semantics)
+    # m == 1 -> UNWRAPPED singleton (single parse semantics). The user payload
+    # stays the bare row text (no <row_i>), but the mode's single-item field/JSON
+    # instruction is carried SYSTEM-side so a recovered tags/structured singleton
+    # emits the right format (previously it carried none and was parsed as if it
+    # did). The parse below is unchanged and matches the non-batched single-row
+    # path. plain mode is unaffected (singleton_instruction() is NULL).
     if (m == 1L) {
       if (calls_made >= call_budget) { fail_rows(g_rows, "error:rowpack_budget"); next }
       g <- g_rows[1]
-      smsg <- if (is.null(system_text)) per_row_texts[g] else
-        c(system = system_text, user = per_row_texts[g])
+      sys1 <- paste(c(system_text, singleton_instruction()), collapse = "\n\n")
+      smsg <- if (!nzchar(sys1)) per_row_texts[g] else
+        c(system = sys1, user = per_row_texts[g])
       rb <- do.call(.broadcast, c(list(config = config, messages = list(smsg)), dots))
       calls_made <- calls_made + 1L
       if (isTRUE(rb$success[1])) {
