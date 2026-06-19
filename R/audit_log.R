@@ -132,11 +132,17 @@ llm_log_merge <- function(path) {
   if (!dir.exists(log_dir)) return(invisible(character()))
 
   shard_pattern <- paste0("^", .llmr_re_escape(basename(path)), "\\.[0-9]+$")
-  shards <- sort(list.files(log_dir, pattern = shard_pattern, full.names = TRUE))
-  if (!length(shards)) return(invisible(shards))
+  shard_names <- sort(list.files(log_dir, pattern = shard_pattern))
+  if (!length(shard_names)) return(invisible(character()))
 
-  for (shard in shards) {
-    lines <- readLines(shard, warn = FALSE)
+  # Rebuild the shard path exactly as the writer formed it (base path + suffix),
+  # so the return value matches `.llmr_log_shard_path()` regardless of how
+  # list.files() normalizes separators (Windows returns forward slashes).
+  shards <- paste0(path, ".", sub("^.*\\.([0-9]+)$", "\\1", shard_names))
+  read_from <- file.path(log_dir, shard_names)
+
+  for (i in seq_along(shards)) {
+    lines <- readLines(read_from[i], warn = FALSE)
     if (length(lines)) {
       con <- file(path, open = "a")
       tryCatch({
@@ -145,7 +151,7 @@ llm_log_merge <- function(path) {
         close(con)
       })
     }
-    unlink(shard)
+    unlink(read_from[i])
   }
 
   invisible(shards)

@@ -56,7 +56,9 @@ test_that("parallel audit shards merge back into the base log", {
   expect_false(file.exists(log_file))
   expect_true(file.exists(shard))
   merged <- llm_log_merge(log_file)
-  expect_equal(merged, shard)
+  # the returned shard path points at the same file (separators may differ by OS)
+  expect_equal(normalizePath(merged, winslash = "/", mustWork = FALSE),
+               normalizePath(shard,  winslash = "/", mustWork = FALSE))
   expect_false(file.exists(shard))
   expect_true(file.exists(log_file))
   expect_length(readLines(log_file), 1L)
@@ -71,7 +73,8 @@ test_that("llm_log_merge creates a missing base file and escapes regex basenames
 
   merged <- llm_log_merge(log_file)
 
-  expect_equal(merged, shard)
+  expect_equal(normalizePath(merged, winslash = "/", mustWork = FALSE),
+               normalizePath(shard,  winslash = "/", mustWork = FALSE))
   expect_false(file.exists(shard))
   expect_identical(readLines(log_file), '{"kind":"call","schema_version":"1.0"}')
 })
