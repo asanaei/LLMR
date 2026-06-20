@@ -133,3 +133,14 @@ reference:
   - call_llm_robust
   - cache_llm_call
   - log_llm_error
+- title: Persona data
+  desc: >
+    A bundled example persona dataset and the small contract helpers that read
+    such frames, shared across the LLMR family.
+  contents:
+  - anes_2024_personas
+  - llm_persona_split
+  - llm_persona_overview
+  - llm_persona_dictionary
+  - llm_persona_demographic_fields
+  - llm_validate_persona_frame
