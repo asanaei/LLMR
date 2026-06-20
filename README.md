@@ -139,7 +139,7 @@ reset_llm_parallel()
 ## The LLMR ecosystem
 
 LLMR is the provider layer of a family of packages for LLM-assisted research.
-[LLMRAgent](https://asanaei.github.io/LLMRAgent/) builds agents and
+[LLMRagent](https://asanaei.github.io/LLMRagent/) builds agents and
 multi-agent designs on top of it.
 [LLMRcontent](https://asanaei.github.io/LLMRcontent/) carries the measurement
 workflow in one package: codebook-first annotation with sealed gold-set

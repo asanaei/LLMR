@@ -1,3 +1,21 @@
+# LLMR 0.8.8
+
+## New features
+
+* Bundled example data `anes_2024_personas`: 100 participant profiles derived
+  from the ANES 2024 Time Series public release (diversity-sampled, demographics
+  coarsened, attitudes intact, decoded to value labels, sorted by an
+  `ideology_score`). It is the shared persona dataset for the LLMR family. The
+  data is a derived product (no respondent identifiers, no restricted-use
+  variables); see `inst/CITATION` and cite ANES.
+* Persona-frame contract helpers: `llm_persona_split()` (split a row into
+  question-keyed demographics and answers), `llm_persona_overview()`,
+  `llm_persona_dictionary()`, `llm_persona_demographic_fields()`, and
+  `llm_validate_persona_frame()`. They read the `dictionary` and
+  `demographic_fields` attributes a persona frame may carry and degrade
+  gracefully when it does not, so downstream packages read such frames
+  identically.
+
 # LLMR 0.8.7
 
 ## New features

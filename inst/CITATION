@@ -1,0 +1,27 @@
+citHeader("To cite the LLMR package in publications use:")
+
+bibentry(
+  bibtype = "Manual",
+  title   = "LLMR: Interface for Large Language Model APIs in R",
+  author  = person("Ali", "Sanaei"),
+  year    = "2026",
+  note    = "R package",
+  url     = "https://github.com/asanaei/LLMR"
+)
+
+citFooter(
+  "The bundled example data 'anes_2024_personas' is derived from the public",
+  "release of the American National Election Studies (ANES) 2024 Time Series",
+  "Study. Work that uses those personas should also cite the source data:"
+)
+
+bibentry(
+  bibtype      = "Misc",
+  key          = "anes2024",
+  author       = person("American National Election Studies"),
+  year         = "2025",
+  title        = "ANES 2024 Time Series Study Full Release",
+  note         = "[dataset and documentation]. August 8, 2025",
+  organization = "University of Michigan and Stanford University",
+  url          = "https://electionstudies.org/data-center/2024-time-series-study/"
+)
