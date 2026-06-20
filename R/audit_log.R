@@ -103,6 +103,20 @@ llm_log_status <- function() {
 
 #' @rdname llm_log_enable
 #' @export
+#' @return `llm_log_active()` returns a list with `active` (logical), `path`
+#'   (the destination or `NULL`), and `include_messages` (logical), for code that
+#'   needs to read the logging state without printing.
+llm_log_active <- function() {
+  p <- getOption("llmr.log_file")
+  list(
+    active           = !is.null(p),
+    path             = p,
+    include_messages = isTRUE(getOption("llmr.log_messages", TRUE))
+  )
+}
+
+#' @rdname llm_log_enable
+#' @export
 llm_log_merge <- function(path) {
   .llmr_log_merge(path)
 }

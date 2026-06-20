@@ -1,3 +1,30 @@
+# LLMR 0.8.9
+
+## New features
+
+These additive helpers were requested by the LLMRagent layer; all are backward
+compatible (new arguments default to the previous behavior, or are new exports).
+
+* `call_llm_par(.request_hash = FALSE)`: opt in to a `request_hash` column on the
+  parallel results, the same key [llm_request_hash()] produces, so a parallel run
+  can be joined to the audit log. `llm_add_request_hash()` does the same to an
+  existing results frame after the fact.
+* `llm_log_active()`: a non-printing reader returning `list(active, path,
+  include_messages)`, so code can inspect the audit-log state without reaching
+  the underlying options.
+* `llm_agreement(metric = c("nominal", "ordinal", "interval"))`: Krippendorff's
+  alpha now supports ordinal and interval difference functions for numeric
+  measures. The default, `"nominal"`, is unchanged.
+* `llm_tool_signature()`: a stable SHA-256 over a tool's name, description, and
+  parameter schema (its function body excluded), for detecting interface drift.
+* `llm_uuid()`: a short, sortable, process-unique id, without a UUID dependency.
+
+## Robustness
+
+* `llm_log_read()` now reads a record's request body with `[["request"]]` rather
+  than `$request`, so a record carrying a flat `request_hash` (but no nested
+  `request`) can no longer partial-match and fail.
+
 # LLMR 0.8.8
 
 ## New features

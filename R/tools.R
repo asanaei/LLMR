@@ -55,6 +55,33 @@ llm_tool <- function(fn, name, description, parameters = NULL, required = NULL) 
   )
 }
 
+#' A stable signature for a tool's identity
+#'
+#' Returns a SHA-256 hash over a tool's `name`, `description`, and parameter
+#' `schema` (its implementation function is deliberately excluded, so the
+#' signature tracks the contract a model sees, not the R code). Use it to detect
+#' when a tool's advertised interface has changed, for example to pin a tool
+#' schema and notice a silent redefinition.
+#'
+#' @param tool An `llmr_tool` (from [llm_tool()]), or a list carrying `name`,
+#'   `description`, and `schema`.
+#' @return A 64-character lowercase hex string.
+#' @seealso [llm_tool()], [llm_hash()].
+#' @examples
+#' tl <- llm_tool(function(x) x, "echo", "Echo a value",
+#'                parameters = list(x = list(type = "string")))
+#' llm_tool_signature(tl)
+#' @export
+llm_tool_signature <- function(tool) {
+  if (!is.list(tool))
+    stop("`tool` must be an `llmr_tool` or a list with name/description/schema.")
+  llm_hash(list(
+    name        = tool$name %||% "",
+    description = tool$description %||% "",
+    schema      = tool$schema %||% list()
+  ))
+}
+
 #' @export
 print.llmr_tool <- function(x, ...) {
   args <- names(x$schema$properties %||% list())

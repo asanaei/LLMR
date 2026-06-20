@@ -94,6 +94,13 @@ llm_replicate <- function(.data, output, prompt, .config,
 #' @param normalize If `TRUE` (default), values are compared after trimming
 #'   whitespace and lowercasing, so "Positive" and " positive" agree. Set to
 #'   `FALSE` for exact string comparison.
+#' @param metric Difference function for Krippendorff's alpha: `"nominal"`
+#'   (default, categories either match or do not), `"ordinal"` (ordered
+#'   categories), or `"interval"` (numeric distance). For `"ordinal"` and
+#'   `"interval"`, labels that parse as numbers are ordered numerically (so "2"
+#'   precedes "10"); `"interval"` requires numeric labels and returns `NA` with a
+#'   warning otherwise. The default reproduces the previous nominal-only behavior
+#'   exactly.
 #' @return An object of class `llmr_agreement`: a list with
 #'   \describe{
 #'     \item{`by_row`}{a tibble with one row per unit: `majority` (modal
@@ -109,8 +116,10 @@ llm_replicate <- function(.data, output, prompt, .config,
 #'   nominal-data form with missing values allowed.
 #' @seealso [llm_replicate()]
 #' @export
-llm_agreement <- function(.data, cols = NULL, prefix = NULL, normalize = TRUE) {
+llm_agreement <- function(.data, cols = NULL, prefix = NULL, normalize = TRUE,
+                          metric = c("nominal", "ordinal", "interval")) {
   stopifnot(is.data.frame(.data))
+  metric <- match.arg(metric)
   if (is.null(cols)) {
     if (is.null(prefix)) stop("Supply `cols` or `prefix`.", call. = FALSE)
     cols <- grep(paste0("^", prefix, "_[0-9]+$"), names(.data), value = TRUE)
@@ -162,16 +171,23 @@ llm_agreement <- function(.data, cols = NULL, prefix = NULL, normalize = TRUE) {
     sum(tab * (tab - 1)) / (nu * (nu - 1))
   }, numeric(1))
 
+  alpha <- if (identical(metric, "nominal")) {
+    .krippendorff_alpha_nominal(m)            # unchanged path
+  } else {
+    .krippendorff_alpha(m, metric = metric)
+  }
+
   summary <- tibble::tibble(
     n_units = n_units,
     n_replicates = k,
     mean_pairwise_agreement = mean(pair_agree, na.rm = TRUE),
-    krippendorff_alpha = .krippendorff_alpha_nominal(m),
+    krippendorff_alpha = alpha,
     n_unanimous = sum(by_row$unanimous %in% TRUE),
     n_ties = sum(by_row$tie %in% TRUE)
   )
 
-  structure(list(by_row = by_row, summary = summary), class = "llmr_agreement")
+  structure(list(by_row = by_row, summary = summary, metric = metric),
+            class = "llmr_agreement")
 }
 
 #' @export
@@ -180,7 +196,8 @@ print.llmr_agreement <- function(x, ...) {
   cat("-- LLMR replicate agreement --\n")
   cat(sprintf("Units: %d | Replicates: %d\n", s$n_units, s$n_replicates))
   cat(sprintf("Mean pairwise agreement: %.3f\n", s$mean_pairwise_agreement))
-  cat(sprintf("Krippendorff's alpha (nominal): %.3f\n", s$krippendorff_alpha))
+  cat(sprintf("Krippendorff's alpha (%s): %.3f\n",
+              x$metric %||% "nominal", s$krippendorff_alpha))
   cat(sprintf("Unanimous units: %d | Tied units: %d\n", s$n_unanimous, s$n_ties))
   cat("Per-unit detail in $by_row\n")
   invisible(x)
@@ -219,6 +236,79 @@ print.llmr_agreement <- function(x, ...) {
   n_k <- colSums(n_uk)
   De <- sum(n_k * (n_total - n_k)) / (n_total * (n_total - 1))
 
+  if (De == 0) return(1)
+  1 - Do / De
+}
+
+# Krippendorff's alpha for ordinal or interval data with missing values, via the
+# coincidence matrix and a squared difference function delta^2(c, k):
+#   interval: (value_c - value_k)^2 over numeric category values.
+#   ordinal : (cumulative rank distance)^2 using the marginal counts, the
+#             standard ordinal metric (g_cumulative includes half each endpoint).
+# m: units x coders character matrix; category labels must coerce to numeric for
+# the interval metric (ordinal uses the sorted label order, values optional).
+#' @keywords internal
+#' @noRd
+.krippendorff_alpha <- function(m, metric = c("ordinal", "interval")) {
+  metric <- match.arg(metric)
+  keep <- rowSums(!is.na(m)) >= 2L
+  m <- m[keep, , drop = FALSE]
+  if (!nrow(m)) return(NA_real_)
+
+  uniq <- unique(stats::na.omit(as.vector(m)))
+  if (length(uniq) < 2L) return(1)
+
+  # Order matters for ordinal/interval. When the labels are numeric, order them
+  # NUMERICALLY (so "2" < "10", and the interval distances use the real values);
+  # otherwise fall back to the labels' sort order. interval requires numeric
+  # labels and is undefined (NA) without them.
+  num_vals <- suppressWarnings(as.numeric(uniq))
+  if (!anyNA(num_vals)) {
+    vals <- uniq[order(num_vals)]
+    num_vals <- sort(num_vals)
+  } else {
+    if (metric == "interval") {
+      warning("interval metric needs numeric category labels; returning NA.",
+              call. = FALSE)
+      return(NA_real_)
+    }
+    vals <- sort(uniq)        # ordinal on non-numeric labels: lexicographic order
+  }
+
+  # per-unit category counts
+  n_uk <- vapply(vals, function(v) rowSums(m == v, na.rm = TRUE), numeric(nrow(m)))
+  if (is.null(dim(n_uk))) n_uk <- matrix(n_uk, nrow = 1L)
+  n_u <- rowSums(n_uk)
+  n_total <- sum(n_u)
+  n_k <- colSums(n_uk)                      # overall counts per category
+  V <- length(vals)
+
+  # squared difference matrix delta2[c, k]
+  delta2 <- matrix(0, V, V)
+  if (metric == "interval") {
+    for (c in seq_len(V)) for (k in seq_len(V))
+      delta2[c, k] <- (num_vals[c] - num_vals[k])^2
+  } else {
+    # ordinal: delta(c,k) = ( sum_{g=c..k} n_g  -  (n_c + n_k)/2 )^2, c <= k
+    for (c in seq_len(V)) for (k in seq_len(V)) {
+      lo <- min(c, k); hi <- max(c, k)
+      g <- sum(n_k[lo:hi]) - (n_k[c] + n_k[k]) / 2
+      delta2[c, k] <- g^2
+    }
+  }
+
+  # observed coincidence within units: o[c,k] = sum_u (pairs of c,k in u)/(n_u-1)
+  o <- matrix(0, V, V)
+  for (u in seq_len(nrow(n_uk))) {
+    if (n_u[u] < 2L) next
+    cu <- n_uk[u, ]
+    pair <- outer(cu, cu)                   # n_uc * n_uk
+    diag(pair) <- cu * (cu - 1)             # ordered same-category pairs
+    o <- o + pair / (n_u[u] - 1)
+  }
+
+  Do <- sum(o * delta2) / n_total
+  De <- sum(outer(n_k, n_k) * delta2) / (n_total * (n_total - 1))
   if (De == 0) return(1)
   1 - Do / De
 }

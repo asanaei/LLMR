@@ -78,6 +78,7 @@ reference:
   - llm_log_read
   - llm_logprobs
   - llm_hash
+  - llm_uuid
 - title: Provenance and replay
   desc: >
     Turning an audit log back into a reproducible request: a content hash of a
@@ -103,6 +104,7 @@ reference:
   - llm_agreement
   - build_factorial_experiments
   - call_llm_par
+  - llm_add_request_hash
   - call_llm_broadcast
   - call_llm_sweep
   - call_llm_compare
@@ -121,6 +123,7 @@ reference:
 - title: Tools (function calling)
   contents:
   - llm_tool
+  - llm_tool_signature
   - call_llm_tools
   - tool_calls
   - bind_tools

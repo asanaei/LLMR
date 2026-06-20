@@ -1,6 +1,6 @@
 Package: LLMR
 Title: Interface for Large Language Model APIs in R
-Version: 0.8.8
+Version: 0.8.9
 Depends: R (>= 4.1.0)
 LazyData: true
 Authors@R: 

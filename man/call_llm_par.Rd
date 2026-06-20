@@ -15,7 +15,8 @@ call_llm_par(
   max_workers = NULL,
   progress = FALSE,
   json_output = NULL,
-  start_jitter = 0
+  start_jitter = 0,
+  .request_hash = FALSE
 )
 }
 \arguments{
@@ -50,6 +51,11 @@ This parameter is kept for backward compatibility but has no effect.}
 between 0 and \code{start_jitter} seconds. The default is 0 (no delay);
 set a few seconds when launching very large runs against a provider with
 strict burst limits.}
+
+\item{.request_hash}{Logical. If \code{TRUE}, append a \code{request_hash}
+column (the same key \code{\link{llm_request_hash}()} produces) so the
+results can be joined to the audit log. Default \code{FALSE}; the column is
+omitted unless requested. See also \code{\link{llm_add_request_hash}()}.}
 }
 \value{
 A tibble containing all original columns plus:

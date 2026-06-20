@@ -4,7 +4,13 @@
 \alias{llm_agreement}
 \title{Agreement across replicated LLM annotations}
 \usage{
-llm_agreement(.data, cols = NULL, prefix = NULL, normalize = TRUE)
+llm_agreement(
+  .data,
+  cols = NULL,
+  prefix = NULL,
+  normalize = TRUE,
+  metric = c("nominal", "ordinal", "interval")
+)
 }
 \arguments{
 \item{.data}{A data frame holding the replicate columns.}
@@ -18,6 +24,14 @@ are used.}
 \item{normalize}{If \code{TRUE} (default), values are compared after trimming
 whitespace and lowercasing, so "Positive" and " positive" agree. Set to
 \code{FALSE} for exact string comparison.}
+
+\item{metric}{Difference function for Krippendorff's alpha: \code{"nominal"}
+(default, categories either match or do not), \code{"ordinal"} (ordered
+categories), or \code{"interval"} (numeric distance). For \code{"ordinal"} and
+\code{"interval"}, labels that parse as numbers are ordered numerically (so "2"
+precedes "10"); \code{"interval"} requires numeric labels and returns \code{NA} with a
+warning otherwise. The default reproduces the previous nominal-only behavior
+exactly.}
 }
 \value{
 An object of class \code{llmr_agreement}: a list with

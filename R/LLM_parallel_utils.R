@@ -406,6 +406,10 @@ call_llm_compare <- function(configs_list,
 #'   between 0 and \code{start_jitter} seconds. The default is 0 (no delay);
 #'   set a few seconds when launching very large runs against a provider with
 #'   strict burst limits.
+#' @param .request_hash Logical. If \code{TRUE}, append a \code{request_hash}
+#'   column (the same key \code{\link{llm_request_hash}()} produces) so the
+#'   results can be joined to the audit log. Default \code{FALSE}; the column is
+#'   omitted unless requested. See also \code{\link{llm_add_request_hash}()}.
 #'
 #' @return A tibble containing all original columns plus:
 #' \itemize{
@@ -467,7 +471,8 @@ call_llm_par <- function(experiments,
                          max_workers = NULL,
                          progress = FALSE,
                          json_output = NULL,
-                         start_jitter = 0) {
+                         start_jitter = 0,
+                         .request_hash = FALSE) {
 
   if (!is.null(json_output) && verbose) {
     message("Note: The 'json_output' parameter is deprecated. Raw JSON is always included as 'raw_response_json'.")
@@ -743,12 +748,50 @@ call_llm_par <- function(experiments,
                     successful_calls, nrow(output_df)))
   }
 
+  # Opt-in: append the audit-log join key, computed from the retained config and
+  # messages columns (off by default; the column is added only when requested).
+  if (isTRUE(.request_hash)) {
+    output_df <- .llmr_add_request_hash(output_df)
+  }
+
   if (simplify) {
     output_df <- .unnest_config_to_cols(output_df, config_col = "config")
   }
   res <- if (requireNamespace("tibble", quietly = TRUE)) tibble::as_tibble(output_df) else output_df
   class(res) <- unique(c("llmr_experiment", class(res)))
   res
+}
+
+# Append a `request_hash` column from a frame's retained `config`/`messages`
+# columns. Internal worker for both `call_llm_par(.request_hash=TRUE)` and the
+# exported `llm_add_request_hash()`.
+.llmr_add_request_hash <- function(df) {
+  if (!all(c("config", "messages") %in% names(df))) {
+    stop("`config` and `messages` columns are required to add `request_hash`.")
+  }
+  df$request_hash <- vapply(seq_len(nrow(df)), function(i) {
+    tryCatch(
+      llm_request_hash(config = df$config[[i]], messages = df$messages[[i]]),
+      error = function(e) NA_character_)
+  }, character(1))
+  df
+}
+
+#' Append the audit-log request hash to a parallel-results frame
+#'
+#' Adds a `request_hash` column to a data frame that still carries the `config`
+#' and `messages` list-columns (such as the result of [call_llm_par()]). The
+#' hash is the same key [llm_request_hash()] produces, so the parallel path can
+#' be joined to the audit log written by [llm_log_enable()]. Equivalent to
+#' calling `call_llm_par(..., .request_hash = TRUE)` after the fact.
+#'
+#' @param df A data frame with `config` and `messages` columns.
+#' @return `df` with an added `request_hash` character column.
+#' @seealso [call_llm_par()], [llm_request_hash()].
+#' @export
+llm_add_request_hash <- function(df) {
+  stopifnot(is.data.frame(df))
+  .llmr_add_request_hash(df)
 }
 
 #' Build Factorial Experiment Design

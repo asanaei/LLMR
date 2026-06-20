@@ -77,13 +77,13 @@ llm_log_read <- function(log) {
       model_version  = as.character(r$model_version %||% NA_character_),
       status         = as.integer(r$status %||% NA_integer_),
       schema_version = as.character(r$schema_version %||% NA_character_),
-      has_payload    = !is.null(r$request) || !is.null(r$text),
-      request_hash   = if (is.null(r$request)) NA_character_ else
+      has_payload    = !is.null(r[["request"]]) || !is.null(r$text),
+      request_hash   = if (is.null(r[["request"]])) NA_character_ else
                          llm_request_hash(
                            provider = r$provider, model = r$model,
                            messages = .llmr_messages_from_turns(
-                             .llmr_turns(provider = r$provider, request = r$request)),
-                           extra = list(params = .llmr_body_params(r$request))),
+                             .llmr_turns(provider = r$provider, request = r[["request"]])),
+                           extra = list(params = .llmr_body_params(r[["request"]]))),
       record_hash    = .llmr_line_hash(records[[i]]$raw)
     )
   }))
@@ -132,8 +132,8 @@ llm_log_read <- function(log) {
 llm_request_from_log <- function(record,
                                  on_unsupported = c("error", "warn", "quiet")) {
   on_unsupported <- match.arg(on_unsupported)
-  if (is.null(record$request)) return(NULL)
-  req <- record$request
+  if (is.null(record[["request"]])) return(NULL)
+  req <- record[["request"]]
 
   turns <- .llmr_turns(provider = record$provider, request = req)
   messages <- .llmr_messages_from_turns(turns)
