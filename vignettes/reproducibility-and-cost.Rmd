@@ -78,6 +78,12 @@ ag
 ag$by_row
 ```
 
+A note on reasoning models such as `gpt-oss-20b`: they spend tokens on hidden
+reasoning before the visible answer, so a small `max_tokens` paired with a
+non-zero temperature can return an empty reply (the budget is exhausted before
+the answer emerges). Give such models a generous `max_tokens`, and prefer leaving
+the temperature unset, since several reasoning models expect their own default.
+
 Low alpha is itself a finding: the instrument disagrees with itself on this
 construct, and downstream estimates should carry that uncertainty rather than
 hide it.

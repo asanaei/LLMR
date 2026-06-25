@@ -1,8 +1,8 @@
 ---
-title: "Frictionless Science: The Trolley Dilemma"
+title: "A Trolley Dilemma Experiment with LLMR"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Frictionless Science: The Trolley Dilemma}
+  %\VignetteIndexEntry{A Trolley Dilemma Experiment with LLMR}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -14,9 +14,9 @@ knitr::opts_chunk$set(
 )
 ```
 
-Behavioral researchers increasingly use large language models (LLMs) to simulate human judgments. This vignette runs a classical moral philosophy experiment, the Trolley Dilemma, with the `LLMR` package. It skips the single-call chat functions and goes straight to a vectorized experimental design built with `llm_mutate()`.
+Some behavioral researchers use large language models to simulate human judgments. This vignette shows the mechanics of that workflow, not a validation of the practice: it runs a classical moral-philosophy experiment, the Trolley Dilemma, with the `LLMR` package, skipping the single-call chat functions and going straight to a vectorized experimental design built with `llm_mutate()`.
 
-For this demonstration, we utilize an open-weights model provided via the Groq API.
+The demonstration uses an open-weights model served through the Groq API.
 
 ```{r setup, message=FALSE, warning=FALSE}
 library(LLMR)
@@ -31,7 +31,7 @@ cfg <- llm_config(
 
 ## Designing the Experiment
 
-We construct a fundamental stimulus set representing two standard variants of the Trolley Dilemma.
+We construct two standard variants of the Trolley Dilemma as the stimulus set.
 
 ```{r stimuli}
 dilemmas <- tibble::tibble(

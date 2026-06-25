@@ -59,7 +59,7 @@ provider's guarantee.
 - Arrays/objects appear where you expected scalars; **ints vs doubles** vary by provider/sample.  
 - **Safety/length caps** can truncate output; detect and handle “finish_reason = length/filter.”  
 
-### LLMR helpers to blunt those edges
+### LLMR helpers for common parsing failures
 
 - `llm_parse_structured()` strips fences and extracts the **largest balanced** `{...}` or `[...]` before parsing.  
 - `llm_parse_structured_col()` hoists fields (supports dot/bracket paths and JSON Pointer) and keeps non-scalars as list-columns.  

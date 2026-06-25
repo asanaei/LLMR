@@ -116,6 +116,6 @@ When run with a valid API key, this analysis would:
 1. Generate high-dimensional embeddings for each presidential speech excerpt
 2. Show correlation patterns between different presidents' rhetorical styles
 3. Create a dendrogram clustering presidents by linguistic similarity
-4. Reveal historical and stylistic patterns in presidential rhetoric
+4. Suggest patterns that can be inspected against known period, genre, and rhetorical differences
 
 **To run this vignette yourself:** Set your Gemini API key in your environment and set `LLMR_RUN_VIGNETTES=true` before rendering the vignette.
