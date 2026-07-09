@@ -557,11 +557,15 @@ llm_parse_structured_col <- function(.data, fields, structured_col = "response_t
           }
           v
         }
-        vals    <- lapply(vals, coerce_scalar_like)
-        nonnull <- vals[!vapply(vals, is.null, logical(1))]
+        # Coerce into a NEW variable so the error handler below still sees the
+        # ORIGINAL strings: if vec_ptype_common() fails on a mixed column, the
+        # fallback must stringify the originals ("5.10"), not the coerced values
+        # ("5.10" -> 5.1 -> "5.1"), which would silently corrupt the data.
+        vals_c  <- lapply(vals, coerce_scalar_like)
+        nonnull <- vals_c[!vapply(vals_c, is.null, logical(1))]
           ptype <- vctrs::vec_ptype_common(!!!nonnull)
         na_val <- vctrs::vec_cast(NA, ptype)
-        casted <- lapply(vals, function(v) if (is.null(v)) na_val else vctrs::vec_cast(v, ptype))
+        casted <- lapply(vals_c, function(v) if (is.null(v)) na_val else vctrs::vec_cast(v, ptype))
         vctrs::vec_c(!!!casted)
       } else {
           if (length(nonnull) == 0L) {

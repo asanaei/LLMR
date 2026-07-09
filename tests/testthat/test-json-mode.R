@@ -43,3 +43,16 @@ test_that("llm_parse_tags_col supports renamed fields and missing tags", {
   expect_equal(out$person_age[[1]], 21)
   expect_true(is.na(out$person_age[[2]]))
 })
+
+test_that("field hoisting keeps original strings on a mixed column", {
+  # numeric- and boolean-looking strings mixed with plain strings can't share a
+  # numeric/logical ptype; the column must fall back to the ORIGINAL strings, not
+  # to the coerced-then-stringified values ("5.10" -> 5.1 -> "5.1").
+  df <- tibble::tibble(response_text = c('{"v": "5.10"}', '{"v": "N/A"}', '{"v": "true"}'))
+  out <- llm_parse_structured_col(df, fields = "v")
+  expect_identical(out$v, c("5.10", "N/A", "true"))
+
+  # a homogeneous numeric-string column still coerces to numeric (no regression)
+  dfn <- tibble::tibble(response_text = c('{"v": "5.10"}', '{"v": "3"}'))
+  expect_type(llm_parse_structured_col(dfn, fields = "v")$v, "double")
+})
