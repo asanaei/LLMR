@@ -5,6 +5,7 @@
 
 # Per-provider quirks for the OpenAI-compatible streaming path.
 .compat_stream_spec <- function(provider) {
+  provider <- provider %||% "openai"   # NULL -> OpenAI-compatible default
   endpoints <- c(
     openai   = "https://api.openai.com/v1/chat/completions",
     groq     = "https://api.groq.com/openai/v1/chat/completions",
@@ -18,7 +19,11 @@
     ollama   = "http://localhost:11434/v1/chat/completions"
   )
   list(
-    endpoint = endpoints[[provider]] %||% endpoints[["openai"]],
+    # `[[` with an unknown name errors ("subscript out of bounds") before %||%
+    # can fall back, so guard the lookup; an unlisted (or NULL) provider streams
+    # against the OpenAI-compatible default, matching call_llm()'s default route.
+    endpoint = if (isTRUE(provider %in% names(endpoints))) endpoints[[provider]]
+               else endpoints[["openai"]],
     auth = if (identical(provider, "xiaomi")) "api-key"
            else if (identical(provider, "ollama")) "none" else "bearer",
     drop = switch(provider,

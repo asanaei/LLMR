@@ -355,3 +355,19 @@ test_that("stream specs cover every compat provider", {
     expect_true(spec$auth %in% c("bearer", "api-key", "none"))
   }
 })
+
+test_that("stream spec falls back to the OpenAI default for unlisted/NULL providers", {
+  # `[[` on an unknown name used to error ("subscript out of bounds") before the
+  # %||% fallback could run; an unlisted provider (a custom gateway) must stream
+  # against the OpenAI-compatible default rather than crash.
+  oa <- LLMR:::.compat_stream_spec("openai")$endpoint
+  for (p in list("openrouter", "my-gateway", NULL)) {
+    spec <- LLMR:::.compat_stream_spec(p)
+    expect_identical(spec$endpoint, oa)
+    expect_identical(spec$auth, "bearer")
+  }
+  # a genuinely unknown provider is treated conservatively (no stream_options),
+  # whereas NULL normalizes to openai and keeps openai's own settings
+  expect_false(LLMR:::.compat_stream_spec("openrouter")$usage_opt)
+  expect_true(LLMR:::.compat_stream_spec(NULL)$usage_opt)
+})
