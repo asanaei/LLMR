@@ -385,3 +385,32 @@ test_that("batched llm_mutate adds batch columns and resolves rows", {
   per_batch <- tapply(out$ans_tot, out$ans_rowpack, function(x) sum(!is.na(x)))
   expect_true(all(per_batch == 1L))
 })
+
+test_that("retry_same retries once and halve_once does not recurse to singletons", {
+  # retry_same: exactly one retry, then give up (was ~log2(rows_per_prompt)+1).
+  nc <- 0L
+  never <- function(config, messages, ...) { nc <<- nc + 1L; mk_res("no rows here") }
+  LLMR:::.run_batched(CFG, paste0("t", 1:4), NULL, mode = "plain", rows_per_prompt = 4,
+                      rowpack_recovery = "retry_same", .broadcast = never)
+  expect_equal(nc, 2L)
+
+  # A stub that resolves the first two rows of any batch (so head_only is FALSE
+  # and the halve_once / halve_recursive branch actually runs) and leaves the
+  # rest unresolved.
+  partial <- function(config, messages, ...) {
+    ids <- .local_ids(.get_user(messages[[1]]))
+    if (!length(ids)) return(mk_res("ok"))                 # unwrapped singleton
+    keep <- utils::head(ids, 2L)
+    mk_res(paste0("<row_", keep, ">ok</row_", keep, ">", collapse = "\n"))
+  }
+  n_once <- 0L
+  LLMR:::.run_batched(CFG, paste0("t", 1:6), NULL, mode = "plain", rows_per_prompt = 6,
+    rowpack_recovery = "halve_once",
+    .broadcast = function(config, messages, ...) { n_once <<- n_once + 1L; partial(config, messages, ...) })
+  n_rec <- 0L
+  LLMR:::.run_batched(CFG, paste0("t", 1:6), NULL, mode = "plain", rows_per_prompt = 6,
+    rowpack_recovery = "halve_recursive",
+    .broadcast = function(config, messages, ...) { n_rec <<- n_rec + 1L; partial(config, messages, ...) })
+  # halve_once stops after the single halving; halve_recursive keeps splitting
+  expect_lt(n_once, n_rec)
+})

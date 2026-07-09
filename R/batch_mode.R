@@ -744,7 +744,11 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
     }
 
     if (identical(rowpack_recovery, "retry_same")) {
-      if (b$depth + 1L >= max_depth) {
+      # Documented as "re-issue the failed batch once at the same size": retry
+      # exactly once (from the depth-0 original), then give up. A retry is
+      # enqueued at depth 1, whose own failure re-enters this branch and hits the
+      # depth >= 1 guard below -- so it fails rather than retrying a second time.
+      if (b$depth >= 1L) {
         fail_rows(U, .terminal_reason(res_b), res_b, b$bid,
                   tokens_available = !tokens_credited); next
       }
@@ -755,12 +759,15 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
     } else if (identical(rowpack_recovery, "halve_once")) {
       k2 <- max(1L, as.integer(ceiling(m / 2)))
       if (k2 >= m) k2 <- 1L
-      # halve_once: split once; children at depth that prevents further recursion
+      # halve_once: split at half size exactly once, then give up. Children are
+      # enqueued at depth = max_depth so the terminal check above fails their own
+      # unresolved rows instead of halving them again (max_depth - 1L did not
+      # satisfy `>= max_depth`, so they recursed all the way to singletons).
       parts <- .batch_partition(length(U), k2); j <- 0L
       for (chunk in parts) {
         j <- j + 1L
         queue[[length(queue) + 1L]] <- list(
-          rows = U[chunk], depth = max_depth - 1L,  # children won't recurse again
+          rows = U[chunk], depth = max_depth,
           bid  = paste0(b$bid, ".", j))
       }
     } else {  # "halve_recursive" (default)
