@@ -70,6 +70,11 @@ give up on any still-unresolved rows.}
 }
 Recovery is bounded by an internal call budget so it always terminates.}
 }
+\value{
+Depends on \code{.return}: \code{"columns"} (default) a tibble with the parsed
+tag columns and diagnostics; \code{"text"} a character vector of the raw
+responses; \code{"object"} a list (one element per row) of parsed tag data.
+}
 \description{
 Tags-first variant of \code{\link[=llm_fn]{llm_fn()}}. Injects tag instructions, calls the model
 via \code{\link[=call_llm_broadcast]{call_llm_broadcast()}}, then parses XML-like tags from each response.

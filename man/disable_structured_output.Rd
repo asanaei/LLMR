@@ -9,6 +9,9 @@ disable_structured_output(config)
 \arguments{
 \item{config}{llm_config}
 }
+\value{
+The \code{llm_config} with the structured-output request fields removed.
+}
 \description{
 Removes response_format/response_schema/response_mime_type and schema tool if present.
 Keeps user tools intact.

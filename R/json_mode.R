@@ -187,6 +187,7 @@ enable_structured_output <- function(config,
 #' Removes response_format/response_schema/response_mime_type and schema tool if present.
 #' Keeps user tools intact.
 #' @param config llm_config
+#' @return The `llm_config` with the structured-output request fields removed.
 #' @seealso [enable_structured_output()]
 #' @export
 disable_structured_output <- function(config) {
@@ -605,6 +606,8 @@ llm_parse_structured_col <- function(.data, fields, structured_col = "response_t
 #' @param .data A data.frame with a `structured_data` list-column.
 #' @param schema JSON Schema (R list)
 #' @param structured_list_col Column name with parsed JSON. Default "structured_data".
+#' @return `.data` with two added columns: `structured_valid` (logical) and
+#'   `structured_error` (character; `NA` when valid).
 #' @seealso [llm_parse_structured_col()], [llm_fn_structured()]
 #' @export
 llm_validate_structured_col <- function(.data, schema, structured_list_col = "structured_data") {
@@ -651,6 +654,10 @@ llm_validate_structured_col <- function(.data, schema, structured_list_col = "st
 #' @param .fields Optional fields to hoist from parsed JSON (supports nested paths).
 #' @param .local_only If TRUE, do not send schema to the provider (parse/validate locally).
 #' @param .validate_local If TRUE and `.schema` provided, validate locally.
+#' @return A tibble: the [call_llm_broadcast()] diagnostics plus the parsed
+#'   structured columns (`structured_ok`, `structured_data`, one column per
+#'   hoisted field, and `structured_valid`/`structured_error` when `.schema` is
+#'   validated locally).
 #' @seealso [llm_fn()], [llm_mutate_structured()], [enable_structured_output()],
 #'   [llm_parse_structured_col()]
 #' @export
@@ -726,6 +733,10 @@ llm_fn_structured <- function(x,
 #' df |> llm_mutate_structured(result = c(system = "Be brief.", user = "{text}"), .config = cfg, .schema = schema)
 #' }
 #'
+#' @return `.data` with the output column, the diagnostic columns, and the parsed
+#'   structured columns (`structured_ok`, `structured_data`, one column per
+#'   hoisted field, and `structured_valid`/`structured_error` when `.schema` is
+#'   validated locally).
 #' @seealso [llm_mutate()], [llm_fn_structured()], [enable_structured_output()],
 #'   [llm_parse_structured_col()], [llm_mutate_tags()]
 #' @export
@@ -837,6 +848,9 @@ llm_mutate_structured <- function(.data,
 #' @param schema Optional JSON Schema list.
 #' @param .fields Optional fields to hoist from parsed JSON (supports nested paths).
 #' @param ... Passed to [call_llm_par()].
+#' @return A tibble of class `llmr_experiment`: the [call_llm_par()] result with
+#'   structured output parsed by [llm_parse_structured_col()] (adds
+#'   `structured_ok`, `structured_data`, and one column per hoisted field).
 #' @seealso [call_llm_par()], [llm_parse_structured_col()],
 #'   [enable_structured_output()]
 #' @export

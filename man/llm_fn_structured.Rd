@@ -68,6 +68,12 @@ give up on any still-unresolved rows.}
 }
 Recovery is bounded by an internal call budget so it always terminates.}
 }
+\value{
+A tibble: the \code{\link[=call_llm_broadcast]{call_llm_broadcast()}} diagnostics plus the parsed
+structured columns (\code{structured_ok}, \code{structured_data}, one column per
+hoisted field, and \code{structured_valid}/\code{structured_error} when \code{.schema} is
+validated locally).
+}
 \description{
 Schema-first variant of \code{\link[=llm_fn]{llm_fn()}}. It enables structured output on the config,
 calls the model via \code{\link[=call_llm_broadcast]{call_llm_broadcast()}}, parses JSON, and optionally validates.

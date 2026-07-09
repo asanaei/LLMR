@@ -1,6 +1,6 @@
 Package: LLMR
 Title: Interface for Large Language Model APIs in R
-Version: 0.8.9
+Version: 0.8.10
 Depends: R (>= 4.1.0)
 LazyData: true
 Authors@R: 
@@ -14,8 +14,8 @@ Encoding: UTF-8
 Imports: httr2 (>= 1.0.0), curl, purrr, dplyr, tidyr, rlang, memoise, future, future.apply,
         tibble, base64enc, mime,  glue (>= 1.6.0),  cli (>= 3.6.0), jsonlite, vctrs,
         digest, tidyselect
-Suggests: testthat (>= 3.0.0), roxygen2 (>= 7.1.2), httptest2,
-       progressr, knitr, rmarkdown, ggplot2, R.rsp, jsonvalidate,
+Suggests: testthat (>= 3.0.0), roxygen2 (>= 7.1.2),
+       progressr, knitr, rmarkdown, ggplot2, jsonvalidate,
        stringi, kableExtra
 RoxygenNote: 7.3.3
 Roxygen: list(markdown = TRUE)

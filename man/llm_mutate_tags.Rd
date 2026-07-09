@@ -71,6 +71,10 @@ One of \code{"halve_recursive"} (default), \code{"halve_once"}, \code{"singleton
 \item{...}{Passed to the underlying calls: \code{\link[=call_llm_broadcast]{call_llm_broadcast()}} in
 generative mode, \code{\link[=get_batched_embeddings]{get_batched_embeddings()}} in embedding mode.}
 }
+\value{
+\code{.data} with the output column, the diagnostic columns, \code{tags_ok},
+\code{tags_data}, and one column per requested tag or field.
+}
 \description{
 Soft structured variant of \code{\link[=llm_mutate]{llm_mutate()}}. It asks the model to return simple
 XML-like tags, then parses those tags into columns.

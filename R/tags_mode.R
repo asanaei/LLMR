@@ -269,6 +269,8 @@ llm_parse_tags_col <- function(.data, tags, tags_col = "response_text", fields =
 #'   )
 #' }
 #'
+#' @return `.data` with the output column, the diagnostic columns, `tags_ok`,
+#'   `tags_data`, and one column per requested tag or field.
 #' @seealso [llm_mutate()], [llm_parse_tags()], [llm_parse_tags_col()],
 #'   [llm_mutate_structured()], [llm_parse_structured_col()]
 #' @export
@@ -356,6 +358,9 @@ llm_mutate_tags <- function(.data,
 #'   raw response text. Unlike [llm_fn()], `"object"` here returns the parsed tag
 #'   data (a list, one element per row), not `llmr_response` objects; this form
 #'   is also supported together with `.rows_per_prompt > 1`.
+#' @return Depends on `.return`: `"columns"` (default) a tibble with the parsed
+#'   tag columns and diagnostics; `"text"` a character vector of the raw
+#'   responses; `"object"` a list (one element per row) of parsed tag data.
 #' @seealso [llm_fn()], [llm_mutate_tags()], [llm_parse_tags_col()],
 #'   [call_llm_par_tags()]
 #' @export
@@ -427,6 +432,9 @@ llm_fn_tags <- function(x,
 #' @param .fields `NULL` to extract all tags, a character vector of tags, a named
 #'   vector such as `c(person_age = "age")`, or `FALSE` to skip field extraction.
 #' @param ... Passed to [call_llm_par()].
+#' @return A tibble of class `llmr_experiment`: the [call_llm_par()] result with
+#'   XML-like tags parsed by [llm_parse_tags_col()] (adds `tags_ok`, `tags_data`,
+#'   and one column per requested tag or field).
 #' @seealso [call_llm_par()], [llm_parse_tags_col()], [llm_fn_tags()],
 #'   [llm_mutate_tags()]
 #' @export
