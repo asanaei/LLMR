@@ -350,6 +350,31 @@ test_that("expand_llm_config keeps S3 dispatch in sync with swept provider", {
   expect_identical(class(cfgs[[2]]), c("llm_config", "anthropic"))
 })
 
+test_that("call_llm_sweep routes top-level fields to the config, not model_params", {
+  base <- llm_config("groq", "openai/gpt-oss-20b", temperature = 0)
+  # sweep a top-level field: it must land on the config, and the model_params
+  # must NOT gain a stray key (the old bug varied nothing and sent a duplicate).
+  sweep_cfg <- function(param_name, values) {
+    # exercise the exact config-construction the sweep uses, offline: stub the
+    # engine so it returns the experiments tibble (with its config column) as-is
+    testthat::local_mocked_bindings(
+      call_llm_par = function(experiments, ...) experiments, .package = "LLMR")
+    call_llm_sweep(base, param_name, values, "hi")
+  }
+  ex_model <- sweep_cfg("model", c("m-A", "m-B"))
+  expect_identical(ex_model$config[[1]]$model, "m-A")
+  expect_identical(ex_model$config[[2]]$model, "m-B")
+  expect_null(ex_model$config[[1]]$model_params$model)
+
+  ex_prov <- sweep_cfg("provider", c("openai", "anthropic"))
+  expect_identical(class(ex_prov$config[[2]]), c("llm_config", "anthropic"))
+
+  # an ordinary sampling param still goes to model_params
+  ex_temp <- sweep_cfg("temperature", c(0, 1))
+  expect_null(ex_temp$config[[2]]$temperature)
+  expect_equal(ex_temp$config[[2]]$model_params$temperature, 1)
+})
+
 test_that("balanced-segment recovery is string-aware", {
   s <- 'Sure: {"note":"use { sparingly","x":1} hope that helps'
   out <- llm_parse_structured(s)

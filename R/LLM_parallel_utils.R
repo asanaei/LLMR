@@ -220,13 +220,25 @@ call_llm_sweep <- function(base_config,
     ))
   }
 
+  # Top-level config fields must be set on the config itself, not tucked into
+  # model_params (where sweeping e.g. "model" would leave the real model unchanged
+  # and send a duplicate key). Mirrors expand_llm_config()'s routing.
+  top_level <- c("provider", "model", "api_key", "embedding",
+                 "troubleshooting", "no_change")
+
   # Build experiments tibble
   experiments <- tibble::tibble(
     !!param_name := param_values, # Use the actual parameter name directly
     config = lapply(param_values, function(val) {
       modified_config <- base_config
-      if (is.null(modified_config$model_params)) modified_config$model_params <- list()
-      modified_config$model_params[[param_name]] <- val
+      if (param_name %in% top_level) {
+        modified_config[[param_name]] <- val
+        # provider determines S3 dispatch in call_llm(); keep the class in sync
+        class(modified_config) <- c("llm_config", modified_config$provider)
+      } else {
+        if (is.null(modified_config$model_params)) modified_config$model_params <- list()
+        modified_config$model_params[[param_name]] <- val
+      }
       modified_config
     }),
     messages = rep(list(messages), length(param_values))
