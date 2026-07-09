@@ -1192,13 +1192,26 @@ llm_cross_design <- function(.data, configs, prompt = NULL, .messages = NULL, .s
 #' @seealso [call_llm_par()]
 #' @export
 llm_par_resume <- function(results, tries = 3, ...) {
-  if (is.data.frame(results) &&
-      any(grepl("^success\\.[0-9]+$", names(results)))) {
-    stop("This result has a collision-renamed 'success' column (e.g. ",
-         "'success.1'), which happens when the input frame already had a column ",
-         "named 'success'. Rename that input column before calling ",
-         "call_llm_par() so the diagnostic columns keep their canonical names.",
-         call. = FALSE)
+  # If the input frame had a column named like ANY diagnostic, call_llm_par()
+  # collision-renamed its own output (e.g. duration -> duration.1). The patch
+  # loop below matches columns by name, so it would overwrite the user's column
+  # with re-run diagnostics. Refuse up front (as the original guard did for
+  # 'success' only) rather than silently corrupt the frame.
+  diag_cols <- c("response_text", "raw_response_json", "success", "error_message",
+                 "finish_reason", "sent_tokens", "rec_tokens", "total_tokens",
+                 "reasoning_tokens", "cached_tokens", "response_id", "duration",
+                 "status_code", "error_code", "bad_param", "response")
+  if (is.data.frame(results)) {
+    renamed <- diag_cols[vapply(diag_cols, function(d)
+      any(grepl(paste0("^", d, "\\.[0-9]+$"), names(results))), logical(1))]
+    if (length(renamed)) {
+      stop("This result has collision-renamed diagnostic column(s) (e.g. '",
+           renamed[[1]], ".1'), which happens when the input frame already had ",
+           "column(s) named like a diagnostic (",
+           paste(renamed, collapse = ", "), "). Rename those input column(s) ",
+           "before calling call_llm_par() so llm_par_resume() patches the right ",
+           "columns.", call. = FALSE)
+    }
   }
   if (!is.data.frame(results) ||
       !all(c("config", "messages", "success") %in% names(results))) {
