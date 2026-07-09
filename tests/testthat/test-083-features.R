@@ -240,6 +240,25 @@ test_that("cached tokens flow into llm_mutate diagnostic columns", {
   expect_equal(out$ans_cached, 4L)
 })
 
+test_that("llm_mutate appends generated columns by default and honors .before/.after", {
+  stub <- function(config, messages, ...) mk_res(length(messages))
+  df <- tibble::tibble(id = 1:2, q = c("a", "b"))
+  cfg <- llm_config("openai", "m")
+
+  # default: generated block APPENDED after the input columns (not moved front)
+  d <- with_stub_broadcast2(stub, llm_mutate(df, ans, prompt = "{q}", .config = cfg))
+  expect_identical(names(d)[1:2], c("id", "q"))
+  expect_identical(which(names(d) == "ans"), 3L)
+
+  # .after = id : bare symbol must not crash, and the block lands right after id
+  a <- with_stub_broadcast2(stub, llm_mutate(df, ans, prompt = "{q}", .config = cfg, .after = id))
+  expect_identical(names(a)[1:2], c("id", "ans"))
+
+  # .before = q : block lands before q
+  b <- with_stub_broadcast2(stub, llm_mutate(df, ans, prompt = "{q}", .config = cfg, .before = q))
+  expect_lt(which(names(b) == "ans"), which(names(b) == "q"))
+})
+
 # ---- preview additions ----------------------------------------------------------
 
 test_that("preview flags NA templates and empty prompts", {

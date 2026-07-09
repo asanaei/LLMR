@@ -862,6 +862,13 @@ llm_mutate <- function(.data,
     added
   )
 
+  # Append by default (dplyr::mutate semantics). Relocate only when the caller
+  # asked: with both .before and .after absent, dplyr::relocate() would move the
+  # generated columns to the FRONT, contradicting the documented "appended"
+  # contract (and the batched/embedding paths, which already guard this way).
+  # `missing()` flags are used rather than is.null(), because is.null() would
+  # force-evaluate a bare-symbol .before/.after and error.
+  if (before_missing && after_missing) return(res_df)
   res_df <- dplyr::relocate(
     res_df,
     dplyr::all_of(names(added)),
