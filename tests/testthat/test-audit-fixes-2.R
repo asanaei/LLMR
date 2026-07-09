@@ -106,3 +106,33 @@ test_that("llm_usage does not over-count batch follow-on NA rows as unknown", {
   expect_equal(u$total_tokens, 90L)
   expect_equal(u$n_unknown_tokens, 0L)   # the NA rows are by-design, not unknown
 })
+
+test_that("Anthropic/Gemini keep stop_sequences and note unrecognized params", {
+  op <- options(llmr.quiet = TRUE); on.exit(options(op), add = TRUE)
+  ab <- LLMR:::.anthropic_chat_request(
+    llm_config("anthropic", "claude-haiku-4-5", max_tokens = 100,
+               stop_sequences = list("END"), metadata = list(user_id = "u1")),
+    c(user = "hi"))$body$data
+  expect_false(is.null(ab$stop_sequences))
+  expect_false(is.null(ab$metadata))
+
+  gb <- LLMR:::.gemini_chat_request(
+    llm_config("gemini", "gemini-2.5-flash-lite", stop_sequences = list("STOP")),
+    c(user = "hi"))$body$data
+  expect_false(is.null(gb$generationConfig$stopSequences))
+
+  # a truly unknown parameter is noted; known/structured params are not
+  options(llmr.quiet = FALSE)
+  expect_message(
+    invisible(LLMR:::.anthropic_chat_request(
+      llm_config("anthropic", "claude-haiku-4-5", max_tokens = 50, made_up_param = 1),
+      c(user = "hi"))),
+    "made_up_param")
+})
+
+test_that("OpenAI Responses path refuses structured output / tools with a clear error", {
+  cfg <- enable_structured_output(llm_config("openai", "o3-pro"),
+                                  schema = list(type = "object",
+                                                properties = list(a = list(type = "string"))))
+  expect_error(call_llm(cfg, "hi"), "Responses API")
+})
