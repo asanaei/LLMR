@@ -380,8 +380,8 @@ llm_fn_tags <- function(x,
   if (.batched) {
     .assert_batch_not_embedding(.config)
     .assert_tags_not_rowlike(tags)
-    user_txt <- if (is.data.frame(x)) glue::glue_data(x, prompt, .na = "") else
-      glue::glue_data(list(x = x), prompt, .na = "")
+    user_txt <- if (is.data.frame(x)) .llm_glue_rows(x, prompt, nrow(x)) else
+      .llm_glue_rows(list(x = x), prompt, length(x))
     res <- .run_batched(
       config = .config, per_row_texts = as.character(user_txt),
       system_text = .system_prompt, mode = "tags", tags = tags,

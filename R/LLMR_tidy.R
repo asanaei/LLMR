@@ -235,7 +235,7 @@ llm_fn <- function(x,
                        .rowpack_recovery = .rowpack_recovery))
   }
 
-  user_txt <- as.character(glue::glue_data(row_df0, prompt, .na = ""))
+  user_txt <- .llm_glue_rows(row_df0, prompt, n_rows)
 
   # Embeddings branch
   if (.is_embedding_config(.config)) {
@@ -717,7 +717,7 @@ llm_mutate <- function(.data,
       }, FUN.VALUE = character(1))
     } else {
       if (is.null(prompt)) stop("For embeddings, provide 'prompt' or '.messages' that yields a user text.")
-      as.character(glue::glue_data(.data, prompt, .na = ""))
+      .llm_glue_rows(.data, prompt, nrow(.data))
     }
 
     emb_mat <- do.call(

@@ -870,10 +870,10 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
   }
 
   if (!is.null(data_df)) {
-    per_row <- as.character(glue::glue_data(data_df, prompt, .na = ""))
+    per_row <- .llm_glue_rows(data_df, prompt, nrow(data_df))
   } else {
-    per_row <- if (is.data.frame(x)) as.character(glue::glue_data(x, prompt, .na = ""))
-               else as.character(glue::glue_data(list(x = x), prompt, .na = ""))
+    per_row <- if (is.data.frame(x)) .llm_glue_rows(x, prompt, nrow(x))
+               else .llm_glue_rows(list(x = x), prompt, length(x))
   }
 
   res <- .run_batched(
@@ -940,7 +940,7 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
       paste(unname(m[names(m) == "user"]), collapse = "\n\n"), character(1))
   } else {
     if (is.null(prompt)) stop("Either 'prompt' or '.messages' must be provided.")
-    per_row <- as.character(glue::glue_data(.data, prompt, .na = ""))
+    per_row <- .llm_glue_rows(.data, prompt, nrow(.data))
     sys_shared <- .system_prompt
   }
 
