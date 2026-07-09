@@ -425,3 +425,15 @@ test_that("structured/tags shorthand finds the output column when its name pre-e
   expect_true(all(tg$tags_ok))
   expect_equal(tg$x, c(7, 7))
 })
+
+test_that("streaming applies the req_builder hook and the request timeout", {
+  req0 <- httr2::request("https://example.com")
+  cfg <- llm_config("groq", "m", timeout = 42,
+                    req_builder = function(r) httr2::req_headers(r, `X-LLMR-Test` = "yes"))
+  r1 <- LLMR:::.llmr_apply_req_hooks(req0, cfg)
+  expect_true("yes" %in% unlist(r1$headers))
+  expect_equal(r1$options$timeout_ms, 42000)
+  # default timeout when unset
+  r2 <- LLMR:::.llmr_apply_req_hooks(req0, llm_config("groq", "m"))
+  expect_equal(r2$options$timeout_ms, 600000)
+})

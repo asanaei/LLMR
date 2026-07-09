@@ -48,8 +48,11 @@
 #' Supported providers: all OpenAI-compatible chat APIs (openai, groq,
 #' together, deepseek, xai, alibaba, zhipu, moonshot, xiaomi, ollama),
 #' Anthropic, and Gemini. The request body is built by the same internals as
-#' [call_llm()], so parameters, structured output, and hooks behave
-#' identically; only the transport differs.
+#' [call_llm()], so parameters and structured output behave identically; the
+#' `request_modifier` and `req_builder` hooks and the request timeout apply as
+#' well. Only the transport differs. The `response_modifier` hook is the one
+#' exception: it rewrites a full parsed response, which has no per-chunk meaning
+#' for a stream, so it is not applied here.
 #'
 #' @param config An [llm_config] for a generative model.
 #' @param messages Messages as in [call_llm()].
@@ -118,8 +121,29 @@ call_llm_stream <- function(config, messages,
   invisible(resp)
 }
 
-# Shared SSE pump: hands each parsed JSON event to `handle`.
-.stream_events <- function(req, handle) {
+# Apply the req_builder hook and the request timeout to a streaming request,
+# exactly as perform_request() does for the non-streaming path. Without this the
+# streaming transport ignored both, contradicting call_llm_stream()'s promise
+# that hooks behave identically. (request_modifier is already applied by the
+# request builders; response_modifier operates on a full parsed response and has
+# no per-chunk meaning, so it does not apply to the incremental stream.)
+.llmr_apply_req_hooks <- function(req, config) {
+  if (!is.null(config) && is.function(config$model_params$req_builder)) {
+    req <- config$model_params$req_builder(req)
+  }
+  tmo <- suppressWarnings(as.numeric(
+    (if (!is.null(config)) config$model_params$timeout else NULL) %||%
+      getOption("llmr.timeout", 600)))
+  if (length(tmo) == 1L && is.finite(tmo) && tmo > 0) {
+    req <- httr2::req_timeout(req, tmo)
+  }
+  req
+}
+
+# Shared SSE pump: applies the request hooks, then hands each parsed JSON event
+# to `handle`.
+.stream_events <- function(req, config, handle) {
+  req <- .llmr_apply_req_hooks(req, config)
   con <- httr2::req_perform_connection(req)
   on.exit(close(con), add = TRUE)
   repeat {
@@ -151,7 +175,7 @@ call_llm_stream <- function(config, messages,
   acc$reasoning_tokens <- NULL; acc$cached <- NULL
   acc$id <- NULL; acc$model_version <- NULL; acc$last <- NULL
 
-  .stream_events(req, function(j) {
+  .stream_events(req, config, function(j) {
     acc$last <- j
     if (is.null(acc$id) && !is.null(j$id)) acc$id <- j$id
     if (is.null(acc$model_version) && !is.null(j$model)) acc$model_version <- j$model
@@ -196,7 +220,7 @@ call_llm_stream <- function(config, messages,
   acc$finish <- NULL; acc$sent <- NULL; acc$rec <- NULL; acc$cached <- NULL
   acc$id <- NULL; acc$model_version <- NULL; acc$last <- NULL
 
-  .stream_events(req, function(j) {
+  .stream_events(req, config, function(j) {
     acc$last <- j
     type <- j$type %||% ""
     if (identical(type, "message_start")) {
@@ -236,7 +260,7 @@ call_llm_stream <- function(config, messages,
   acc$reasoning_tokens <- NULL
   acc$id <- NULL; acc$model_version <- NULL; acc$last <- NULL
 
-  .stream_events(req, function(j) {
+  .stream_events(req, config, function(j) {
     acc$last <- j
     if (is.null(acc$id) && !is.null(j$responseId)) acc$id <- j$responseId
     if (is.null(acc$model_version) && !is.null(j$modelVersion)) acc$model_version <- j$modelVersion
