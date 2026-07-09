@@ -25,6 +25,43 @@ compatible (new arguments default to the previous behavior, or are new exports).
   than `$request`, so a record carrying a flat `request_hash` (but no nested
   `request`) can no longer partial-match and fail.
 
+## Bug fixes
+
+* `llm_hash()` is now independent of the collation locale. The canonical form
+  sorted field names with `order()`, which follows `LC_COLLATE`, so the same
+  object could hash differently across machines -- breaking the cross-machine
+  reproducibility contract that protocol locks, archive seals, and request
+  hashes rely on. Names are now sorted with `method = "radix"`, which is
+  locale-independent and coincides with the C-locale ordering, so hashes
+  recorded under the C locale are unchanged.
+* A prompt template with no `{column}` reference (a constant prompt) no longer
+  leaves rows 2..n empty. `glue` returns length 1 for such a template, so
+  `llm_fn()`, `llm_mutate()`, the batched tag/structured paths, and the
+  embedding branches previously sent `NA` content for every row after the first
+  (which providers reject). The constant is now recycled to every row.
+* `llm_mutate()` again appends its generated columns instead of moving them to
+  the front. With neither `.before` nor `.after` supplied, the default columns
+  path relocated the new columns to the first position, contradicting the
+  documented "appended" contract (and the batched and embedding paths).
+* `call_llm()` and friends no longer emit a message with an empty role for a
+  partially named character vector such as `c(system = "...", "...")`. The
+  unnamed element now defaults to the `user` role, as the multimodal path
+  already did; previously it was sent as role `""` and rejected with HTTP 400.
+* `llm_usage()`, `llm_failures()`, and `llm_methods_text()` now work on the
+  result of `llm_mutate_structured()` and `llm_mutate_tags()`. The parser
+  columns `structured_ok`/`tags_ok` are no longer mistaken for diagnostic
+  blocks, so automatic prefix inference no longer errors with "Found multiple
+  diagnostic blocks".
+* `call_llm_stream()` no longer errors for a provider outside the built-in
+  streaming table (for example a custom OpenAI-compatible gateway); such a
+  provider streams against the OpenAI-compatible default instead of raising
+  "subscript out of bounds".
+* `call_llm_sweep()` now varies top-level config fields. Sweeping `"model"`
+  (or `"provider"`, `"api_key"`, ...) wrote the value into `model_params`,
+  leaving the real field unchanged, so the sweep silently varied nothing; these
+  fields are now set on the config, with the S3 class kept in sync with a swept
+  provider.
+
 # LLMR 0.8.8
 
 ## New features
