@@ -101,6 +101,23 @@ test_that("a scalar stop and a one-element stop array agree", {
   expect_identical(hs, hl)
 })
 
+test_that("llm_hash does not depend on the collation locale (radix sort)", {
+  # Names that C and locale collation order differently; the hash must be the
+  # same whatever LC_COLLATE is, or a sealed archive fails to verify elsewhere.
+  obj <- list(Zebra = 1, apple = 2, Beta = 3, zulu = 5, Alpha = 6, model = "x")
+  hash_under <- function(loc) {
+    old <- Sys.getlocale("LC_COLLATE")
+    on.exit(suppressWarnings(Sys.setlocale("LC_COLLATE", old)), add = TRUE)
+    set_ok <- suppressWarnings(Sys.setlocale("LC_COLLATE", loc))
+    if (!nzchar(set_ok)) return(NA_character_)  # locale not installed here
+    llm_hash(obj)
+  }
+  hs <- vapply(c("C", "en_US.UTF-8", "de_DE.UTF-8"), hash_under, character(1))
+  hs <- hs[!is.na(hs)]
+  skip_if(length(hs) < 2L, "need at least two settable collation locales")
+  expect_equal(length(unique(hs)), 1L)
+})
+
 test_that("transport and internal knobs never enter the hash", {
   base <- llm_request_hash(llm_config("openai", "gpt-4o-mini", temperature = 0), "hi")
   for (knob in list(list(request_modifier = identity), list(cache = TRUE),
