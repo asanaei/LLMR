@@ -93,6 +93,19 @@
   }
 }
 
+# The output column name for the shorthand form `newcol = "<prompt>"`: the name
+# of the first character-valued entry in `dots`. The structured/tags variants use
+# this to identify the output column BY NAME, which is robust when that name
+# already exists in the data; set-differencing the result columns is not (the
+# clobbered original is excluded, so the first "new" column is <out>_finish).
+.llm_shorthand_name <- function(dots) {
+  nm <- names(dots)
+  if (is.null(nm)) return(NULL)
+  cand <- which(nzchar(nm) &
+                  vapply(dots, function(v) is.character(v) && length(v) >= 1L, logical(1)))
+  if (!length(cand)) NULL else nm[[cand[[1]]]]
+}
+
 # Overwrite-with-notice semantics for generated columns, mirroring
 # dplyr::mutate(): an existing column of the same name is replaced (and a note
 # is emitted) instead of letting bind_cols() mangle both names.

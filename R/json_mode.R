@@ -789,14 +789,13 @@ llm_mutate_structured <- function(.data,
     )
     args$.before <- before_name   # resolved name; NULL removes the entry
     args$.after  <- after_name
-    out <- do.call(llm_mutate, c(args, dots))
-    # Extract the output column name from the result
-    # It should be the first new column added
-    new_cols <- setdiff(names(out), names(.data))
-    if (length(new_cols) == 0) {
+    # Identify the output column by the shorthand mapping name (robust when that
+    # name already exists in .data), not by set-differencing the result columns.
+    output_name <- .llm_shorthand_name(dots)
+    if (is.null(output_name)) {
       stop("Could not determine output column name from shorthand syntax")
     }
-    output_name <- new_cols[1]
+    out <- do.call(llm_mutate, c(args, dots))
   } else {
     # Explicit output: use it directly
     output_sym <- rlang::ensym(output)

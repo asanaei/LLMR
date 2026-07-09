@@ -406,3 +406,22 @@ test_that("stream spec falls back to the OpenAI default for unlisted/NULL provid
   expect_false(LLMR:::.compat_stream_spec("openrouter")$usage_opt)
   expect_true(LLMR:::.compat_stream_spec(NULL)$usage_opt)
 })
+
+test_that("structured/tags shorthand finds the output column when its name pre-exists", {
+  # Shorthand `newcol = "<prompt>"` where `newcol` already exists in .data: the
+  # output column must still be identified as `newcol`, not `newcol_finish` (which
+  # set-differencing produced once the clobbered original was dropped).
+  cfg <- llm_config("openai", "m")
+  df <- tibble::tibble(id = 1:2, result = c("old1", "old2"))
+  s <- with_stub_broadcast2(
+    function(config, messages, ...) { r <- mk_res(length(messages)); r$response_text <- '{"a":1}'; r },
+    suppressWarnings(llm_mutate_structured(df, result = "{id}", .config = cfg)))
+  expect_true(all(s$structured_ok))
+
+  dft <- tibble::tibble(id = 1:2, geo = c("old1", "old2"))
+  tg <- with_stub_broadcast2(
+    function(config, messages, ...) { r <- mk_res(length(messages)); r$response_text <- "<x>7</x>"; r },
+    llm_mutate_tags(dft, geo = "{id}", .config = cfg, .tags = c("x")))
+  expect_true(all(tg$tags_ok))
+  expect_equal(tg$x, c(7, 7))
+})
