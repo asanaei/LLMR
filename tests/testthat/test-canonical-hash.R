@@ -63,6 +63,12 @@ test_that("config-side and log-side hashes agree after provider param renames", 
   # The provider builders rename canonical params (Gemini camelCase, OpenAI
   # o-series max_completion_tokens); the log side must reverse those so a logged
   # body and the config that produced it still hash identically.
+  # Building a request resolves the API key into headers, so give each provider
+  # a fake key for the duration (withr ships with testthat; previous values are
+  # restored automatically; no network is used).
+  withr::local_envvar(c(
+    OPENAI_API_KEY = "test-key-not-real", GEMINI_API_KEY = "test-key-not-real",
+    ANTHROPIC_API_KEY = "test-key-not-real", GROQ_API_KEY = "test-key-not-real"))
   agree <- function(cfg) {
     msgs <- c(user = "Hello")
     h_cfg <- llm_request_hash(cfg, msgs)

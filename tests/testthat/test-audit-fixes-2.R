@@ -109,6 +109,9 @@ test_that("llm_usage does not over-count batch follow-on NA rows as unknown", {
 
 test_that("Anthropic/Gemini keep stop_sequences and note unrecognized params", {
   op <- options(llmr.quiet = TRUE); on.exit(options(op), add = TRUE)
+  # request building resolves the API key into headers; fake keys, no network
+  withr::local_envvar(c(ANTHROPIC_API_KEY = "test-key-not-real",
+                        GEMINI_API_KEY = "test-key-not-real"))
   ab <- LLMR:::.anthropic_chat_request(
     llm_config("anthropic", "claude-haiku-4-5", max_tokens = 100,
                stop_sequences = list("END"), metadata = list(user_id = "u1")),
