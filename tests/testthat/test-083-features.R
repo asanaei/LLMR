@@ -240,6 +240,60 @@ test_that("cached tokens flow into llm_mutate diagnostic columns", {
   expect_equal(out$ans_cached, 4L)
 })
 
+test_that("llm_mutate appends generated columns by default and honors .before/.after", {
+  stub <- function(config, messages, ...) mk_res(length(messages))
+  df <- tibble::tibble(id = 1:2, q = c("a", "b"))
+  cfg <- llm_config("openai", "m")
+
+  # default: generated block APPENDED after the input columns (not moved front)
+  d <- with_stub_broadcast2(stub, llm_mutate(df, ans, prompt = "{q}", .config = cfg))
+  expect_identical(names(d)[1:2], c("id", "q"))
+  expect_identical(which(names(d) == "ans"), 3L)
+
+  # .after = id : bare symbol must not crash, and the block lands right after id
+  a <- with_stub_broadcast2(stub, llm_mutate(df, ans, prompt = "{q}", .config = cfg, .after = id))
+  expect_identical(names(a)[1:2], c("id", "ans"))
+
+  # .before = q : block lands before q
+  b <- with_stub_broadcast2(stub, llm_mutate(df, ans, prompt = "{q}", .config = cfg, .before = q))
+  expect_lt(which(names(b) == "ans"), which(names(b) == "q"))
+})
+
+test_that("bare-symbol .before/.after works on the structured, tags, and batched paths", {
+  # These non-plain paths used to force-evaluate a bare-symbol .before/.after
+  # (via is.null() or an eager delegation), erroring "object 'id' not found".
+  # Resolving to a column name at each boundary fixes it on every path.
+  stub <- function(config, messages, ...) mk_res(length(messages))
+  df <- tibble::tibble(id = 1:2, q = c("a", "b"))
+  cfg <- llm_config("openai", "m")
+
+  # structured (non-batched): parsed columns land right after id
+  s <- with_stub_broadcast2(stub, suppressWarnings(
+    llm_mutate(df, r, prompt = "{q}", .config = cfg, .structured = TRUE, .after = id)))
+  expect_identical(names(s)[1:2], c("id", "r"))
+
+  # tags (non-batched)
+  tg <- with_stub_broadcast2(stub,
+    llm_mutate(df, r, prompt = "{q}", .config = cfg, .tags = c("a"), .after = id))
+  expect_identical(names(tg)[2], "r")
+
+  # batched generative
+  bt <- with_stub_broadcast2(stub,
+    llm_mutate(df, ans, prompt = "{q}", .config = cfg, .rows_per_prompt = 2, .after = id))
+  expect_identical(names(bt)[2], "ans")
+
+  # batched tags, with .before
+  btg <- with_stub_broadcast2(stub,
+    llm_mutate(df, r, prompt = "{q}", .config = cfg, .tags = c("a"),
+               .rows_per_prompt = 2, .before = q))
+  expect_lt(which(names(btg) == "r"), which(names(btg) == "q"))
+
+  # each path still appends by default (no relocation to the front)
+  bt0 <- with_stub_broadcast2(stub,
+    llm_mutate(df, ans, prompt = "{q}", .config = cfg, .rows_per_prompt = 2))
+  expect_identical(names(bt0)[1:2], c("id", "q"))
+})
+
 # ---- preview additions ----------------------------------------------------------
 
 test_that("preview flags NA templates and empty prompts", {
@@ -335,4 +389,51 @@ test_that("stream specs cover every compat provider", {
     expect_true(nzchar(spec$endpoint))
     expect_true(spec$auth %in% c("bearer", "api-key", "none"))
   }
+})
+
+test_that("stream spec falls back to the OpenAI default for unlisted/NULL providers", {
+  # `[[` on an unknown name used to error ("subscript out of bounds") before the
+  # %||% fallback could run; an unlisted provider (a custom gateway) must stream
+  # against the OpenAI-compatible default rather than crash.
+  oa <- LLMR:::.compat_stream_spec("openai")$endpoint
+  for (p in list("openrouter", "my-gateway", NULL)) {
+    spec <- LLMR:::.compat_stream_spec(p)
+    expect_identical(spec$endpoint, oa)
+    expect_identical(spec$auth, "bearer")
+  }
+  # a genuinely unknown provider is treated conservatively (no stream_options),
+  # whereas NULL normalizes to openai and keeps openai's own settings
+  expect_false(LLMR:::.compat_stream_spec("openrouter")$usage_opt)
+  expect_true(LLMR:::.compat_stream_spec(NULL)$usage_opt)
+})
+
+test_that("structured/tags shorthand finds the output column when its name pre-exists", {
+  # Shorthand `newcol = "<prompt>"` where `newcol` already exists in .data: the
+  # output column must still be identified as `newcol`, not `newcol_finish` (which
+  # set-differencing produced once the clobbered original was dropped).
+  cfg <- llm_config("openai", "m")
+  df <- tibble::tibble(id = 1:2, result = c("old1", "old2"))
+  s <- with_stub_broadcast2(
+    function(config, messages, ...) { r <- mk_res(length(messages)); r$response_text <- '{"a":1}'; r },
+    suppressWarnings(llm_mutate_structured(df, result = "{id}", .config = cfg)))
+  expect_true(all(s$structured_ok))
+
+  dft <- tibble::tibble(id = 1:2, geo = c("old1", "old2"))
+  tg <- with_stub_broadcast2(
+    function(config, messages, ...) { r <- mk_res(length(messages)); r$response_text <- "<x>7</x>"; r },
+    llm_mutate_tags(dft, geo = "{id}", .config = cfg, .tags = c("x")))
+  expect_true(all(tg$tags_ok))
+  expect_equal(tg$x, c(7, 7))
+})
+
+test_that("streaming applies the req_builder hook and the request timeout", {
+  req0 <- httr2::request("https://example.com")
+  cfg <- llm_config("groq", "m", timeout = 42,
+                    req_builder = function(r) httr2::req_headers(r, `X-LLMR-Test` = "yes"))
+  r1 <- LLMR:::.llmr_apply_req_hooks(req0, cfg)
+  expect_true("yes" %in% unlist(r1$headers))
+  expect_equal(r1$options$timeout_ms, 42000)
+  # default timeout when unset
+  r2 <- LLMR:::.llmr_apply_req_hooks(req0, llm_config("groq", "m"))
+  expect_equal(r2$options$timeout_ms, 600000)
 })

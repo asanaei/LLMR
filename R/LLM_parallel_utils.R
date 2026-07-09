@@ -187,7 +187,7 @@
 #' @examples
 #' \dontrun{
 #'   # Temperature sweep
-#'   config <- llm_config(provider = "openai", model = "gpt-4.1-nano")
+#'   config <- llm_config(provider = "groq", model = "openai/gpt-oss-20b")
 #'
 #'   messages <- "What is 15 * 23?"
 #'   temperatures <- c(0, 0.3, 0.7, 1.0, 1.5)
@@ -220,13 +220,25 @@ call_llm_sweep <- function(base_config,
     ))
   }
 
+  # Top-level config fields must be set on the config itself, not tucked into
+  # model_params (where sweeping e.g. "model" would leave the real model unchanged
+  # and send a duplicate key). Mirrors expand_llm_config()'s routing.
+  top_level <- c("provider", "model", "api_key", "embedding",
+                 "troubleshooting", "no_change")
+
   # Build experiments tibble
   experiments <- tibble::tibble(
     !!param_name := param_values, # Use the actual parameter name directly
     config = lapply(param_values, function(val) {
       modified_config <- base_config
-      if (is.null(modified_config$model_params)) modified_config$model_params <- list()
-      modified_config$model_params[[param_name]] <- val
+      if (param_name %in% top_level) {
+        modified_config[[param_name]] <- val
+        # provider determines S3 dispatch in call_llm(); keep the class in sync
+        class(modified_config) <- c("llm_config", modified_config$provider)
+      } else {
+        if (is.null(modified_config$model_params)) modified_config$model_params <- list()
+        modified_config$model_params[[param_name]] <- val
+      }
       modified_config
     }),
     messages = rep(list(messages), length(param_values))
@@ -269,7 +281,7 @@ call_llm_sweep <- function(base_config,
 #' @examples
 #' \dontrun{
 #'   # Broadcast different questions
-#'   config <- llm_config(provider = "openai", model = "gpt-4.1-nano")
+#'   config <- llm_config(provider = "groq", model = "openai/gpt-oss-20b")
 #'
 #'   messages <- list(
 #'     list(list(role = "user", content = "What is 2+2?")),
@@ -1051,13 +1063,11 @@ reset_llm_parallel <- function(verbose = FALSE) {
 #' @return A list of [llm_config] objects.
 #'
 #' @examples
-#' \dontrun{
 #' base <- llm_config("openai", "gpt-4.1-nano")
 #' cfgs <- expand_llm_config(base,
 #'                           temperature = c(0, 0.5, 1),
 #'                           model = c("gpt-4.1-nano", "gpt-4.1-mini"))
 #' length(cfgs)
-#' }
 #'
 #' @seealso [llm_config()], [llm_cross_design()], [call_llm_par()]
 #' @export
@@ -1105,7 +1115,7 @@ expand_llm_config <- function(base_config, ...) {
 #' @examples
 #' \dontrun{
 #' cities <- data.frame(city = c("Cairo", "Lima"))
-#' cfgs <- list(llm_config("openai", "gpt-4.1-nano"), llm_config("openai", "gpt-4.1-mini"))
+#' cfgs <- list(llm_config("groq", "openai/gpt-oss-20b"), llm_config("deepseek", "deepseek-chat"))
 #' design <- llm_cross_design(cities, cfgs, prompt = "What country is {city} in?")
 #' results <- call_llm_par(design)
 #' }
@@ -1180,13 +1190,26 @@ llm_cross_design <- function(.data, configs, prompt = NULL, .messages = NULL, .s
 #' @seealso [call_llm_par()]
 #' @export
 llm_par_resume <- function(results, tries = 3, ...) {
-  if (is.data.frame(results) &&
-      any(grepl("^success\\.[0-9]+$", names(results)))) {
-    stop("This result has a collision-renamed 'success' column (e.g. ",
-         "'success.1'), which happens when the input frame already had a column ",
-         "named 'success'. Rename that input column before calling ",
-         "call_llm_par() so the diagnostic columns keep their canonical names.",
-         call. = FALSE)
+  # If the input frame had a column named like ANY diagnostic, call_llm_par()
+  # collision-renamed its own output (e.g. duration -> duration.1). The patch
+  # loop below matches columns by name, so it would overwrite the user's column
+  # with re-run diagnostics. Refuse up front (as the original guard did for
+  # 'success' only) rather than silently corrupt the frame.
+  diag_cols <- c("response_text", "raw_response_json", "success", "error_message",
+                 "finish_reason", "sent_tokens", "rec_tokens", "total_tokens",
+                 "reasoning_tokens", "cached_tokens", "response_id", "duration",
+                 "status_code", "error_code", "bad_param", "response")
+  if (is.data.frame(results)) {
+    renamed <- diag_cols[vapply(diag_cols, function(d)
+      any(grepl(paste0("^", d, "\\.[0-9]+$"), names(results))), logical(1))]
+    if (length(renamed)) {
+      stop("This result has collision-renamed diagnostic column(s) (e.g. '",
+           renamed[[1]], ".1'), which happens when the input frame already had ",
+           "column(s) named like a diagnostic (",
+           paste(renamed, collapse = ", "), "). Rename those input column(s) ",
+           "before calling call_llm_par() so llm_par_resume() patches the right ",
+           "columns.", call. = FALSE)
+    }
   }
   if (!is.data.frame(results) ||
       !all(c("config", "messages", "success") %in% names(results))) {

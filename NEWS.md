@@ -1,3 +1,64 @@
+# LLMR 0.8.10
+
+A bug-fix release. All fixes are backward compatible.
+
+## Bug fixes
+
+* `llm_hash()` is now independent of the collation locale. The canonical form
+  sorted field names with `order()`, which follows `LC_COLLATE`, so the same
+  object could hash differently across machines -- breaking the cross-machine
+  reproducibility contract that protocol locks, archive seals, and request
+  hashes rely on. Names are now sorted with `method = "radix"`, which is
+  locale-independent and coincides with the C-locale ordering, so hashes
+  recorded under the C locale are unchanged.
+* A prompt template with no `{column}` reference (a constant prompt) no longer
+  leaves rows 2..n empty. `glue` returns length 1 for such a template, so
+  `llm_fn()`, `llm_mutate()`, the batched tag/structured paths, and the
+  embedding branches previously sent `NA` content for every row after the first
+  (which providers reject). The constant is now recycled to every row.
+* `llm_mutate()` again appends its generated columns instead of moving them to
+  the front. With neither `.before` nor `.after` supplied, the default columns
+  path relocated the new columns to the first position, contradicting the
+  documented "appended" contract.
+* `.before` / `.after` no longer error on the embedding, structured, tag, and
+  row-batched paths. Detecting whether they were supplied with `is.null()`
+  force-evaluated a bare-symbol column reference ("object not found"); the
+  arguments are now resolved to a column name once at each verb's boundary.
+* `call_llm()` and friends no longer emit a message with an empty role for a
+  partially named character vector such as `c(system = "...", "...")`. The
+  unnamed element now defaults to the `user` role; previously it was sent as
+  role `""` and rejected with HTTP 400.
+* `llm_usage()`, `llm_failures()`, and `llm_methods_text()` now work on the
+  result of `llm_mutate_structured()` and `llm_mutate_tags()`; the parser
+  columns `structured_ok`/`tags_ok` are no longer mistaken for diagnostic
+  blocks.
+* `llm_mutate_structured()` / `llm_mutate_tags()` shorthand (`newcol = "..."`)
+  now finds the output column even when its name already exists in the data
+  (previously it parsed `newcol_finish` and reported a failed parse).
+* Field hoisting in `llm_parse_structured_col()` keeps the original strings on a
+  mixed column instead of stringifying coerced values (`"5.10"` no longer
+  becomes `"5.1"`).
+* `call_llm_stream()` no longer errors for a provider outside the built-in
+  streaming table, and now applies the `req_builder` hook and the request
+  timeout as the non-streaming path does.
+* The OpenAI Responses API path fails fast with a clear message when structured
+  output or tools are requested (it cannot accept the chat-completions shapes),
+  instead of sending a request the server rejects with HTTP 400.
+* The Anthropic and Gemini builders now send the documented `stop_sequences`
+  (and Anthropic `metadata`, Gemini `stopSequences`) and emit a one-time note
+  for any parameter they cannot forward, rather than dropping it silently.
+* Config-side and log-side request hashes now agree after provider parameter
+  renames (Gemini camelCase, OpenAI o-series `max_completion_tokens`), so the
+  audit-log join stays intact.
+* `call_llm_sweep()` now varies top-level config fields such as `"model"` and
+  `"provider"` (previously written into `model_params`, so the sweep varied
+  nothing).
+* The `.rowpack_recovery = "halve_once"` and `"retry_same"` modes now stop after
+  their documented single step instead of recursing to singletons.
+* `llm_par_resume()` refuses any input frame whose columns collide with a
+  diagnostic name (not just `success`), which would otherwise overwrite the
+  user's data with re-run diagnostics.
+
 # LLMR 0.8.9
 
 ## New features

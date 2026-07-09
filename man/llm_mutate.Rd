@@ -183,7 +183,7 @@ df <- tibble::tibble(
   hint     = c("European city", "English novelist")
 )
 
-cfg <- llm_config("openai", "gpt-4.1-nano",
+cfg <- llm_config("groq", "openai/gpt-oss-20b",
                   temperature = 0)
 
 # Generative: single-turn with multi-column injection

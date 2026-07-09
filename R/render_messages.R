@@ -33,6 +33,29 @@
   out
 }
 
+#' Glue a single prompt template over `n` rows, guaranteeing a length-`n` result
+#'
+#' `glue::glue_data()` returns length 1 for a template with no `{column}`
+#' reference (a constant prompt), and length `n` for one that interpolates a
+#' column. Vectorized call paths index the result per row, so a length-1
+#' constant would leave rows 2..n as `NA` (and the provider then rejects a
+#' null-content message). Recycling a length-1 result to `n` fixes that; a
+#' length-`n` result passes through untouched. Any other length is a genuine
+#' inconsistency and is left as-is for the caller to surface.
+#'
+#' @param data A data.frame/tibble, or a list like `list(x = x)` for the
+#'   bare-vector entry points.
+#' @param template A single glue template string.
+#' @param n The intended number of rows/elements.
+#' @return A character vector; length `n` whenever glue returned 1 or `n`.
+#' @keywords internal
+#' @noRd
+.llm_glue_rows <- function(data, template, n) {
+  out <- as.character(glue::glue_data(data, template, .na = ""))
+  if (length(out) == 1L && n != 1L) out <- rep(out, n)
+  out
+}
+
 #' Build per-row generative messages from `prompt` or `.messages`
 #'
 #' Returns a length-`nrow(df)` list. Each element is either a bare unnamed
@@ -79,7 +102,7 @@
     }
   } else {
     if (is.null(prompt)) stop("Either 'prompt' or '.messages' must be provided.")
-    user_txt <- glue::glue_data(df, prompt, .na = "")
+    user_txt <- .llm_glue_rows(df, prompt, n)
     for (i in seq_len(n)) {
       if (is.null(.system_prompt)) {
         msgs[[i]] <- as.character(user_txt[i])

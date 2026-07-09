@@ -22,13 +22,11 @@ Creates a list of \link{llm_config} objects from a base configuration and sweepi
 parameter vectors. Uses \code{\link[=expand.grid]{expand.grid()}} internally.
 }
 \examples{
-\dontrun{
 base <- llm_config("openai", "gpt-4.1-nano")
 cfgs <- expand_llm_config(base,
                           temperature = c(0, 0.5, 1),
                           model = c("gpt-4.1-nano", "gpt-4.1-mini"))
 length(cfgs)
-}
 
 }
 \seealso{

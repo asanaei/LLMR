@@ -16,6 +16,11 @@ vector such as \code{c(person_age = "age")}, or \code{FALSE} to skip field extra
 
 \item{...}{Passed to \code{\link[=call_llm_par]{call_llm_par()}}.}
 }
+\value{
+A tibble of class \code{llmr_experiment}: the \code{\link[=call_llm_par]{call_llm_par()}} result with
+XML-like tags parsed by \code{\link[=llm_parse_tags_col]{llm_parse_tags_col()}} (adds \code{tags_ok}, \code{tags_data},
+and one column per requested tag or field).
+}
 \description{
 Injects tag instructions into each experiment row, runs \code{\link[=call_llm_par]{call_llm_par()}},
 then parses XML-like tags from each response via \code{\link[=llm_parse_tags_col]{llm_parse_tags_col()}}.

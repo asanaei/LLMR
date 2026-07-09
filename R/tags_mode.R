@@ -255,7 +255,7 @@ llm_parse_tags_col <- function(.data, tags, tags_col = "response_text", fields =
 #' @examples
 #' \dontrun{
 #' df <- tibble::tibble(city = c("Cairo", "Lima"))
-#' cfg <- llm_config("openai", "gpt-4.1-nano", temperature = 0)
+#' cfg <- llm_config("groq", "openai/gpt-oss-20b", temperature = 0)
 #'
 #' df |>
 #'   llm_mutate_tags(
@@ -269,6 +269,8 @@ llm_parse_tags_col <- function(.data, tags, tags_col = "response_text", fields =
 #'   )
 #' }
 #'
+#' @return `.data` with the output column, the diagnostic columns, `tags_ok`,
+#'   `tags_data`, and one column per requested tag or field.
 #' @seealso [llm_mutate()], [llm_parse_tags()], [llm_parse_tags_col()],
 #'   [llm_mutate_structured()], [llm_parse_structured_col()]
 #' @export
@@ -289,8 +291,9 @@ llm_mutate_tags <- function(.data,
                             ...) {
   tags <- .validate_tags(.tags)
   output_missing <- missing(output)
-  before_missing <- missing(.before)
-  after_missing <- missing(.after)
+  # Resolve .before/.after to column name(s) once (see .llm_reloc_name).
+  before_name <- .llm_reloc_name(rlang::enquo(.before), .data)
+  after_name  <- .llm_reloc_name(rlang::enquo(.after), .data)
   dots <- rlang::dots_list(...)
   .batched <- .validate_rows_per_prompt(.rows_per_prompt)
   .rowpack_payload  <- match.arg(.rowpack_payload)
@@ -304,8 +307,7 @@ llm_mutate_tags <- function(.data,
       output = if (output_missing) NULL else rlang::ensym(output),
       prompt = prompt, .messages = .messages, .config = .config,
       .system_prompt = .system_prompt,
-      .before = if (before_missing) NULL else .before,
-      .after  = if (after_missing) NULL else .after,
+      .before = before_name, .after = after_name,
       tags = tags, .fields = .fields,
       .rows_per_prompt = .rows_per_prompt, .rowpack_payload = .rowpack_payload,
       .rowpack_recovery = .rowpack_recovery, dots = dots))
@@ -321,16 +323,17 @@ llm_mutate_tags <- function(.data,
     .system_prompt = prompted$.system_prompt,
     .return = "columns"
   )
-  if (!before_missing) args$.before <- .before
-  if (!after_missing) args$.after <- .after
+  args$.before <- before_name   # resolved name; NULL removes the entry
+  args$.after  <- after_name
 
   if (output_missing) {
-    out <- do.call(llm_mutate, c(args, dots))
-    new_cols <- setdiff(names(out), names(.data))
-    if (!length(new_cols)) {
+    # Identify the output column by the shorthand mapping name (robust when that
+    # name already exists in .data), not by set-differencing the result columns.
+    output_name <- .llm_shorthand_name(dots)
+    if (is.null(output_name)) {
       stop("Could not determine output column name from shorthand syntax")
     }
-    output_name <- new_cols[[1]]
+    out <- do.call(llm_mutate, c(args, dots))
   } else {
     output_sym <- rlang::ensym(output)
     args$output <- output_sym
@@ -355,6 +358,9 @@ llm_mutate_tags <- function(.data,
 #'   raw response text. Unlike [llm_fn()], `"object"` here returns the parsed tag
 #'   data (a list, one element per row), not `llmr_response` objects; this form
 #'   is also supported together with `.rows_per_prompt > 1`.
+#' @return Depends on `.return`: `"columns"` (default) a tibble with the parsed
+#'   tag columns and diagnostics; `"text"` a character vector of the raw
+#'   responses; `"object"` a list (one element per row) of parsed tag data.
 #' @seealso [llm_fn()], [llm_mutate_tags()], [llm_parse_tags_col()],
 #'   [call_llm_par_tags()]
 #' @export
@@ -380,8 +386,8 @@ llm_fn_tags <- function(x,
   if (.batched) {
     .assert_batch_not_embedding(.config)
     .assert_tags_not_rowlike(tags)
-    user_txt <- if (is.data.frame(x)) glue::glue_data(x, prompt, .na = "") else
-      glue::glue_data(list(x = x), prompt, .na = "")
+    user_txt <- if (is.data.frame(x)) .llm_glue_rows(x, prompt, nrow(x)) else
+      .llm_glue_rows(list(x = x), prompt, length(x))
     res <- .run_batched(
       config = .config, per_row_texts = as.character(user_txt),
       system_text = .system_prompt, mode = "tags", tags = tags,
@@ -426,6 +432,9 @@ llm_fn_tags <- function(x,
 #' @param .fields `NULL` to extract all tags, a character vector of tags, a named
 #'   vector such as `c(person_age = "age")`, or `FALSE` to skip field extraction.
 #' @param ... Passed to [call_llm_par()].
+#' @return A tibble of class `llmr_experiment`: the [call_llm_par()] result with
+#'   XML-like tags parsed by [llm_parse_tags_col()] (adds `tags_ok`, `tags_data`,
+#'   and one column per requested tag or field).
 #' @seealso [call_llm_par()], [llm_parse_tags_col()], [llm_fn_tags()],
 #'   [llm_mutate_tags()]
 #' @export

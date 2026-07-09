@@ -744,7 +744,11 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
     }
 
     if (identical(rowpack_recovery, "retry_same")) {
-      if (b$depth + 1L >= max_depth) {
+      # Documented as "re-issue the failed batch once at the same size": retry
+      # exactly once (from the depth-0 original), then give up. A retry is
+      # enqueued at depth 1, whose own failure re-enters this branch and hits the
+      # depth >= 1 guard below -- so it fails rather than retrying a second time.
+      if (b$depth >= 1L) {
         fail_rows(U, .terminal_reason(res_b), res_b, b$bid,
                   tokens_available = !tokens_credited); next
       }
@@ -755,12 +759,15 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
     } else if (identical(rowpack_recovery, "halve_once")) {
       k2 <- max(1L, as.integer(ceiling(m / 2)))
       if (k2 >= m) k2 <- 1L
-      # halve_once: split once; children at depth that prevents further recursion
+      # halve_once: split at half size exactly once, then give up. Children are
+      # enqueued at depth = max_depth so the terminal check above fails their own
+      # unresolved rows instead of halving them again (max_depth - 1L did not
+      # satisfy `>= max_depth`, so they recursed all the way to singletons).
       parts <- .batch_partition(length(U), k2); j <- 0L
       for (chunk in parts) {
         j <- j + 1L
         queue[[length(queue) + 1L]] <- list(
-          rows = U[chunk], depth = max_depth - 1L,  # children won't recurse again
+          rows = U[chunk], depth = max_depth,
           bid  = paste0(b$bid, ".", j))
       }
     } else {  # "halve_recursive" (default)
@@ -791,13 +798,12 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
 #' @param .data Original data frame.
 #' @param res The engine result tibble (`call_llm_par` columns + batch columns).
 #' @param out_sym Quosure/symbol of the output column.
-#' @param .before,.after Relocation targets.
-#' @param before_missing,after_missing Whether the caller passed them.
+#' @param before_name,after_name Resolved relocation target column name(s), or
+#'   `NULL` (append). See `.llm_reloc_name()`.
 #' @return `.data` with the diagnostic (and batch) columns bound and relocated.
 #' @keywords internal
 #' @noRd
-.assemble_mutate_columns <- function(.data, res, out_sym, .before, .after,
-                                     before_missing, after_missing) {
+.assemble_mutate_columns <- function(.data, res, out_sym, before_name, after_name) {
   nm <- rlang::as_name(out_sym)
   base_text <- ifelse(res$success, res$response_text, NA_character_)
   added <- tibble::tibble(
@@ -825,12 +831,7 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
     .llm_drop_clobbered(.data, names(added), context = "llm_mutate()"),
     added
   )
-  if (is.null(.before) && is.null(.after)) return(res_df)
-  if (!is.null(.before)) {
-    dplyr::relocate(res_df, dplyr::all_of(names(added)), .before = {{ .before }})
-  } else {
-    dplyr::relocate(res_df, dplyr::all_of(names(added)), .after = {{ .after }})
-  }
+  .llm_relocate_added(res_df, names(added), before_name, after_name)
 }
 
 #' Batched implementation shared by llm_fn_structured()/llm_mutate_structured()
@@ -870,10 +871,10 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
   }
 
   if (!is.null(data_df)) {
-    per_row <- as.character(glue::glue_data(data_df, prompt, .na = ""))
+    per_row <- .llm_glue_rows(data_df, prompt, nrow(data_df))
   } else {
-    per_row <- if (is.data.frame(x)) as.character(glue::glue_data(x, prompt, .na = ""))
-               else as.character(glue::glue_data(list(x = x), prompt, .na = ""))
+    per_row <- if (is.data.frame(x)) .llm_glue_rows(x, prompt, nrow(x))
+               else .llm_glue_rows(list(x = x), prompt, length(x))
   }
 
   res <- .run_batched(
@@ -886,9 +887,7 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
 
   if (!is.null(data_df)) {
     out_sym <- if (is.null(output)) rlang::sym("llm_structured") else output
-    res_df <- .assemble_mutate_columns(
-      data_df, res, out_sym, .before, .after,
-      before_missing = is.null(.before), after_missing = is.null(.after))
+    res_df <- .assemble_mutate_columns(data_df, res, out_sym, .before, .after)
     out2 <- llm_parse_structured_col(res_df,
       structured_col = rlang::as_name(out_sym), fields = fields_auto)
   } else {
@@ -940,7 +939,7 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
       paste(unname(m[names(m) == "user"]), collapse = "\n\n"), character(1))
   } else {
     if (is.null(prompt)) stop("Either 'prompt' or '.messages' must be provided.")
-    per_row <- as.character(glue::glue_data(.data, prompt, .na = ""))
+    per_row <- .llm_glue_rows(.data, prompt, nrow(.data))
     sys_shared <- .system_prompt
   }
 
@@ -950,9 +949,7 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
     rowpack_payload = .rowpack_payload, rowpack_recovery = .rowpack_recovery, dots = dots)
 
   out_sym <- rlang::sym(out_name)
-  res_df <- .assemble_mutate_columns(
-    .data, res, out_sym, .before, .after,
-    before_missing = is.null(.before), after_missing = is.null(.after))
+  res_df <- .assemble_mutate_columns(.data, res, out_sym, .before, .after)
 
   # parse the wrapped field tags into columns (unchanged parser)
   llm_parse_tags_col(res_df, tags = tags, tags_col = out_name, fields = .fields)

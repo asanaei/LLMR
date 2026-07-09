@@ -17,6 +17,10 @@ llm_validate_structured_col(
 
 \item{structured_list_col}{Column name with parsed JSON. Default "structured_data".}
 }
+\value{
+\code{.data} with two added columns: \code{structured_valid} (logical) and
+\code{structured_error} (character; \code{NA} when valid).
+}
 \description{
 Adds \code{structured_valid} (logical) and \code{structured_error} (chr) by validating
 each row's \code{structured_data} against \code{schema}. No provider calls are made.

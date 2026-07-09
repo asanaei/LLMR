@@ -8,13 +8,16 @@
 
 # Internal: canonical form. Classes are stripped recursively; named lists are
 # sorted by name (construction order must not change the hash); functions
-# hash by their deparsed source.
+# hash by their deparsed source. The sort uses method = "radix", which is
+# locale-independent (unlike the default, which follows LC_COLLATE); this is
+# what makes the hash identical across machines. Radix order coincides with the
+# C-locale ordering, so hashes recorded under the C locale are unchanged.
 .llmr_canonical <- function(x) {
   if (is.function(x)) return(paste(deparse(x), collapse = "\n"))
   if (is.list(x)) {
     x <- unclass(x)
     nm <- names(x)
-    if (!is.null(nm) && all(nzchar(nm))) x <- x[order(nm)]
+    if (!is.null(nm) && all(nzchar(nm))) x <- x[order(nm, method = "radix")]
     return(lapply(x, .llmr_canonical))
   }
   x

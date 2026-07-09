@@ -156,3 +156,28 @@ test_that("shared renderer: resolved braces survive (single glue pass, no re-eva
   got <- LLMR:::.llm_build_messages_df(d2, prompt = "{text}")
   expect_identical(got[[1]], "{1+1}")   # literal, not "2"
 })
+
+test_that("constant prompt (no column ref) fills every row, not just the first", {
+  # glue returns length 1 for a template with no {column}; rows 2..n must not be
+  # NA (the provider rejects a null-content message). See .llm_glue_rows().
+  d3 <- tibble::tibble(x = 1:3)
+  got <- LLMR:::.llm_build_messages_df(d3, prompt = "classify this item")
+  expect_length(got, 3L)
+  expect_identical(unlist(got), rep("classify this item", 3L))
+  expect_false(anyNA(unlist(got)))
+
+  # with a system prompt the user turn is still filled on every row
+  got2 <- LLMR:::.llm_build_messages_df(d3, prompt = "constant",
+                                        .system_prompt = "be terse")
+  expect_identical(vapply(got2, function(m) unname(m["user"]), character(1)),
+                   rep("constant", 3L))
+})
+
+test_that(".llm_glue_rows recycles length-1, passes length-n through, respects n", {
+  glr <- LLMR:::.llm_glue_rows
+  expect_identical(glr(data.frame(x = 1:3), "hi", 3L), rep("hi", 3L))          # constant
+  expect_identical(glr(data.frame(x = c("a", "b")), "{x}", 2L), c("a", "b"))   # column ref
+  expect_identical(glr(list(x = c("p", "q", "r")), "hi", 3L), rep("hi", 3L))   # bare vector
+  expect_identical(glr(data.frame(x = 1), "hi", 1L), "hi")                     # single row
+  expect_length(glr(data.frame(x = integer(0)), "hi", 0L), 0L)                 # zero rows
+})

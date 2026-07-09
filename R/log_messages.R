@@ -147,6 +147,13 @@
   # Normalize a single-element stop ("x") and a one-element list/array (["x"])
   # to the same value, since they are the same stop sequence.
   if (!is.null(keep$stop)) keep$stop <- as.character(unlist(keep$stop))
+  # max_completion_tokens (the o-series / gpt-5 spelling, and what LLMR renames
+  # max_tokens to for those models) is the same request as max_tokens; fold it in
+  # so a config and its logged body agree whichever spelling was supplied.
+  if (!is.null(keep$max_completion_tokens)) {
+    keep$max_tokens <- keep$max_tokens %||% keep$max_completion_tokens
+    keep$max_completion_tokens <- NULL
+  }
   if (!length(keep)) list() else keep[order(names(keep))]
 }
 
@@ -167,11 +174,34 @@
                   "generationConfig", "model", "stream")
   top <- request[setdiff(names(request), structural)]
   mp <- c(top, gen)
-  if (!is.null(mp$maxOutputTokens)) {
-    mp$max_tokens <- mp$max_tokens %||% mp$maxOutputTokens; mp$maxOutputTokens <- NULL
+
+  # Un-nest Gemini's thinkingConfig to canonical thinking_budget/include_thoughts.
+  if (is.list(mp$thinkingConfig)) {
+    tc <- mp$thinkingConfig; mp$thinkingConfig <- NULL
+    if (!is.null(tc$thinkingBudget))  mp$thinking_budget  <- mp$thinking_budget  %||% tc$thinkingBudget
+    if (!is.null(tc$includeThoughts)) mp$include_thoughts <- mp$include_thoughts %||% tc$includeThoughts
   }
-  if (!is.null(mp$topP)) {
-    mp$top_p <- mp$top_p %||% mp$topP; mp$topP <- NULL
+  # Gemini injects responseMimeType = "text/plain" on every text call; the config
+  # that produced it never set that default, so drop it (a non-default value is a
+  # real request the config also carries and is renamed below).
+  if (identical(mp$responseMimeType, "text/plain")) mp$responseMimeType <- NULL
+
+  # Reverse the provider-specific renames back to canonical (OpenAI) spelling so a
+  # logged provider body and the config that produced it hash identically. Only
+  # unambiguous renames are reversed; the logprobs family, whose body key means
+  # different things on OpenAI vs Gemini, is left as-is (documented above), as is
+  # the structural OpenAI response_format wrapper.
+  aliases <- c(maxOutputTokens = "max_tokens", max_completion_tokens = "max_tokens",
+               topP = "top_p", topK = "top_k",
+               presencePenalty = "presence_penalty",
+               frequencyPenalty = "frequency_penalty",
+               thinkingBudget = "thinking_budget", includeThoughts = "include_thoughts",
+               responseMimeType = "response_mime_type",
+               responseJsonSchema = "response_json_schema",
+               responseSchema = "response_schema")
+  for (from in names(aliases)) {
+    to <- aliases[[from]]
+    if (!is.null(mp[[from]])) { mp[[to]] <- mp[[to]] %||% mp[[from]]; mp[[from]] <- NULL }
   }
   .llmr_drop_transport(mp)
 }

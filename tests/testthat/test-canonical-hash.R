@@ -59,6 +59,38 @@ test_that("the log side also picks up a body-only param, and agrees with config"
   expect_identical(hc2, hl2)
 })
 
+test_that("config-side and log-side hashes agree after provider param renames", {
+  # The provider builders rename canonical params (Gemini camelCase, OpenAI
+  # o-series max_completion_tokens); the log side must reverse those so a logged
+  # body and the config that produced it still hash identically.
+  agree <- function(cfg) {
+    msgs <- c(user = "Hello")
+    h_cfg <- llm_request_hash(cfg, msgs)
+    builder <- switch(cfg$provider,
+      gemini    = LLMR:::.gemini_chat_request,
+      anthropic = LLMR:::.anthropic_chat_request,
+      function(cfg, m) LLMR:::.compat_chat_request(
+        cfg, m, endpoint = "https://example/v1/chat/completions"))
+    body <- builder(cfg, msgs)$body$data
+    h_log <- llm_request_hash(
+      provider = cfg$provider, model = cfg$model,
+      messages = LLMR:::.llmr_messages_from_turns(
+        LLMR:::.llmr_turns(provider = cfg$provider, request = body)),
+      extra = list(params = LLMR:::.llmr_body_params(body)))
+    identical(h_cfg, h_log)
+  }
+  op <- options(llmr.quiet = TRUE); on.exit(options(op), add = TRUE)
+  expect_true(agree(llm_config("gemini", "gemini-2.5-flash-lite", temperature = 0,
+                               top_k = 40, presence_penalty = 0.5, thinking_budget = 128)))
+  expect_true(agree(llm_config("gemini", "gemini-2.5-flash-lite", temperature = 0)))
+  expect_true(agree(llm_config("openai", "o3-mini", max_completion_tokens = 100)))
+  expect_true(agree(llm_config("openai", "gpt-4o-mini", max_tokens = 100)))
+  # a config using max_tokens and one using max_completion_tokens are the same request
+  expect_identical(
+    llm_request_hash(llm_config("openai", "gpt-4o-mini", max_tokens = 50), "hi"),
+    llm_request_hash(llm_config("openai", "gpt-4o-mini", max_completion_tokens = 50), "hi"))
+})
+
 test_that("a Gemini-style body hashes the same as its OpenAI-style twin", {
   # same question + temperature, two provider body shapes -> same identity
   open_body <- list(messages = list(list(role = "user", content = "hi")),
@@ -99,6 +131,23 @@ test_that("a scalar stop and a one-element stop array agree", {
   hl <- llm_request_hash(provider = "openai", model = "demo", messages = "hi",
                          extra = list(params = list(stop = list("END"))))
   expect_identical(hs, hl)
+})
+
+test_that("llm_hash does not depend on the collation locale (radix sort)", {
+  # Names that C and locale collation order differently; the hash must be the
+  # same whatever LC_COLLATE is, or a sealed archive fails to verify elsewhere.
+  obj <- list(Zebra = 1, apple = 2, Beta = 3, zulu = 5, Alpha = 6, model = "x")
+  hash_under <- function(loc) {
+    old <- Sys.getlocale("LC_COLLATE")
+    on.exit(suppressWarnings(Sys.setlocale("LC_COLLATE", old)), add = TRUE)
+    set_ok <- suppressWarnings(Sys.setlocale("LC_COLLATE", loc))
+    if (!nzchar(set_ok)) return(NA_character_)  # locale not installed here
+    llm_hash(obj)
+  }
+  hs <- vapply(c("C", "en_US.UTF-8", "de_DE.UTF-8"), hash_under, character(1))
+  hs <- hs[!is.na(hs)]
+  skip_if(length(hs) < 2L, "need at least two settable collation locales")
+  expect_equal(length(unique(hs)), 1L)
 })
 
 test_that("transport and internal knobs never enter the hash", {

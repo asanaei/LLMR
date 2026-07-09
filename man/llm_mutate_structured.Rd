@@ -87,6 +87,12 @@ One of \code{"halve_recursive"} (default), \code{"halve_once"}, \code{"singleton
 \item{...}{Passed to the underlying calls: \code{\link[=call_llm_broadcast]{call_llm_broadcast()}} in
 generative mode, \code{\link[=get_batched_embeddings]{get_batched_embeddings()}} in embedding mode.}
 }
+\value{
+\code{.data} with the output column, the diagnostic columns, and the parsed
+structured columns (\code{structured_ok}, \code{structured_data}, one column per
+hoisted field, and \code{structured_valid}/\code{structured_error} when \code{.schema} is
+validated locally).
+}
 \description{
 Drop-in schema-first variant of \code{\link[=llm_mutate]{llm_mutate()}}. Produces parsed columns.
 }

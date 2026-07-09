@@ -21,8 +21,8 @@ Logs an error with a timestamp for troubleshooting.
   # below is deliberately one that is not set in the environment, so the
   # call fails locally with a "Missing API key" authentication error.
   config_test <- llm_config(
-    provider = "openai",
-    model = "gpt-4.1-nano",
+    provider = "groq",
+    model = "openai/gpt-oss-20b",
     api_key = "LLMR_UNSET_DEMO_KEY",
     temperature = 0.5,
     max_tokens = 30

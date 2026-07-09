@@ -104,3 +104,16 @@ test_that("llm_api_key_env is exported and usable", {
   h <- llm_api_key_env("SOME_VAR")
   expect_s3_class(h, "llmr_secret")
 })
+
+test_that("llm_par_resume refuses any collision-renamed diagnostic column", {
+  cfg <- llm_config("groq", "openai/gpt-oss-20b")
+  # user column 'duration' collides -> call_llm_par would emit 'duration.1'
+  res <- tibble::tibble(duration = c("user-a", "user-b"),
+                        config = list(cfg, cfg), messages = list("x", "y"),
+                        success = c(TRUE, FALSE), duration.1 = c(0.4, NA))
+  expect_error(llm_par_resume(res), "collision-renamed diagnostic")
+  # the historical 'success' collision still errors
+  res2 <- tibble::tibble(config = list(cfg), messages = list("x"),
+                         success = TRUE, success.1 = TRUE)
+  expect_error(llm_par_resume(res2), "collision-renamed diagnostic")
+})

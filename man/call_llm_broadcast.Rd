@@ -40,7 +40,7 @@ to \code{multisession} for the duration of the call.
 \examples{
 \dontrun{
   # Broadcast different questions
-  config <- llm_config(provider = "openai", model = "gpt-4.1-nano")
+  config <- llm_config(provider = "groq", model = "openai/gpt-oss-20b")
 
   messages <- list(
     list(list(role = "user", content = "What is 2+2?")),

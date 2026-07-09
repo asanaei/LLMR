@@ -15,6 +15,11 @@ call_llm_par_structured(experiments, schema = NULL, .fields = NULL, ...)
 
 \item{...}{Passed to \code{\link[=call_llm_par]{call_llm_par()}}.}
 }
+\value{
+A tibble of class \code{llmr_experiment}: the \code{\link[=call_llm_par]{call_llm_par()}} result with
+structured output parsed by \code{\link[=llm_parse_structured_col]{llm_parse_structured_col()}} (adds
+\code{structured_ok}, \code{structured_data}, and one column per hoisted field).
+}
 \description{
 Enables structured output on each config (if not already set), runs, then parses JSON.
 }
