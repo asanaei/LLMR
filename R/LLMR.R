@@ -76,6 +76,12 @@
 
     ### 2b - *named* but no "file" -> legacy path
     if (!"file" %in% msg_names) {
+      # Empty/NA names (e.g. c(system = "x", "y"), where the second element is
+      # unnamed) default to the user role, mirroring the multimodal path below.
+      # Without this the turn carries role "" and providers reject it (HTTP 400,
+      # "invalid role").
+      msg_names[is.na(msg_names) | msg_names == ""] <- "user"
+      names(messages) <- msg_names
       return(unname(purrr::imap(messages,
                                 \(txt, role) list(role = role, content = txt))))
     }
