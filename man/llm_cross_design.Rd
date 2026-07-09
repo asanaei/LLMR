@@ -35,7 +35,7 @@ The result has \code{config} and \code{messages} list-columns ready for \code{\l
 \examples{
 \dontrun{
 cities <- data.frame(city = c("Cairo", "Lima"))
-cfgs <- list(llm_config("openai", "gpt-4.1-nano"), llm_config("openai", "gpt-4.1-mini"))
+cfgs <- list(llm_config("groq", "openai/gpt-oss-20b"), llm_config("deepseek", "deepseek-chat"))
 design <- llm_cross_design(cities, cfgs, prompt = "What country is {city} in?")
 results <- call_llm_par(design)
 }

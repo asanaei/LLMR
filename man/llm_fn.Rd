@@ -134,7 +134,7 @@ land on, so sums can slightly undercount in heavy-recovery runs.
 \examples{
 \dontrun{
 words <- c("excellent", "awful")
-cfg <- llm_config("openai", "gpt-4.1-nano", temperature = 0)
+cfg <- llm_config("groq", "openai/gpt-oss-20b", temperature = 0)
 llm_fn(words, "Classify '{x}' as Positive/Negative.", cfg, .return = "text")
 
 df <- tibble::tibble(text = words, source = c("review", "review"))

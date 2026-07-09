@@ -187,7 +187,7 @@
 #' @examples
 #' \dontrun{
 #'   # Temperature sweep
-#'   config <- llm_config(provider = "openai", model = "gpt-4.1-nano")
+#'   config <- llm_config(provider = "groq", model = "openai/gpt-oss-20b")
 #'
 #'   messages <- "What is 15 * 23?"
 #'   temperatures <- c(0, 0.3, 0.7, 1.0, 1.5)
@@ -281,7 +281,7 @@ call_llm_sweep <- function(base_config,
 #' @examples
 #' \dontrun{
 #'   # Broadcast different questions
-#'   config <- llm_config(provider = "openai", model = "gpt-4.1-nano")
+#'   config <- llm_config(provider = "groq", model = "openai/gpt-oss-20b")
 #'
 #'   messages <- list(
 #'     list(list(role = "user", content = "What is 2+2?")),
@@ -1063,13 +1063,11 @@ reset_llm_parallel <- function(verbose = FALSE) {
 #' @return A list of [llm_config] objects.
 #'
 #' @examples
-#' \dontrun{
 #' base <- llm_config("openai", "gpt-4.1-nano")
 #' cfgs <- expand_llm_config(base,
 #'                           temperature = c(0, 0.5, 1),
 #'                           model = c("gpt-4.1-nano", "gpt-4.1-mini"))
 #' length(cfgs)
-#' }
 #'
 #' @seealso [llm_config()], [llm_cross_design()], [call_llm_par()]
 #' @export
@@ -1117,7 +1115,7 @@ expand_llm_config <- function(base_config, ...) {
 #' @examples
 #' \dontrun{
 #' cities <- data.frame(city = c("Cairo", "Lima"))
-#' cfgs <- list(llm_config("openai", "gpt-4.1-nano"), llm_config("openai", "gpt-4.1-mini"))
+#' cfgs <- list(llm_config("groq", "openai/gpt-oss-20b"), llm_config("deepseek", "deepseek-chat"))
 #' design <- llm_cross_design(cities, cfgs, prompt = "What country is {city} in?")
 #' results <- call_llm_par(design)
 #' }

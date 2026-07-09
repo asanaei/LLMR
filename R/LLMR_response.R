@@ -113,9 +113,10 @@ new_llmr_response <- function(text,
 #' @param x An \code{llmr_response} object.
 #' @return A length-1 character vector or \code{NA_character_}.
 #' @examples
-#' \dontrun{
-#' fr <- finish_reason(r)
-#' }
+#' r <- structure(list(text="hi", model="demo", finish_reason="stop",
+#'   usage=list(sent=1L, rec=1L, total=2L, reasoning=NA_integer_, cached=NA_integer_),
+#'   duration_s=0.01), class="llmr_response")
+#' finish_reason(r)
 #' @rdname llmr_response
 #' @export
 finish_reason <- function(x) {
@@ -132,10 +133,10 @@ finish_reason <- function(x) {
 #'   its cache (cheaper than fresh input tokens); it is `NA` for providers that
 #'   do not report cache usage.
 #' @examples
-#' \dontrun{
-#' u <- tokens(r)
-#' u$total
-#' }
+#' r <- structure(list(text="hi", model="demo", finish_reason="stop",
+#'   usage=list(sent=1L, rec=1L, total=2L, reasoning=NA_integer_, cached=NA_integer_),
+#'   duration_s=0.01), class="llmr_response")
+#' tokens(r)
 #' @rdname llmr_response
 #' @export
 tokens <- function(x) {
@@ -152,9 +153,10 @@ tokens <- function(x) {
 #' @param x An \code{llmr_response} object.
 #' @return \code{TRUE} if truncated, otherwise \code{FALSE}.
 #' @examples
-#' \dontrun{
-#' if (is_truncated(r)) message("Increase max_tokens")
-#' }
+#' r <- structure(list(text="hi", model="demo", finish_reason="stop",
+#'   usage=list(sent=1L, rec=1L, total=2L, reasoning=NA_integer_, cached=NA_integer_),
+#'   duration_s=0.01), class="llmr_response")
+#' is_truncated(r)
 #' @rdname llmr_response
 #' @export
 is_truncated <- function(x) identical(finish_reason(x), "length")

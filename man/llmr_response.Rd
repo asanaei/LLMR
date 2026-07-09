@@ -106,14 +106,16 @@ as.character(r)
 finish_reason(r)
 tokens(r)
 print(r)
-\dontrun{
-fr <- finish_reason(r)
-}
-\dontrun{
-u <- tokens(r)
-u$total
-}
-\dontrun{
-if (is_truncated(r)) message("Increase max_tokens")
-}
+r <- structure(list(text="hi", model="demo", finish_reason="stop",
+  usage=list(sent=1L, rec=1L, total=2L, reasoning=NA_integer_, cached=NA_integer_),
+  duration_s=0.01), class="llmr_response")
+finish_reason(r)
+r <- structure(list(text="hi", model="demo", finish_reason="stop",
+  usage=list(sent=1L, rec=1L, total=2L, reasoning=NA_integer_, cached=NA_integer_),
+  duration_s=0.01), class="llmr_response")
+tokens(r)
+r <- structure(list(text="hi", model="demo", finish_reason="stop",
+  usage=list(sent=1L, rec=1L, total=2L, reasoning=NA_integer_, cached=NA_integer_),
+  duration_s=0.01), class="llmr_response")
+is_truncated(r)
 }

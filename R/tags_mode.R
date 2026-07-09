@@ -255,7 +255,7 @@ llm_parse_tags_col <- function(.data, tags, tags_col = "response_text", fields =
 #' @examples
 #' \dontrun{
 #' df <- tibble::tibble(city = c("Cairo", "Lima"))
-#' cfg <- llm_config("openai", "gpt-4.1-nano", temperature = 0)
+#' cfg <- llm_config("groq", "openai/gpt-oss-20b", temperature = 0)
 #'
 #' df |>
 #'   llm_mutate_tags(
