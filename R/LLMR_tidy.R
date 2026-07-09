@@ -62,6 +62,37 @@
   invisible(NULL)
 }
 
+# Resolve a defused .before/.after argument (a tidyselect quosure) to the
+# column name(s) it selects, or NULL when the argument was not supplied. Doing
+# this once, at each verb's boundary, is what makes .before/.after robust:
+# is.null(.before) would force-evaluate a bare-symbol column reference and error
+# ("object 'id' not found"), and forwarding a quosure through delegating verbs
+# (llm_mutate -> llm_mutate_structured/tags -> the batched engines) is fragile
+# across the mixed call styles. A resolved character name has neither problem --
+# it forwards cleanly and re-resolves to itself. quo_is_null() detects "not
+# supplied" without evaluating; tidyselect handles a bare symbol, a string, or
+# any tidyselect helper (last_col(), starts_with(), ...) uniformly.
+.llm_reloc_name <- function(quo, data) {
+  if (rlang::quo_is_null(quo)) return(NULL)
+  nm <- names(tidyselect::eval_select(quo, data))
+  if (!length(nm)) NULL else nm
+}
+
+# Append the generated columns, or relocate them to the resolved .before/.after
+# column name(s). Neither supplied -> append (dplyr::mutate semantics); with both
+# NULL, dplyr::relocate() would instead move them to the FRONT, which is the bug
+# this guard prevents.
+.llm_relocate_added <- function(df, added_names, before_name, after_name) {
+  if (is.null(before_name) && is.null(after_name)) return(df)
+  if (!is.null(before_name)) {
+    dplyr::relocate(df, tidyselect::all_of(added_names),
+                    .before = tidyselect::all_of(before_name))
+  } else {
+    dplyr::relocate(df, tidyselect::all_of(added_names),
+                    .after = tidyselect::all_of(after_name))
+  }
+}
+
 # Overwrite-with-notice semantics for generated columns, mirroring
 # dplyr::mutate(): an existing column of the same name is replaced (and a note
 # is emitted) instead of letting bind_cols() mangle both names.
@@ -574,8 +605,12 @@ llm_mutate <- function(.data,
   if (.batched) .assert_batch_not_embedding(.config)
 
   out_missing <- missing(output)  # shorthand may supply it; final check happens later
-  before_missing <- missing(.before)
-  after_missing  <- missing(.after)
+  # Resolve .before/.after to column name(s) once, here at the boundary, then pass
+  # the resolved names (never the raw tidyselect promise) through every path and
+  # delegation. See .llm_reloc_name(): this avoids both the is.null()-forces-a-
+  # bare-symbol crash and the fragility of forwarding a quosure through verbs.
+  before_name <- .llm_reloc_name(rlang::enquo(.before), .data)
+  after_name  <- .llm_reloc_name(rlang::enquo(.after), .data)
 
   dots <- rlang::dots_list(...)
 
@@ -640,8 +675,10 @@ llm_mutate <- function(.data,
       .rowpack_payload = .rowpack_payload,
       .rowpack_recovery = .rowpack_recovery
     )
-    if (!before_missing) args$.before <- .before
-    if (!after_missing)  args$.after  <- .after
+    # pass resolved names (NULL removes the entry, so the delegate keeps its
+    # default; the delegate re-resolves the name idempotently)
+    args$.before <- before_name
+    args$.after  <- after_name
 
     if (out_missing) {
       # Shorthand set `output` to a symbol earlier
@@ -671,8 +708,10 @@ llm_mutate <- function(.data,
       .rowpack_payload = .rowpack_payload,
       .rowpack_recovery = .rowpack_recovery
     )
-    if (!before_missing) args$.before <- .before
-    if (!after_missing)  args$.after  <- .after
+    # pass resolved names (NULL removes the entry, so the delegate keeps its
+    # default; the delegate re-resolves the name idempotently)
+    args$.before <- before_name
+    args$.after  <- after_name
 
     args$output <- if (out_missing) output else rlang::ensym(output)
     return(do.call(llm_mutate_tags, c(args, dots)))
@@ -755,14 +794,7 @@ llm_mutate <- function(.data,
       emb_df
     )
 
-    if (!is.null(.before) || !is.null(.after)) {
-      res <- dplyr::relocate(
-        res,
-        dplyr::all_of(names(emb_df)),
-        .before = {{ .before }},
-        .after  = {{ .after }}
-      )
-    }
+    res <- .llm_relocate_added(res, names(emb_df), before_name, after_name)
     return(res)
   }
   # -------------------------------------------------------------------------
@@ -803,12 +835,11 @@ llm_mutate <- function(.data,
 
     base_text <- ifelse(res$success %in% TRUE, res$response_text, NA_character_)
     if (.ret == "text") {
-      return(.data |>
-               dplyr::mutate(!!out_sym := base_text,
-                             .before = {{ .before }}, .after = {{ .after }}))
+      return(.llm_relocate_added(
+        dplyr::mutate(.data, !!out_sym := base_text),
+        rlang::as_name(out_sym), before_name, after_name))
     }
-    return(.assemble_mutate_columns(.data, res, out_sym, .before, .after,
-                                    before_missing, after_missing))
+    return(.assemble_mutate_columns(.data, res, out_sym, before_name, after_name))
   }
 
   res <- do.call(
@@ -821,9 +852,9 @@ llm_mutate <- function(.data,
   base_text <- ifelse(res$success %in% TRUE, res$response_text, NA_character_)
 
   if (.ret == "text") {
-    return(.data |>
-             dplyr::mutate(!!out_sym := base_text,
-                           .before = {{ .before }}, .after = {{ .after }}))
+    return(.llm_relocate_added(
+      dplyr::mutate(.data, !!out_sym := base_text),
+      rlang::as_name(out_sym), before_name, after_name))
   }
 
   if (.ret == "object") {
@@ -832,9 +863,9 @@ llm_mutate <- function(.data,
     for (i in seq_len(nrow(res))) {
       objs[[i]] <- if (isTRUE(res$success[i])) res$response[[i]] else NA
     }
-    return(.data |>
-             dplyr::mutate(!!col_name := objs,
-                           .before = {{ .before }}, .after = {{ .after }}))
+    return(.llm_relocate_added(
+      dplyr::mutate(.data, !!col_name := objs),
+      col_name, before_name, after_name))
   }
 
 
@@ -862,19 +893,9 @@ llm_mutate <- function(.data,
     added
   )
 
-  # Append by default (dplyr::mutate semantics). Relocate only when the caller
-  # asked: with both .before and .after absent, dplyr::relocate() would move the
-  # generated columns to the FRONT, contradicting the documented "appended"
-  # contract (and the batched/embedding paths, which already guard this way).
-  # `missing()` flags are used rather than is.null(), because is.null() would
-  # force-evaluate a bare-symbol .before/.after and error.
-  if (before_missing && after_missing) return(res_df)
-  res_df <- dplyr::relocate(
-    res_df,
-    dplyr::all_of(names(added)),
-    .before = {{ .before }},
-    .after  = {{ .after }}
-  )
-
-  return(res_df)
+  # Append by default (dplyr::mutate semantics), or relocate to the resolved
+  # .before/.after. With both absent, dplyr::relocate() would move the generated
+  # columns to the FRONT, so .llm_relocate_added() returns the appended frame
+  # untouched in that case.
+  return(.llm_relocate_added(res_df, names(added), before_name, after_name))
 }

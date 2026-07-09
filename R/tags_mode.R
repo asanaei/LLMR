@@ -289,8 +289,9 @@ llm_mutate_tags <- function(.data,
                             ...) {
   tags <- .validate_tags(.tags)
   output_missing <- missing(output)
-  before_missing <- missing(.before)
-  after_missing <- missing(.after)
+  # Resolve .before/.after to column name(s) once (see .llm_reloc_name).
+  before_name <- .llm_reloc_name(rlang::enquo(.before), .data)
+  after_name  <- .llm_reloc_name(rlang::enquo(.after), .data)
   dots <- rlang::dots_list(...)
   .batched <- .validate_rows_per_prompt(.rows_per_prompt)
   .rowpack_payload  <- match.arg(.rowpack_payload)
@@ -304,8 +305,7 @@ llm_mutate_tags <- function(.data,
       output = if (output_missing) NULL else rlang::ensym(output),
       prompt = prompt, .messages = .messages, .config = .config,
       .system_prompt = .system_prompt,
-      .before = if (before_missing) NULL else .before,
-      .after  = if (after_missing) NULL else .after,
+      .before = before_name, .after = after_name,
       tags = tags, .fields = .fields,
       .rows_per_prompt = .rows_per_prompt, .rowpack_payload = .rowpack_payload,
       .rowpack_recovery = .rowpack_recovery, dots = dots))
@@ -321,8 +321,8 @@ llm_mutate_tags <- function(.data,
     .system_prompt = prompted$.system_prompt,
     .return = "columns"
   )
-  if (!before_missing) args$.before <- .before
-  if (!after_missing) args$.after <- .after
+  args$.before <- before_name   # resolved name; NULL removes the entry
+  args$.after  <- after_name
 
   if (output_missing) {
     out <- do.call(llm_mutate, c(args, dots))

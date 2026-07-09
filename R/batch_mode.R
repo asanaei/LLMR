@@ -791,13 +791,12 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
 #' @param .data Original data frame.
 #' @param res The engine result tibble (`call_llm_par` columns + batch columns).
 #' @param out_sym Quosure/symbol of the output column.
-#' @param .before,.after Relocation targets.
-#' @param before_missing,after_missing Whether the caller passed them.
+#' @param before_name,after_name Resolved relocation target column name(s), or
+#'   `NULL` (append). See `.llm_reloc_name()`.
 #' @return `.data` with the diagnostic (and batch) columns bound and relocated.
 #' @keywords internal
 #' @noRd
-.assemble_mutate_columns <- function(.data, res, out_sym, .before, .after,
-                                     before_missing, after_missing) {
+.assemble_mutate_columns <- function(.data, res, out_sym, before_name, after_name) {
   nm <- rlang::as_name(out_sym)
   base_text <- ifelse(res$success, res$response_text, NA_character_)
   added <- tibble::tibble(
@@ -825,12 +824,7 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
     .llm_drop_clobbered(.data, names(added), context = "llm_mutate()"),
     added
   )
-  if (is.null(.before) && is.null(.after)) return(res_df)
-  if (!is.null(.before)) {
-    dplyr::relocate(res_df, dplyr::all_of(names(added)), .before = {{ .before }})
-  } else {
-    dplyr::relocate(res_df, dplyr::all_of(names(added)), .after = {{ .after }})
-  }
+  .llm_relocate_added(res_df, names(added), before_name, after_name)
 }
 
 #' Batched implementation shared by llm_fn_structured()/llm_mutate_structured()
@@ -886,9 +880,7 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
 
   if (!is.null(data_df)) {
     out_sym <- if (is.null(output)) rlang::sym("llm_structured") else output
-    res_df <- .assemble_mutate_columns(
-      data_df, res, out_sym, .before, .after,
-      before_missing = is.null(.before), after_missing = is.null(.after))
+    res_df <- .assemble_mutate_columns(data_df, res, out_sym, .before, .after)
     out2 <- llm_parse_structured_col(res_df,
       structured_col = rlang::as_name(out_sym), fields = fields_auto)
   } else {
@@ -950,9 +942,7 @@ llm_parse_rowpack_tags <- function(text, tags, m) {
     rowpack_payload = .rowpack_payload, rowpack_recovery = .rowpack_recovery, dots = dots)
 
   out_sym <- rlang::sym(out_name)
-  res_df <- .assemble_mutate_columns(
-    .data, res, out_sym, .before, .after,
-    before_missing = is.null(.before), after_missing = is.null(.after))
+  res_df <- .assemble_mutate_columns(.data, res, out_sym, .before, .after)
 
   # parse the wrapped field tags into columns (unchanged parser)
   llm_parse_tags_col(res_df, tags = tags, tags_col = out_name, fields = .fields)

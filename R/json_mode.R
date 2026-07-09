@@ -743,9 +743,10 @@ llm_mutate_structured <- function(.data,
                             ...) {
   # Capture whether output was actually provided
   output_missing <- missing(output)
-  # Track whether .before / .after were supplied (vs defaulted)
-  before_missing <- missing(.before)
-  after_missing  <- missing(.after)
+  # Resolve .before/.after to column name(s) once (see .llm_reloc_name); the
+  # resolved name forwards cleanly to the batched engine and to llm_mutate.
+  before_name <- .llm_reloc_name(rlang::enquo(.before), .data)
+  after_name  <- .llm_reloc_name(rlang::enquo(.after), .data)
   # Capture dots for safe forwarding
   dots <- rlang::dots_list(...)
   .batched <- .validate_rows_per_prompt(.rows_per_prompt)
@@ -763,8 +764,7 @@ llm_mutate_structured <- function(.data,
       .rowpack_recovery = .rowpack_recovery, dots = dots,
       data_df = .data,
       output = if (output_missing) NULL else rlang::ensym(output),
-      .before = if (before_missing) NULL else .before,
-      .after  = if (after_missing) NULL else .after)
+      .before = before_name, .after = after_name)
     return(out2)
   }
 
@@ -783,8 +783,8 @@ llm_mutate_structured <- function(.data,
       .system_prompt = .system_prompt,
       .return = "columns"
     )
-    if (!before_missing) args$.before <- .before
-    if (!after_missing)  args$.after  <- .after
+    args$.before <- before_name   # resolved name; NULL removes the entry
+    args$.after  <- after_name
     out <- do.call(llm_mutate, c(args, dots))
     # Extract the output column name from the result
     # It should be the first new column added
@@ -805,8 +805,8 @@ llm_mutate_structured <- function(.data,
       .system_prompt = .system_prompt,
       .return = "columns"
     )
-    if (!before_missing) args$.before <- .before
-    if (!after_missing)  args$.after  <- .after
+    args$.before <- before_name   # resolved name; NULL removes the entry
+    args$.after  <- after_name
     out <- do.call(llm_mutate, c(args, dots))
     output_name <- rlang::as_name(output_sym)
   }

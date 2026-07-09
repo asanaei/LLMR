@@ -259,6 +259,41 @@ test_that("llm_mutate appends generated columns by default and honors .before/.a
   expect_lt(which(names(b) == "ans"), which(names(b) == "q"))
 })
 
+test_that("bare-symbol .before/.after works on the structured, tags, and batched paths", {
+  # These non-plain paths used to force-evaluate a bare-symbol .before/.after
+  # (via is.null() or an eager delegation), erroring "object 'id' not found".
+  # Resolving to a column name at each boundary fixes it on every path.
+  stub <- function(config, messages, ...) mk_res(length(messages))
+  df <- tibble::tibble(id = 1:2, q = c("a", "b"))
+  cfg <- llm_config("openai", "m")
+
+  # structured (non-batched): parsed columns land right after id
+  s <- with_stub_broadcast2(stub, suppressWarnings(
+    llm_mutate(df, r, prompt = "{q}", .config = cfg, .structured = TRUE, .after = id)))
+  expect_identical(names(s)[1:2], c("id", "r"))
+
+  # tags (non-batched)
+  tg <- with_stub_broadcast2(stub,
+    llm_mutate(df, r, prompt = "{q}", .config = cfg, .tags = c("a"), .after = id))
+  expect_identical(names(tg)[2], "r")
+
+  # batched generative
+  bt <- with_stub_broadcast2(stub,
+    llm_mutate(df, ans, prompt = "{q}", .config = cfg, .rows_per_prompt = 2, .after = id))
+  expect_identical(names(bt)[2], "ans")
+
+  # batched tags, with .before
+  btg <- with_stub_broadcast2(stub,
+    llm_mutate(df, r, prompt = "{q}", .config = cfg, .tags = c("a"),
+               .rows_per_prompt = 2, .before = q))
+  expect_lt(which(names(btg) == "r"), which(names(btg) == "q"))
+
+  # each path still appends by default (no relocation to the front)
+  bt0 <- with_stub_broadcast2(stub,
+    llm_mutate(df, ans, prompt = "{q}", .config = cfg, .rows_per_prompt = 2))
+  expect_identical(names(bt0)[1:2], c("id", "q"))
+})
+
 # ---- preview additions ----------------------------------------------------------
 
 test_that("preview flags NA templates and empty prompts", {
