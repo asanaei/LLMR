@@ -75,9 +75,15 @@
   }
 
   if (is.null(prefix)) {
-    # Infer from a unique "<prefix>_ok" column.
+    # Infer from a unique "<prefix>_ok" column. A real llm_mutate() diagnostic
+    # block always carries a matching "<prefix>_finish" column too; the parser
+    # artifacts structured_ok / tags_ok (added by llm_mutate_structured() /
+    # llm_mutate_tags()) do not, so requiring the corroborating "_finish" keeps
+    # them from being mistaken for an output block (and still works if the user
+    # named their output column "tags" or "structured").
     ok_cols <- nm[grepl("_ok$", nm)]
     cand <- sub("_ok$", "", ok_cols)
+    cand <- cand[paste0(cand, "_finish") %in% nm]
     if (length(cand) == 1L) {
       prefix <- cand[[1]]
     } else if (length(cand) == 0L) {

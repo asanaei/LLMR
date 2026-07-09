@@ -101,6 +101,28 @@ test_that("ambiguous prefix requires an explicit choice", {
   expect_silent(llm_usage(two, prefix = "a"))
 })
 
+test_that("parser artifact columns (tags_ok/structured_ok) do not break inference", {
+  # llm_mutate_tags()/llm_mutate_structured() add tags_ok / structured_ok next to
+  # the real "<out>_*" block. Those artifacts have no matching "_finish", so the
+  # output prefix is inferred unambiguously rather than colliding.
+  tag_shaped <- tibble::tibble(
+    geo = "Egypt", geo_finish = "stop", geo_ok = TRUE,
+    geo_sent = 10L, geo_rec = 5L, geo_tot = 15L, geo_t = 0.1,
+    tags_ok = TRUE, tags_data = list(list(country = "Egypt")), country = "Egypt"
+  )
+  u <- llm_usage(tag_shaped)
+  expect_identical(u$n_ok, 1L)
+  expect_identical(u$sent_tokens, 10L)
+  expect_equal(nrow(llm_failures(tag_shaped)), 0L)
+
+  struct_shaped <- tibble::tibble(
+    result = "{}", result_finish = "stop", result_ok = TRUE,
+    result_sent = 7L, result_rec = 2L, result_tot = 9L, result_t = 0.1,
+    structured_ok = TRUE, structured_data = list(list(a = 1))
+  )
+  expect_identical(llm_usage(struct_shaped)$sent_tokens, 7L)
+})
+
 test_that("missing diagnostics gives a clear error", {
   expect_error(llm_usage(tibble::tibble(x = 1:3)),
                "diagnostic columns", ignore.case = TRUE)
