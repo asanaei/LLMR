@@ -16,7 +16,7 @@ Imports: httr2 (>= 1.0.0), curl, purrr, dplyr, tidyr, rlang, memoise, future, fu
         digest, tidyselect
 Suggests: testthat (>= 3.0.0), roxygen2 (>= 7.1.2),
        progressr, knitr, rmarkdown, ggplot2, jsonvalidate,
-       stringi, kableExtra
+       stringi, kableExtra, withr
 RoxygenNote: 7.3.3
 Roxygen: list(markdown = TRUE)
 Config/testthat/edition: 3
