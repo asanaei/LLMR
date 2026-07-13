@@ -66,6 +66,10 @@ no Authorization header is required. Override with \code{api_url} as needed.
 \code{api.moonshot.ai}). China-region accounts must pass \code{api_url} for the
 mainland hosts (\code{dashscope.aliyuncs.com} and \code{api.moonshot.cn});
 using the wrong region returns HTTP 401.
+\item \strong{OpenRouter:} one key (\code{OPENROUTER_API_KEY}) reaches many
+hosted models; its optional attribution headers (\code{HTTP-Referer},
+\code{X-Title}) can be added through the \code{req_builder} hook of
+\code{\link[=llm_config]{llm_config()}}. No embeddings or batch API.
 \item \strong{Error handling:} HTTP errors raise structured conditions with
 classes like \code{llmr_api_param_error}, \code{llmr_api_rate_limit_error},
 \code{llmr_api_server_error}; see the condition fields for status, code,

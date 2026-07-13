@@ -37,16 +37,16 @@ Modified \code{llm_config}.
 \description{
 Turn on structured output for a model configuration. Supports OpenAI-compatible
 providers (OpenAI, Groq, Together, x.ai, DeepSeek, Xiaomi, Alibaba (Qwen), Zhipu,
-Moonshot), Anthropic, and Gemini.
+Moonshot, OpenRouter), Anthropic, and Gemini.
 }
 \section{Server-side enforcement by provider}{
 
-OpenAI, Groq, Together, x.ai, and Ollama accept a strict \code{json_schema}
-response format. DeepSeek, Alibaba (Qwen), Zhipu, Moonshot, and Xiaomi
-accept only JSON-object mode; for them the supplied schema drives local
-parsing and validation, so the prompt itself should describe the desired
-fields. Anthropic enforcement runs through a forced tool call; Gemini
-through \code{responseJsonSchema}.
+OpenAI, Groq, Together, x.ai, OpenRouter, and Ollama accept a strict
+\code{json_schema} response format. DeepSeek, Alibaba (Qwen), Zhipu, Moonshot,
+and Xiaomi accept only JSON-object mode; for them the supplied schema drives
+local parsing and validation, so the prompt itself should describe the
+desired fields. Anthropic enforcement runs through a forced tool call;
+Gemini through \code{responseJsonSchema}.
 }
 
 \section{Gemini}{

@@ -80,6 +80,21 @@ test_that("alibaba (qwen): basic call", {
   expect_true(nzchar(as.character(r)))
 })
 
+test_that("openrouter: basic call and streaming", {
+  skip_if_no_env("OPENROUTER_API_KEY")
+  skip_on_cran()
+  cfg <- llm_config("openrouter", "openai/gpt-oss-20b", temperature = 0,
+                    max_tokens = 100)
+  r <- call_llm_robust(cfg, "Reply with exactly one word: ready")
+  expect_s3_class(r, "llmr_response")
+  expect_true(nzchar(as.character(r)))
+
+  s <- call_llm_stream(cfg, "Count from 1 to 3, digits only.",
+                       callback = function(chunk) invisible(NULL))
+  expect_s3_class(s, "llmr_response")
+  expect_true(nzchar(as.character(s)))
+})
+
 test_that("gemini: thinking budget, schema, and embeddings", {
   skip_if_no_env("GEMINI_API_KEY")
   skip_on_cran()

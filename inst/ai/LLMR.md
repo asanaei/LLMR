@@ -1,6 +1,6 @@
 ---
 name: llmr
-description: Unified LLM provider layer for R - one config across OpenAI/Anthropic/Gemini/Groq/DeepSeek/Together/Ollama and more; structured output, tool calling, streaming, logprobs, embeddings, tidy data-frame verbs, parallel and batch execution, audit logging, replication and agreement, cost accounting.
+description: Unified LLM provider layer for R - one config across OpenAI/Anthropic/Gemini/Groq/DeepSeek/Together/OpenRouter/Ollama and more; structured output, tool calling, streaming, logprobs, embeddings, tidy data-frame verbs, parallel and batch execution, audit logging, replication and agreement, cost accounting.
 ---
 
 # LLMR — usage capsule for AI assistants
@@ -97,9 +97,10 @@ out <- llm_mutate_structured(df, ans, prompt = "...{text}",
 - For measurement, `temperature = 0`; for replication runs leave sampling
   on and use `llm_replicate()` + `llm_agreement()` (Krippendorff alpha).
 - Strict JSON-schema mode is provider-gated: openai/groq/together/xai/
-  ollama take real schemas (auto-hardened: `additionalProperties: false`,
-  required filled); deepseek/alibaba/zhipu/moonshot get JSON-object mode
-  with local validation. Anthropic uses a schema tool; Gemini uses
+  openrouter/ollama take real schemas (auto-hardened:
+  `additionalProperties: false`, required filled);
+  deepseek/alibaba/zhipu/moonshot get JSON-object mode with local
+  validation. Anthropic uses a schema tool; Gemini uses
   `responseJsonSchema`.
 - Logprobs: deepseek and openai expose them; groq and most gemini models
   reject the flag; anthropic has none.

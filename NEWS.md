@@ -1,3 +1,11 @@
+# LLMR 0.8.11
+
+* New provider `"openrouter"`: chat, streaming, and structured output through
+  OpenRouter's OpenAI-compatible aggregator (model ids like
+  `"openai/gpt-4o-mini"`; key from `OPENROUTER_API_KEY`). OpenRouter has no
+  embeddings or batch API; its optional attribution headers can be set through
+  the `req_builder` hook.
+
 # LLMR 0.8.10
 
 A bug-fix release; all changes are backward compatible.

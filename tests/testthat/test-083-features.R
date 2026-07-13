@@ -384,11 +384,17 @@ test_that("stream finish reasons reuse the standard vocabulary", {
 
 test_that("stream specs cover every compat provider", {
   for (p in c("openai", "groq", "together", "deepseek", "xiaomi", "alibaba",
-              "zhipu", "moonshot", "xai", "ollama")) {
+              "zhipu", "moonshot", "xai", "openrouter", "ollama")) {
     spec <- LLMR:::.compat_stream_spec(p)
     expect_true(nzchar(spec$endpoint))
     expect_true(spec$auth %in% c("bearer", "api-key", "none"))
   }
+  # openrouter streams against its own host, drops nothing, and relies on the
+  # usage object OpenRouter sends in the final chunk (no stream_options needed)
+  orsp <- LLMR:::.compat_stream_spec("openrouter")
+  expect_match(orsp$endpoint, "openrouter\\.ai")
+  expect_identical(orsp$drop, character(0))
+  expect_false(orsp$usage_opt)
 })
 
 test_that("stream spec falls back to the OpenAI default for unlisted/NULL providers", {
@@ -396,14 +402,14 @@ test_that("stream spec falls back to the OpenAI default for unlisted/NULL provid
   # %||% fallback could run; an unlisted provider (a custom gateway) must stream
   # against the OpenAI-compatible default rather than crash.
   oa <- LLMR:::.compat_stream_spec("openai")$endpoint
-  for (p in list("openrouter", "my-gateway", NULL)) {
+  for (p in list("my-gateway", NULL)) {
     spec <- LLMR:::.compat_stream_spec(p)
     expect_identical(spec$endpoint, oa)
     expect_identical(spec$auth, "bearer")
   }
   # a genuinely unknown provider is treated conservatively (no stream_options),
   # whereas NULL normalizes to openai and keeps openai's own settings
-  expect_false(LLMR:::.compat_stream_spec("openrouter")$usage_opt)
+  expect_false(LLMR:::.compat_stream_spec("my-gateway")$usage_opt)
   expect_true(LLMR:::.compat_stream_spec(NULL)$usage_opt)
 })
 
@@ -436,4 +442,30 @@ test_that("streaming applies the req_builder hook and the request timeout", {
   # default timeout when unset
   r2 <- LLMR:::.llmr_apply_req_hooks(req0, llm_config("groq", "m"))
   expect_equal(r2$options$timeout_ms, 600000)
+})
+
+test_that("openrouter dispatches to its own endpoint with Bearer auth (offline)", {
+  withr::local_envvar(c(OPENROUTER_API_KEY = "test-key-not-real"))
+  seen <- NULL
+  testthat::local_mocked_bindings(
+    perform_request = function(req, verbose, provider = NULL, model = NULL, config = NULL) {
+      seen <<- req
+      structure(list(text = "ok"), class = "llmr_response")
+    },
+    .package = "LLMR")
+  cfg <- llm_config("openrouter", "openai/gpt-4o-mini", temperature = 0)
+  invisible(call_llm(cfg, "hi"))
+  expect_identical(seen$url, "https://openrouter.ai/api/v1/chat/completions")
+  # bearer auth: the Authorization header is set (httr2 stores its value as a
+  # protected weakref, so only the header's presence is observable here)
+  expect_true("Authorization" %in% names(seen$headers))
+
+  # embeddings are refused (OpenRouter has no embeddings endpoint)
+  emb <- llm_config("openrouter", "text-embedding-x", embedding = TRUE)
+  expect_error(call_llm(emb, "hi"), "not currently supported for OpenRouter")
+
+  # structured output: openrouter is schema-capable (server-side json_schema)
+  sc <- enable_structured_output(cfg,
+    schema = list(type = "object", properties = list(a = list(type = "string"))))
+  expect_identical(sc$model_params$response_format$type, "json_schema")
 })

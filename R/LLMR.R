@@ -477,6 +477,8 @@ get_endpoint <- function(config, default_endpoint) {
 #'   `"openai"`, `"anthropic"`, `"gemini"`, `"groq"`, `"together"`,
 #'   `"deepseek"`, `"xai"`, `"xiaomi"`, `"alibaba"` (Alibaba Cloud DashScope,
 #'   OpenAI-compatible mode; serves the Qwen models), `"zhipu"`, `"moonshot"`,
+#'   `"openrouter"` (an aggregator routing one OpenAI-compatible interface to
+#'   many hosted models; model ids like `"openai/gpt-4o-mini"`),
 #'   `"voyage"` (embeddings only), and `"ollama"` (local server, usually
 #'   keyless). Other names are accepted and routed through the
 #'   OpenAI-compatible path.
@@ -814,6 +816,10 @@ format.llm_config <- function(x, ...) {
 #'         `api.moonshot.ai`). China-region accounts must pass `api_url` for the
 #'         mainland hosts (`dashscope.aliyuncs.com` and `api.moonshot.cn`);
 #'         using the wrong region returns HTTP 401.
+#'   \item \strong{OpenRouter:} one key (`OPENROUTER_API_KEY`) reaches many
+#'         hosted models; its optional attribution headers (`HTTP-Referer`,
+#'         `X-Title`) can be added through the `req_builder` hook of
+#'         [llm_config()]. No embeddings or batch API.
 #'   \item \strong{Error handling:} HTTP errors raise structured conditions with
 #'         classes like `llmr_api_param_error`, `llmr_api_rate_limit_error`,
 #'         `llmr_api_server_error`; see the condition fields for status, code,
@@ -1643,6 +1649,22 @@ call_llm.xai <- function(config, messages, verbose = FALSE) {
     config, messages, verbose,
     endpoint = get_endpoint(config, default_endpoint = "https://api.x.ai/v1/chat/completions"),
     drop_params = c("top_k", "repetition_penalty")
+  )
+}
+
+#' @export
+call_llm.openrouter <- function(config, messages, verbose = FALSE) {
+  if (.is_embedding_config(config)) {
+    stop("Embedding models are not currently supported for OpenRouter!")
+  }
+  # OpenRouter routes one OpenAI-compatible request to many hosted models
+  # (model ids like "openai/gpt-4o-mini" or "meta-llama/llama-3.1-8b-instruct").
+  # It ignores parameters a chosen model cannot take, and top_k /
+  # repetition_penalty are genuinely supported for many of its models, so
+  # nothing is dropped here (same treatment as "together").
+  .openai_compat_chat(
+    config, messages, verbose,
+    endpoint = get_endpoint(config, default_endpoint = "https://openrouter.ai/api/v1/chat/completions")
   )
 }
 

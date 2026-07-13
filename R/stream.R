@@ -16,6 +16,7 @@
     zhipu    = "https://open.bigmodel.cn/api/paas/v4/chat/completions",
     moonshot = "https://api.moonshot.ai/v1/chat/completions",
     xai      = "https://api.x.ai/v1/chat/completions",
+    openrouter = "https://openrouter.ai/api/v1/chat/completions",
     ollama   = "http://localhost:11434/v1/chat/completions"
   )
   list(
@@ -29,6 +30,7 @@
     drop = switch(provider,
       together = character(0),
       ollama   = character(0),
+      openrouter = character(0),
       alibaba  = "repetition_penalty",
       zhipu    = c("frequency_penalty", "presence_penalty", "repetition_penalty"),
       c("top_k", "repetition_penalty")

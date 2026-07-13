@@ -34,7 +34,7 @@
 #'
 #' Turn on structured output for a model configuration. Supports OpenAI-compatible
 #' providers (OpenAI, Groq, Together, x.ai, DeepSeek, Xiaomi, Alibaba (Qwen), Zhipu,
-#' Moonshot), Anthropic, and Gemini.
+#' Moonshot, OpenRouter), Anthropic, and Gemini.
 #'
 #' @param config An [llm_config] object.
 #' @param schema A named list representing a JSON Schema.
@@ -52,12 +52,12 @@
 #' @return Modified `llm_config`.
 #'
 #' @section Server-side enforcement by provider:
-#' OpenAI, Groq, Together, x.ai, and Ollama accept a strict `json_schema`
-#' response format. DeepSeek, Alibaba (Qwen), Zhipu, Moonshot, and Xiaomi
-#' accept only JSON-object mode; for them the supplied schema drives local
-#' parsing and validation, so the prompt itself should describe the desired
-#' fields. Anthropic enforcement runs through a forced tool call; Gemini
-#' through `responseJsonSchema`.
+#' OpenAI, Groq, Together, x.ai, OpenRouter, and Ollama accept a strict
+#' `json_schema` response format. DeepSeek, Alibaba (Qwen), Zhipu, Moonshot,
+#' and Xiaomi accept only JSON-object mode; for them the supplied schema drives
+#' local parsing and validation, so the prompt itself should describe the
+#' desired fields. Anthropic enforcement runs through a forced tool call;
+#' Gemini through `responseJsonSchema`.
 #'
 #' @section Gemini:
 #' A supplied schema is sent as `responseJsonSchema` (standard JSON Schema,
@@ -84,13 +84,13 @@ enable_structured_output <- function(config,
 
   mp <- config$model_params %||% list()
   prov <- config$provider
-  is_openai_compat <- prov %in% c("openai","groq","together","xai","deepseek", "xiaomi", "alibaba", "zhipu", "moonshot", "ollama")
+  is_openai_compat <- prov %in% c("openai","groq","together","xai","deepseek", "xiaomi", "alibaba", "zhipu", "moonshot", "openrouter", "ollama")
   # Providers whose API enforces a json_schema response_format server-side.
   # The others (DeepSeek, Alibaba, Zhipu, Moonshot, Xiaomi) reject the
   # json_schema type outright; for them LLMR requests JSON-object mode and the
   # schema is used for local parsing/validation, so describe the desired
   # fields in your prompt.
-  schema_capable <- prov %in% c("openai", "groq", "together", "xai", "ollama")
+  schema_capable <- prov %in% c("openai", "groq", "together", "xai", "openrouter", "ollama")
 
   if (is_openai_compat) {
     # Prefer json_mode via response_format for structured output
