@@ -281,5 +281,5 @@ cities |>
 \seealso{
 \code{\link[=llm_fn]{llm_fn()}}, \code{\link[=llm_mutate_structured]{llm_mutate_structured()}}, \code{\link[=llm_mutate_tags]{llm_mutate_tags()}},
 \code{\link[=llm_parse_structured_col]{llm_parse_structured_col()}}, \code{\link[=llm_parse_tags_col]{llm_parse_tags_col()}},
-\code{\link[=llm_parse_rowpack_tags]{llm_parse_rowpack_tags()}}, \code{\link[=call_llm_broadcast]{call_llm_broadcast()}}, \code{\link[=setup_llm_parallel]{setup_llm_parallel()}}
+\code{\link[=call_llm_broadcast]{call_llm_broadcast()}}, \code{\link[=setup_llm_parallel]{setup_llm_parallel()}}
 }

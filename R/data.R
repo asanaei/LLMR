@@ -13,7 +13,7 @@
 #' select columns and filter rows with [dplyr][dplyr::dplyr-package] or base R,
 #' then hand the result to a consumer (for example `FocusGroup::create_agents_from_data()`
 #' or `LLMRpanel::panel_from_personas()`). The helpers [llm_persona_split()],
-#' [llm_persona_overview()], and [llm_persona_dictionary()] read the frame.
+#' [llm_persona_overview()], and [llm_persona_demographic_fields()] read the frame.
 #'
 #' @format A data frame with 100 rows and 125 columns. Column names are short,
 #'   tidy-select-friendly handles. Demographics use a `demo_` prefix

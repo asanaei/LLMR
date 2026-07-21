@@ -39,24 +39,23 @@
 #'   message.
 #'
 #' Records are appended line by line. Under multisession parallel execution,
-#' workers write per-process shard files and [llm_log_merge()] folds those
-#' shards back into the main log after the parallel call completes. The log
-#' contains your prompts and the model's replies in clear text. It never
-#' contains API keys.
+#' workers write per-process shard files, which LLMR folds back into the main
+#' log after the parallel call completes. The log contains your prompts and the
+#' model's replies in clear text. It never contains API keys.
 #'
 #' Set `include_messages = FALSE` to omit request bodies and reply text
 #' (keeping only metadata, parameters, usage, and identifiers), e.g. when
 #' prompts contain confidential data.
 #'
-#' @param path File path for the log. For `llm_log_enable()`, created on first
-#'   write and appended to if it exists; for `llm_log_merge()`, the base log
-#'   path whose per-process shard files should be folded in.
+#' @param path File path for the log. It is opened for append when logging is
+#'   enabled, creating the file if needed; an unusable destination errors before
+#'   logging is activated.
 #' @param include_messages Logical. If `TRUE` (default), the request body and
 #'   the reply text are stored. If `FALSE`, only metadata is stored.
 #' @return `llm_log_enable()` and `llm_log_disable()` return the previous log
 #'   path invisibly. `llm_log_status()` returns the active path or `NULL`,
 #'   invisibly, after printing a one-line status.
-#' @seealso [llm_usage()] for token summaries, [llm_methods_text()] for a
+#' @seealso [llm_usage()] for token summaries, [report()] for a
 #'   draft methods paragraph.
 #' @export
 #' @examples
@@ -71,6 +70,12 @@
 #' }
 llm_log_enable <- function(path = "llmr_log.jsonl", include_messages = TRUE) {
   stopifnot(is.character(path), length(path) == 1L, nzchar(path))
+  writable <- tryCatch({
+    con <- file(path, open = "a")
+    close(con)
+    TRUE
+  }, warning = function(e) FALSE, error = function(e) FALSE)
+  if (!writable) stop("Cannot open audit log for appending: ", path, call. = FALSE)
   old <- getOption("llmr.log_file")
   options(
     llmr.log_file     = path,
@@ -115,8 +120,7 @@ llm_log_active <- function() {
   )
 }
 
-#' @rdname llm_log_enable
-#' @export
+# Internal compatibility wrapper around the shard merger.
 llm_log_merge <- function(path) {
   .llmr_log_merge(path)
 }
@@ -175,7 +179,9 @@ llm_log_merge <- function(path) {
 .llmr_log_scrub <- function(x) {
   if (is.character(x) && length(x) == 1L && nchar(x) > 4096L &&
       (grepl("^data:", x) || grepl("^[A-Za-z0-9+/=\r\n]+$", substr(x, 1, 512)))) {
-    return(sprintf("<inline data omitted: %d chars>", nchar(x)))
+    encoding <- if (grepl("^data:", x)) "auto" else "base64"
+    return(sprintf("<inline data omitted: %d chars; sha256=%s>",
+                   nchar(x), .llmr_payload_hash(x, encoding)))
   }
   if (is.list(x)) return(lapply(x, .llmr_log_scrub))
   x

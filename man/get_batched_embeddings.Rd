@@ -32,9 +32,11 @@ batches are split automatically.)}
 \value{
 A numeric matrix where each row is an embedding vector for the corresponding text.
 Columns are named \code{v1}, \code{v2}, ..., \code{vK} where K is the embedding dimension.
-If embedding fails for certain texts, those rows will be filled with NA values.
-The matrix will always have the same number of rows as the input texts.
-Returns NULL if no embeddings were successfully generated.
+If a transient failure exhausts its retries after another batch succeeds,
+or a successful response omits particular vectors, the affected rows are
+filled with \code{NA}. Authentication, invalid-request, and transport errors
+propagate, and the function errors if no batch yields an embedding. The
+matrix otherwise has the same number of rows as the input texts.
 }
 \description{
 A wrapper function that processes a list of texts in batches to generate embeddings,

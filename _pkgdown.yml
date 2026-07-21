@@ -57,7 +57,6 @@ reference:
   - llm_parse_structured_col
   - llm_parse_tags
   - llm_parse_tags_col
-  - llm_parse_rowpack_tags
   - llm_validate_structured_col
   - llm_fn_structured
   - llm_mutate_structured
@@ -73,12 +72,10 @@ reference:
   - ensure_alternating_messages
   - llm_usage
   - llm_failures
-  - llm_methods_text
   - llm_log_enable
   - llm_log_read
   - llm_logprobs
   - llm_hash
-  - llm_uuid
 - title: Provenance and replay
   desc: >
     Turning an audit log back into a reproducible request: a content hash of a
@@ -88,10 +85,10 @@ reference:
   - llm_request_hash
   - llm_request_from_log
   - llm_response_record
-- title: Method-package generics
+- title: Reporting and family generics
   desc: >
-    Shared generics implemented by the LLMR method packages (LLMRcontent,
-    LLMRpanel, FocusGroup) on their result objects.
+    Experiment reporting plus shared generics implemented by LLMR family
+    packages on their result objects.
   contents:
   - diagnostics
   - report
@@ -104,12 +101,9 @@ reference:
   - llm_agreement
   - build_factorial_experiments
   - call_llm_par
-  - llm_add_request_hash
   - call_llm_broadcast
   - call_llm_sweep
   - call_llm_compare
-  - expand_llm_config
-  - llm_cross_design
   - llm_par_resume
   - llm_judge
   - setup_llm_parallel
@@ -126,7 +120,6 @@ reference:
   - llm_tool_signature
   - call_llm_tools
   - tool_calls
-  - bind_tools
 - title: Embeddings
   contents:
   - parse_embeddings
@@ -134,8 +127,6 @@ reference:
 - title: Reliability
   contents:
   - call_llm_robust
-  - cache_llm_call
-  - log_llm_error
 - title: Persona data
   desc: >
     A bundled example persona dataset and the small contract helpers that read
@@ -144,6 +135,5 @@ reference:
   - anes_2024_personas
   - llm_persona_split
   - llm_persona_overview
-  - llm_persona_dictionary
   - llm_persona_demographic_fields
   - llm_validate_persona_frame

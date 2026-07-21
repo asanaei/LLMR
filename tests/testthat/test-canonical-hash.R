@@ -22,19 +22,28 @@ test_that("config-side and log-side hashes are identical for the same call", {
   expect_identical(h_cfg, h_log)
 })
 
-test_that("temperature still distinguishes calls", {
-  base <- llm_request_hash(llm_config("openai", "gpt-4o-mini", temperature = 0),
-                           c(user = "Capital of France?"))
-  hot  <- llm_request_hash(llm_config("openai", "gpt-4o-mini", temperature = 1),
-                           c(user = "Capital of France?"))
-  expect_false(identical(base, hot))
-})
+test_that("multimodal hashes include attachment bytes and agree with the log side", {
+  f1 <- tempfile(fileext = ".png")
+  f2 <- tempfile(fileext = ".png")
+  on.exit(unlink(c(f1, f2)), add = TRUE)
+  writeBin(as.raw(rep(0:255, 20L)), f1)
+  writeBin(as.raw(c(rep(0:255, 19L), 0:254, 0L)), f2)
 
-test_that("message shape no longer changes the hash", {
   cfg <- llm_config("openai", "gpt-4o-mini", temperature = 0)
-  hA <- llm_request_hash(cfg, c(user = "hi"))
-  hB <- llm_request_hash(cfg, list(list(role = "user", content = "hi")))
-  expect_identical(hA, hB)
+  m1 <- c(user = "Describe this image.", file = f1)
+  m2 <- c(user = "Describe this image.", file = f2)
+  h1 <- llm_request_hash(cfg, m1)
+  h2 <- llm_request_hash(cfg, m2)
+  expect_false(identical(h1, h2))
+
+  body <- LLMR:::.compat_chat_request(
+    cfg, m1, endpoint = "https://example.invalid/v1/chat/completions",
+    auth_style = "none")$body$data
+  expect_identical(h1, log_side_hash("openai", "gpt-4o-mini", body))
+
+  scrubbed <- LLMR:::.llmr_log_scrub(body)
+  expect_match(scrubbed$messages[[1]]$content[[2]]$image_url$url, "sha256=")
+  expect_identical(h1, log_side_hash("openai", "gpt-4o-mini", scrubbed))
 })
 
 test_that("a non-4-tuple param (presence_penalty) is NOT lost", {

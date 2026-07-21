@@ -167,7 +167,6 @@ retry_with_backoff <- function(func,
 #' @return The successful result from \code{\link{call_llm}}, or an error if all retries fail.
 #' @seealso
 #' \code{\link{call_llm}} for the underlying, non-robust API call.
-#' \code{\link{cache_llm_call}} for a memoised version that avoids repeated requests.
 #' \code{\link{llm_config}} to create the configuration object.
 #' \code{\link{chat_session}} for stateful, interactive conversations.
 #' @export
@@ -241,41 +240,13 @@ call_llm_robust <- function(config, messages,
 # 3. Caching Wrapper
 # -------------------------------------------------------------------
 
-#' Cache LLM API Calls
-#'
-#' A memoised version of \code{\link{call_llm}} to avoid repeated identical requests.
-#'
-#' @param config An \code{llm_config} object from \code{\link{llm_config}}.
-#' @param messages A list of message objects or character vector for embeddings.
-#' @param verbose Logical. If TRUE, prints the full API response (passed to \code{\link{call_llm}}).
-#'
-#' @details
-#' - Requires the \code{memoise} package. Add \code{memoise} to your
-#'   package's DESCRIPTION.
-#' - Clearing the cache can be done via \code{memoise::forget(cache_llm_call)}
-#'   or by restarting your R session.
-#' - The cache lives in the R process that makes the call. Under a
-#'   \code{future} multisession plan (as used by \code{\link{call_llm_par}}),
-#'   each worker process keeps its own cache, which disappears with the
-#'   worker; identical requests in different workers are not deduplicated.
-#'
-#' @return The (memoised) response object from \code{\link{call_llm}}.
-#'
-#' @keywords internal
+#' Memoized call path used when call_llm_robust(memoize = TRUE).
 #' @importFrom memoise memoise
-#' @export
-#' @name cache_llm_call
-#'
-#' @examples
-#' \dontrun{
-#'   # Using cache_llm_call:
-#'   response1 <- cache_llm_call(my_config, list(list(role="user", content="Hello!")))
-#'   # Subsequent identical calls won't hit the API unless we clear the cache.
-#'   response2 <- cache_llm_call(my_config, list(list(role="user", content="Hello!")))
-#' }
+#' @keywords internal
+#' @noRd
 cache_llm_call <- memoise::memoise(function(config, messages, verbose = FALSE) {
   if (!requireNamespace("memoise", quietly = TRUE)) {
-    stop("Caching with cache_llm_call requires the 'memoise' package. Please install it (install.packages('memoise')).")
+    stop("Caching requires the 'memoise' package. Please install it (install.packages('memoise')).")
   }
   call_llm(config, messages, verbose = verbose)
 })
@@ -284,34 +255,7 @@ cache_llm_call <- memoise::memoise(function(config, messages, verbose = FALSE) {
 # 4. Error Logging
 # -------------------------------------------------------------------
 
-#' Log LLMR Errors
-#'
-#' Logs an error with a timestamp for troubleshooting.
-#'
-#' @param err An error object.
-#'
-#' @return Invisibly returns \code{NULL}.
-#' @export
-#'
-#' @keywords internal
-#' @examples
-#' \dontrun{
-#'   # Example of logging an error by catching a failure. The variable name
-#'   # below is deliberately one that is not set in the environment, so the
-#'   # call fails locally with a "Missing API key" authentication error.
-#'   config_test <- llm_config(
-#'     provider = "groq",
-#'     model = "openai/gpt-oss-20b",
-#'     api_key = "LLMR_UNSET_DEMO_KEY",
-#'     temperature = 0.5,
-#'     max_tokens = 30
-#'   )
-#'
-#'   tryCatch(
-#'     call_llm(config_test, list(list(role = "user", content = "Hello world!"))),
-#'     error = function(e) log_llm_error(e)
-#'   )
-#' }
+# Internal error reporter for call_llm_robust().
 log_llm_error <- function(err) {
   stamp <- Sys.time()
   msg <- conditionMessage(err)

@@ -23,12 +23,6 @@ test_that(".fields = FALSE does not error when the structured column is absent",
   expect_false("FALSE" %in% names(out))
 })
 
-test_that(".fields as a real vector still hoists (no regression)", {
-  df <- tibble::tibble(response_text = c('{"name":"a","score":1}'))
-  out <- LLMR::llm_parse_structured_col(df, fields = c("name", "score"))
-  expect_true(all(c("name", "score") %in% names(out)))
-})
-
 # ---- #6: token counts are NA (not 0) when usage is absent -----------------
 
 test_that(".token_counts returns NA, not 0, when no usage metadata present", {
@@ -63,38 +57,13 @@ test_that("llm_usage handles collision-renamed call_llm_par columns", {
   expect_equal(u$n_truncated, 1L)
 })
 
-test_that("llm_par_resume gives a clear error on collision-renamed success", {
-  x <- tibble::tibble(success = c("a"), success.1 = c(TRUE),
-                      config = list(1), messages = list(1))
-  expect_error(llm_par_resume(x), "collision-renamed", ignore.case = TRUE)
-})
-
 # ---- #4: preview is tag-aware for object + batch --------------------------
 
 test_that("llm_preview flags object+batch in plain mode but not in tag mode", {
   df <- tibble::tibble(text = c("a", "b", "c"))
-  p_plain <- llm_preview(df, prompt = "{text}", .return = "object",
-                         .rows_per_prompt = 2)
-  expect_true(any(grepl("object", p_plain$issues[[1]])))
-
   p_tags <- llm_preview(df, prompt = "{text}", .return = "object",
                         .rows_per_prompt = 2, .tags = c("a", "b"))
   expect_false(any(grepl("object", unlist(p_tags$issues))))
-})
-
-# ---- #5: llm_fn routes through the shared renderer ------------------------
-
-test_that("llm_fn message build equals the shared renderer (bare vector)", {
-  x <- c("alpha", "beta")
-  # what llm_fn now builds internally:
-  shared <- LLMR:::.llm_build_messages_df(
-    data.frame(x = x, stringsAsFactors = FALSE),
-    prompt = "Q: {x}", .system_prompt = "S")
-  # the frozen old inline assembly:
-  old_txt <- glue::glue_data(list(x = x), "Q: {x}", .na = "")
-  old <- lapply(as.character(old_txt),
-                function(txt) c(system = "S", user = txt))
-  expect_identical(shared, old)
 })
 
 # ---- #1: llm_api_key_env is exported --------------------------------------

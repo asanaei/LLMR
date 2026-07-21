@@ -36,8 +36,7 @@
 #' @keywords internal
 #' @noRd
 .assert_batch_not_embedding <- function(config) {
-  if (isTRUE(config$embedding) ||
-      grepl("embedding", config$model, ignore.case = TRUE)) {
+  if (.is_embedding_config(config)) {
     stop(".rows_per_prompt controls generative row batching and does not apply to ",
          "embeddings; use get_batched_embeddings(batch_size = ) for ",
          "embedding-call chunking.", call. = FALSE)
@@ -398,39 +397,9 @@
   list(blocks = blocks, report = list(found = found, nesting = nesting_hit))
 }
 
-#' Parse a batched, row-wrapped tag response into per-row field lists
-#'
-#' Splits a single batched reply into its numbered `<row_i>` blocks and then
-#' applies the standard flat tag parser ([llm_parse_tags()]) inside each block.
-#' This is the parsing counterpart to the `<row_i>` protocol that LLMR uses when
-#' `.rows_per_prompt > 1` together with `.tags`; it is exported so the protocol is
-#' inspectable and testable on its own.
-#'
-#' @param text Character scalar: one batched model response containing
-#'   `<row_i>...</row_i>` blocks, each wrapping flat field tags.
-#' @param tags Character vector of field tag names to extract within each block.
-#' @param m Integer: the number of items expected in the batch (local ids
-#'   `1..m`).
-#' @return A list of length `m`. Element `i` is the named list returned by
-#'   [llm_parse_tags()] for `<row_i>`, or `NULL` when that block is absent,
-#'   truncated, or otherwise unrecoverable.
-#'
-#' @details
-#' Robustness mirrors the internal scanner: reordered, duplicated, hallucinated,
-#' truncated, or accidentally nested `<row_i>` blocks are handled; only fully
-#' closed blocks contribute. Inner field tags are extracted by the same parser
-#' used in non-batched tag mode, so values coerce and decode identically.
-#'
-#' @seealso [llm_parse_tags()], [llm_parse_tags_col()], [llm_mutate()],
-#'   [llm_fn()]
-#' @examples
-#' txt <- paste(
-#'   "<row_1><age>21</age><job>barista</job></row_1>",
-#'   "<row_2><age>34</age><job>welder</job></row_2>",
-#'   sep = "\n"
-#' )
-#' llm_parse_rowpack_tags(txt, tags = c("age", "job"), m = 2)
-#' @export
+#' Parse field tags inside canonical row-pack blocks
+#' @keywords internal
+#' @noRd
 llm_parse_rowpack_tags <- function(text, tags, m) {
   tags <- .validate_tags(tags)
   m <- as.integer(m)

@@ -1,16 +1,13 @@
 ## Submission
 
-This release of LLMR (0.8.10) rolls up the additive helpers of 0.8.7-0.8.9
-(the bundled `anes_2024_personas` example data and persona helpers, the
-`transcript_as_messages()` / `ensure_alternating_messages()` message helpers,
-the audit-log readers `llm_log_read()` / `llm_request_from_log()`, the shared
-`reset()` generic, `llm_uuid()`, `llm_tool_signature()`, `llm_log_active()`,
-`llm_add_request_hash()`, and `llm_agreement(metric=)`) together with a set of
-bug fixes (see NEWS.md). All changes are backward compatible: new arguments
-default to the previous behavior, and no existing exported behavior changes.
-
-`tidyselect` is added to Imports (it backs the `.before`/`.after` column
-resolution and is already a transitive dependency via `dplyr`).
+LLMR 0.8.11 adds OpenRouter and a focused set of corrections described in
+NEWS.md. Request hashes now distinguish multimodal attachments, embedding
+batch failures are surfaced, invalid Anthropic thinking budgets fail before a
+request is built, ordered agreement metrics require a defensible category
+order, audit-log destinations are validated when enabled, and experiment and
+tool-loop objects expose their documented reporting and provenance contracts.
+Ten non-core helpers remain available inside the package but are no longer
+exported.
 
 ## Test environments
 

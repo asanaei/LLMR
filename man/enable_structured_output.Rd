@@ -8,7 +8,6 @@ enable_structured_output(
   config,
   schema = NULL,
   name = "llmr_schema",
-  method = c("auto", "json_mode", "tool_call"),
   strict = TRUE
 )
 }
@@ -20,9 +19,6 @@ If \code{NULL}, OpenAI-compatible providers enforce a JSON object; Gemini switch
 to JSON mime type; Anthropic only injects a tool when a schema is supplied.}
 
 \item{name}{Character. Schema/tool name for providers requiring one. Default "llmr_schema".}
-
-\item{method}{One of c("auto","json_mode","tool_call"). "auto" chooses the best
-per provider. You rarely need to change this.}
 
 \item{strict}{Logical. Request strict validation when supported
 (OpenAI-compatible). Strict mode has formal requirements of its own:

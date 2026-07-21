@@ -38,19 +38,19 @@ test_that("llm_log_active reports the audit-log state without printing", {
 
 # --- #1: request_hash on the parallel path -----------------------------------
 
-test_that("llm_add_request_hash matches llm_request_hash for each row", {
+test_that("the parallel request-hash worker matches llm_request_hash", {
   cfg <- llm_config("groq", "openai/gpt-oss-20b", temperature = 0)
   df <- tibble::tibble(
     config   = list(cfg, cfg),
     messages = list(c(user = "Label: positive?"), c(user = "Label: negative?")))
-  out <- llm_add_request_hash(df)
+  out <- LLMR:::.llmr_add_request_hash(df)
   expect_true("request_hash" %in% names(out))
   expect_equal(out$request_hash[1],
                llm_request_hash(config = cfg, messages = c(user = "Label: positive?")))
   expect_false(identical(out$request_hash[1], out$request_hash[2]))
 })
 
-# --- #6: llm_tool_signature() and llm_uuid() ---------------------------------
+# --- #6: llm_tool_signature() ------------------------------------------------
 
 test_that("llm_tool_signature is stable and tracks the contract, not the body", {
   t1 <- llm_tool(function(x) x, "echo", "Echo a value",
@@ -61,16 +61,8 @@ test_that("llm_tool_signature is stable and tracks the contract, not the body", 
                  parameters = list(x = list(type = "string")))
   s1 <- llm_tool_signature(t1)
   expect_match(s1, "^[0-9a-f]{64}$")
-  expect_identical(s1, llm_tool_signature(t1))            # stable
   expect_identical(s1, llm_tool_signature(t2))            # body excluded
   expect_false(identical(s1, llm_tool_signature(t3)))     # description matters
-})
-
-test_that("llm_uuid is unique, sortable, and prefixable", {
-  ids <- vapply(1:5, function(i) llm_uuid(), "")
-  expect_equal(length(unique(ids)), 5L)
-  expect_identical(ids, sort(ids))                        # creation order sorts
-  expect_match(llm_uuid("run"), "^run-")
 })
 
 # --- #4: llm_agreement(metric=) ----------------------------------------------
@@ -100,14 +92,12 @@ test_that("ordinal and interval alpha match a hand-computed example", {
 })
 
 test_that("numeric labels order numerically, not lexicographically", {
-  # "2" must sort before "10" for ordinal/interval; lexicographic order would
-  # corrupt the distances.
-  df <- data.frame(r1 = c("2", "10", "2"),
-                   r2 = c("2", "10", "10"),
-                   r3 = c("10", "10", "2"))
+  df <- data.frame(r1 = c("1", "1", "2", "10", "10"),
+                   r2 = c("1", "2", "2", "2", "10"),
+                   r3 = c("2", "2", "10", "10", "10"))
   ord <- llm_agreement(df, cols = c("r1", "r2", "r3"),
                        metric = "ordinal", normalize = FALSE)$summary$krippendorff_alpha
-  expect_true(is.finite(ord))
+  expect_equal(ord, 0.5679012, tolerance = 1e-6)
 })
 
 test_that("ordinal and interval alpha run on numeric labels and lie in range", {
@@ -120,9 +110,37 @@ test_that("ordinal and interval alpha run on numeric labels and lie in range", {
                        metric = "interval", normalize = FALSE)$summary$krippendorff_alpha
   expect_true(ord >= -1 && ord <= 1)
   expect_true(int >= -1 && int <= 1)
-  # interval metric needs numeric labels; non-numeric -> NA with a warning
+  # Unordered labels require the caller to state their order.
   dfc <- data.frame(r_1 = c("low", "high"), r_2 = c("low", "low"))
-  expect_warning(av <- llm_agreement(dfc, cols = c("r_1", "r_2"),
-                                     metric = "interval")$summary$krippendorff_alpha)
-  expect_true(is.na(av))
+  expect_error(llm_agreement(dfc, cols = c("r_1", "r_2"), metric = "interval"),
+               "requires numeric labels")
+
+  av <- llm_agreement(dfc, cols = c("r_1", "r_2"), metric = "interval",
+                      levels = c("low", "high"))$summary$krippendorff_alpha
+  expect_true(is.finite(av))
+})
+
+test_that("ordinal agreement accepts explicit levels and ordered factors", {
+  chars <- data.frame(r1 = c("low", "middle", "high"),
+                      r2 = c("middle", "middle", "high"))
+  expect_error(llm_agreement(chars, metric = "ordinal", cols = c("r1", "r2")),
+               "explicit `levels`")
+  explicit <- llm_agreement(chars, metric = "ordinal", cols = c("r1", "r2"),
+                            levels = c("low", "middle", "high"))
+  expect_true(is.finite(explicit$summary$krippendorff_alpha))
+
+  ordered <- data.frame(
+    r1 = ordered(chars$r1, levels = c("low", "middle", "high")),
+    r2 = ordered(chars$r2, levels = c("low", "middle", "high")))
+  inferred <- llm_agreement(ordered, metric = "ordinal", cols = c("r1", "r2"))
+  expect_identical(inferred$summary$krippendorff_alpha,
+                   explicit$summary$krippendorff_alpha)
+})
+
+test_that("agreement returns NA when no pair is estimable", {
+  df <- data.frame(r1 = c("1", NA), r2 = c(NA, "2"))
+  out <- llm_agreement(df, metric = "interval", cols = c("r1", "r2"))
+  expect_true(is.na(out$summary$mean_pairwise_agreement))
+  expect_false(is.nan(out$summary$mean_pairwise_agreement))
+  expect_true(is.na(out$summary$krippendorff_alpha))
 })

@@ -35,13 +35,13 @@ ceilings (e.g. agent frameworks) can catch that class.}
 \item{tries, wait_seconds}{Retry controls passed to \code{\link[=call_llm_robust]{call_llm_robust()}}.}
 }
 \value{
-The final \link{llmr_response}. The full conversation (including tool
-results) is attached as \code{attr(x, "messages")}; a tibble of executed
-calls as \code{attr(x, "tool_history")} with columns \code{round}, \code{name},
-\code{arguments} (JSON), \code{result}; and aggregate spend across the whole loop
-as \code{attr(x, "tool_loop")}, a list with \code{model_calls}, \code{sent}, \code{rec}
+The final \link{llmr_response}. Its \code{messages} field contains the full
+conversation, including tool results; \code{tool_history} is a tibble of
+executed calls with columns \code{round}, \code{name}, \code{arguments} (JSON), and
+\code{result}; and \code{tool_loop} is a list with \code{model_calls}, \code{sent}, \code{rec}
 (token totals over every internal model call, \code{NA} when the provider
-reported none), and \code{tool_calls}. Note that \code{tokens(x)} alone covers
+reported none), and \code{tool_calls}. The same values remain available as
+attributes for backward compatibility. Note that \code{tokens(x)} alone covers
 only the final model call.
 }
 \description{
@@ -62,7 +62,7 @@ weather <- llm_tool(
 cfg <- llm_config("groq", "openai/gpt-oss-20b", temperature = 0)
 r <- call_llm_tools(cfg, "What is the weather in Tunis?", tools = weather)
 as.character(r)
-attr(r, "tool_history")
+r$tool_history
 }
 }
 \seealso{

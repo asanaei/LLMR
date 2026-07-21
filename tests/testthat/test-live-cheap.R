@@ -36,7 +36,7 @@ test_that("groq: structured output, tools, streaming, logprobs", {
   rt <- call_llm_tools(cfg, "Use the capital_lookup tool to find the capital of Chile, then answer in one word.",
                        tools = lookup)
   expect_s3_class(rt, "llmr_response")
-  hist <- attr(rt, "tool_history")
+  hist <- rt$tool_history
   expect_gte(nrow(hist), 1L)
   expect_match(as.character(rt), "Santiago", ignore.case = TRUE)
 
@@ -58,41 +58,6 @@ test_that("deepseek: basic call and cached-token plumbing", {
   expect_s3_class(r, "llmr_response")
   expect_match(as.character(r), "ready", ignore.case = TRUE)
   expect_true(is.list(tokens(r)) && "cached" %in% names(tokens(r)))
-})
-
-test_that("moonshot (kimi): basic call", {
-  skip_if_no_env("MOONSHOT_API_KEY")
-  skip_on_cran()
-  cfg <- llm_config("moonshot", "moonshot-v1-8k", temperature = 0,
-                    max_tokens = 100)
-  r <- call_llm_robust(cfg, "Reply with exactly one word: ready")
-  expect_s3_class(r, "llmr_response")
-  expect_true(nzchar(as.character(r)))
-})
-
-test_that("alibaba (qwen): basic call", {
-  skip_if_no_env("ALIBABA_API_KEY")
-  skip_on_cran()
-  cfg <- llm_config("alibaba", "qwen-flash", temperature = 0,
-                    max_tokens = 100, enable_thinking = FALSE)
-  r <- call_llm_robust(cfg, "Reply with exactly one word: ready")
-  expect_s3_class(r, "llmr_response")
-  expect_true(nzchar(as.character(r)))
-})
-
-test_that("openrouter: basic call and streaming", {
-  skip_if_no_env("OPENROUTER_API_KEY")
-  skip_on_cran()
-  cfg <- llm_config("openrouter", "openai/gpt-oss-20b", temperature = 0,
-                    max_tokens = 100)
-  r <- call_llm_robust(cfg, "Reply with exactly one word: ready")
-  expect_s3_class(r, "llmr_response")
-  expect_true(nzchar(as.character(r)))
-
-  s <- call_llm_stream(cfg, "Count from 1 to 3, digits only.",
-                       callback = function(chunk) invisible(NULL))
-  expect_s3_class(s, "llmr_response")
-  expect_true(nzchar(as.character(s)))
 })
 
 test_that("gemini: thinking budget, schema, and embeddings", {

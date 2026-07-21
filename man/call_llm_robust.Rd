@@ -61,7 +61,6 @@ as.character(robust_resp)
 }
 \seealso{
 \code{\link{call_llm}} for the underlying, non-robust API call.
-\code{\link{cache_llm_call}} for a memoised version that avoids repeated requests.
 \code{\link{llm_config}} to create the configuration object.
 \code{\link{chat_session}} for stateful, interactive conversations.
 }

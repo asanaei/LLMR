@@ -167,7 +167,7 @@
 #' @param messages A character vector or a list of message objects (same for all calls).
 #' @param ... Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).
 #'
-#' @return A tibble with columns: swept_param_name, the varied parameter column,
+#' @return An `llmr_experiment` tibble with columns: swept_param_name, the varied parameter column,
 #'   the `config` list-column (so [llm_par_resume()] can re-run failures),
 #'   provider, model, all other model parameters, response_text,
 #'   raw_response_json, success, error_message, and the other diagnostics
@@ -209,15 +209,18 @@ call_llm_sweep <- function(base_config,
 
   if (length(param_values) == 0) {
     warning("No parameter values provided. Returning empty tibble.")
-    return(tibble::tibble(
+    out <- tibble::tibble(
       swept_param_name = character(0),
       provider = character(0),
       model = character(0),
       response_text = character(0),
       raw_response_json = character(0),
       success = logical(0),
-      error_message = character(0)
-    ))
+      error_message = character(0),
+      finish_reason = character(0)
+    )
+    class(out) <- unique(c("llmr_experiment", class(out)))
+    return(out)
   }
 
   # Top-level config fields must be set on the config itself, not tucked into
@@ -261,7 +264,7 @@ call_llm_sweep <- function(base_config,
 #'   a list where each element is a pre-formatted message list.
 #' @param ... Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).
 #'
-#' @return A tibble with columns: message_index (metadata), the `config`
+#' @return An `llmr_experiment` tibble with columns: message_index (metadata), the `config`
 #'   list-column (so [llm_par_resume()] can re-run failures), provider, model,
 #'   all model parameters, response_text, raw_response_json, success,
 #'   error_message, and the other diagnostics documented in [call_llm_par()].
@@ -329,7 +332,7 @@ call_llm_broadcast <- function(config,
 #' @param messages A character vector or a list of message objects (same for all configs).
 #' @param ... Additional arguments passed to `call_llm_par` (e.g., tries, verbose, progress).
 #'
-#' @return A tibble with columns: config_index (metadata), the `config`
+#' @return An `llmr_experiment` tibble with columns: config_index (metadata), the `config`
 #'   list-column (so [llm_par_resume()] can re-run failures), provider, model,
 #'   all varying model parameters, response_text, raw_response_json, success,
 #'   error_message, and the other diagnostics documented in [call_llm_par()].
@@ -367,15 +370,18 @@ call_llm_compare <- function(configs_list,
 
   if (length(configs_list) == 0) {
     warning("No configs provided. Returning empty tibble.")
-    return(tibble::tibble(
+    out <- tibble::tibble(
       config_index = integer(0),
       provider = character(0),
       model = character(0),
       response_text = character(0),
       raw_response_json = character(0),
       success = logical(0),
-      error_message = character(0)
-    ))
+      error_message = character(0),
+      finish_reason = character(0)
+    )
+    class(out) <- unique(c("llmr_experiment", class(out)))
+    return(out)
   }
 
   # Build experiments tibble
@@ -421,9 +427,9 @@ call_llm_compare <- function(configs_list,
 #' @param .request_hash Logical. If \code{TRUE}, append a \code{request_hash}
 #'   column (the same key \code{\link{llm_request_hash}()} produces) so the
 #'   results can be joined to the audit log. Default \code{FALSE}; the column is
-#'   omitted unless requested. See also \code{\link{llm_add_request_hash}()}.
+#'   omitted unless requested.
 #'
-#' @return A tibble containing all original columns plus:
+#' @return An `llmr_experiment` tibble containing all original columns plus:
 #' \itemize{
 #'   \item \code{response_text} - assistant text (or \code{NA} on failure)
 #'   \item \code{raw_response_json} - raw JSON string (on failure: the
@@ -515,7 +521,7 @@ call_llm_par <- function(experiments,
   }
   if (nrow(experiments) == 0) {
     warning("No experiments provided. Returning empty input tibble with result columns.")
-    return(dplyr::bind_cols(experiments, tibble::tibble(
+    out <- dplyr::bind_cols(experiments, tibble::tibble(
       response_text     = character(0),
       raw_response_json = character(0),
       success           = logical(0),
@@ -532,7 +538,9 @@ call_llm_par <- function(experiments,
       status_code = integer(0),
       error_code  = character(0),
       bad_param   = character(0)
-    )))
+    ))
+    class(out) <- unique(c("llmr_experiment", class(out)))
+    return(out)
   }
 
   for (i in seq_len(nrow(experiments))) {
@@ -774,9 +782,7 @@ call_llm_par <- function(experiments,
   res
 }
 
-# Append a `request_hash` column from a frame's retained `config`/`messages`
-# columns. Internal worker for both `call_llm_par(.request_hash=TRUE)` and the
-# exported `llm_add_request_hash()`.
+# Append a `request_hash` column from retained `config`/`messages` columns.
 .llmr_add_request_hash <- function(df) {
   if (!all(c("config", "messages") %in% names(df))) {
     stop("`config` and `messages` columns are required to add `request_hash`.")
@@ -800,7 +806,8 @@ call_llm_par <- function(experiments,
 #' @param df A data frame with `config` and `messages` columns.
 #' @return `df` with an added `request_hash` character column.
 #' @seealso [call_llm_par()], [llm_request_hash()].
-#' @export
+#' @keywords internal
+#' @noRd
 llm_add_request_hash <- function(df) {
   stopifnot(is.data.frame(df))
   .llmr_add_request_hash(df)
@@ -1069,8 +1076,8 @@ reset_llm_parallel <- function(verbose = FALSE) {
 #'                           model = c("gpt-4.1-nano", "gpt-4.1-mini"))
 #' length(cfgs)
 #'
-#' @seealso [llm_config()], [llm_cross_design()], [call_llm_par()]
-#' @export
+#' @keywords internal
+#' @noRd
 expand_llm_config <- function(base_config, ...) {
   stopifnot(inherits(base_config, "llm_config"))
   dots <- list(...)
@@ -1120,8 +1127,8 @@ expand_llm_config <- function(base_config, ...) {
 #' results <- call_llm_par(design)
 #' }
 #'
-#' @seealso [expand_llm_config()], [call_llm_par()], [build_factorial_experiments()]
-#' @export
+#' @keywords internal
+#' @noRd
 llm_cross_design <- function(.data, configs, prompt = NULL, .messages = NULL, .system_prompt = NULL) {
   if (!is.data.frame(.data)) stop(".data must be a data frame.")
   if (inherits(configs, "llm_config")) configs <- list(configs)
@@ -1332,6 +1339,32 @@ llm_judge <- function(.data, .target, .config, prompt,
   cands <- grep(paste0("^", base, "(\\.[0-9]+)?$"), names(object), value = TRUE)
   if (!length(cands)) return(NA_character_)
   cands[length(cands)]
+}
+
+#' @export
+print.llmr_experiment <- function(x, ...) {
+  n <- nrow(x)
+  parts <- sprintf("%d run%s", n, if (n == 1L) "" else "s")
+
+  sc <- .llmr_diag_col(x, "success")
+  if (!is.na(sc)) {
+    parts <- c(parts, sprintf("%d/%d successful", sum(x[[sc]] %in% TRUE), n))
+  }
+
+  if ("model" %in% names(x)) {
+    models <- unique(stats::na.omit(as.character(x$model)))
+    if (length(models)) {
+      model_text <- if (length(models) <= 2L) {
+        paste(models, collapse = ", ")
+      } else {
+        sprintf("%d models", length(models))
+      }
+      parts <- c(parts, model_text)
+    }
+  }
+
+  cat("<llmr_experiment: ", paste(parts, collapse = " | "), ">\n", sep = "")
+  invisible(x)
 }
 
 #' @export

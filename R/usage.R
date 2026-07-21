@@ -338,33 +338,16 @@ llm_failures <- function(x, prefix = NULL, include = c("all", "failed", "truncat
   )
 }
 
-#' Draft a methods-section paragraph from an LLM run
-#'
-#' Turns the diagnostic columns of a finished run into a first draft of the
-#' transparency paragraph that journals and methodological guidelines now ask
-#' for: which model(s) and provider(s), how many calls, the inference settings
-#' that were recorded, token totals, and the failure/truncation counts. Edit
-#' the draft; it states only what the result frame actually contains and marks
-#' anything unknown as such.
-#'
-#' @inheritParams llm_usage
-#' @param task Optional one-clause description of what the model was asked to
-#'   do (e.g., `"to code open-ended survey responses into topics"`); it is
-#'   spliced into the first sentence.
-#' @return A character scalar (one paragraph). Print it with `cat()`.
-#' @seealso [llm_usage()], [llm_log_enable()] for the per-call audit trail.
-#' @examples
-#' res <- tibble::tibble(
-#'   model = "openai/gpt-oss-20b", provider = "groq",
-#'   success = c(TRUE, TRUE), finish_reason = c("stop", "stop"),
-#'   sent_tokens = c(10L, 12L), rec_tokens = c(5L, 7L),
-#'   total_tokens = c(15L, 19L), reasoning_tokens = NA_integer_,
-#'   duration = c(0.4, 0.5)
-#' )
-#' cat(llm_methods_text(res, task = "to classify sample sentences"))
+#' @rdname report
 #' @export
-llm_methods_text <- function(x, prefix = NULL, task = NULL) {
+report.llmr_experiment <- function(x, prefix = NULL, task = NULL, ...) {
   u <- llm_usage(x, prefix = prefix)
+  if (u$n == 0L) {
+    return(paste(
+      "The experiment result contains no calls; no model, provider, inference",
+      "settings, or token usage were recorded."
+    ))
+  }
 
   models <- if ("model" %in% names(x)) {
     sort(unique(stats::na.omit(as.character(x$model))))
@@ -408,13 +391,14 @@ llm_methods_text <- function(x, prefix = NULL, task = NULL) {
     " All calls completed without failures or truncation."
   }
 
+  run_part <- paste0(
+    "The run comprised ", u$n, " call(s), of which ", u$n_ok,
+    " succeeded (", sprintf("%.1f%%", 100 * u$ok_rate), "). "
+  )
+
   paste0(
     "Text was processed with ", model_part, provider_part, task_part,
-    " via the LLMR package (version ",
-    as.character(utils::packageVersion("LLMR")), ") for R, on ",
-    format(Sys.Date(), "%Y-%m-%d"), ". ",
-    "The run comprised ", u$n, " call(s), of which ", u$n_ok,
-    " succeeded (", sprintf("%.1f%%", 100 * u$ok_rate), "). ",
+    " via LLMR. ", run_part,
     "Token usage as reported by the provider(s): ",
     format(u$sent_tokens, big.mark = ","), " sent and ",
     format(u$rec_tokens, big.mark = ","), " received",
@@ -426,4 +410,26 @@ llm_methods_text <- function(x, prefix = NULL, task = NULL) {
     "model identifiers and request ids needed for exact attribution are ",
     "retained when logging is enabled via llm_log_enable()."
   )
+}
+
+#' Deprecated methods-paragraph helper
+#'
+#' `llm_methods_text()` is retained for compatibility. Use [report()] on an
+#' `llmr_experiment` instead.
+#'
+#' @inheritParams llm_usage
+#' @param task Optional clause describing what the model was asked to do.
+#' @return A character scalar from [report()].
+#' @seealso [report()]
+#' @export
+llm_methods_text <- function(x, prefix = NULL, task = NULL) {
+  rlang::warn(
+    "`llm_methods_text()` is deprecated; use `report()` instead.",
+    .frequency = "once",
+    .frequency_id = "llmr-llm_methods_text"
+  )
+  if (!inherits(x, "llmr_experiment")) {
+    class(x) <- unique(c("llmr_experiment", class(x)))
+  }
+  report(x, prefix = prefix, task = task)
 }

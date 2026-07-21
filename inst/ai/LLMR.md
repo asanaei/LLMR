@@ -46,7 +46,7 @@ llm_batch_status(job); llm_batch_fetch(job); llm_batch_cancel(job)
 # interactive layer
 llm_tool(fn, name, description, parameters = NULL, required = NULL)
 call_llm_tools(config, messages, tools, max_rounds = 8L,
-               max_tool_calls = Inf, ...)   # attr(x,"tool_loop") = real spend
+               max_tool_calls = Inf, ...)   # x$tool_loop records total spend
 call_llm_stream(config, messages, callback = ..., verbose = FALSE)
 llm_logprobs(x)
 
@@ -57,7 +57,7 @@ get_batched_embeddings(texts, embed_config, ...)
 llm_log_enable(path, include_messages = TRUE); llm_log_disable()
 llm_replicate(.data, output, prompt, .config, .times = 3, ...)
 llm_agreement(.data, cols = NULL, prefix = NULL)
-llm_usage(x, price_table = NULL); llm_methods_text(x, ...)
+llm_usage(x, price_table = NULL); report(x, ...)
 llm_hash(x)        # the ecosystem content-hash convention
 chat_session(config, system = NULL, ...)
 ```
@@ -105,7 +105,7 @@ out <- llm_mutate_structured(df, ans, prompt = "...{text}",
 - Logprobs: deepseek and openai expose them; groq and most gemini models
   reject the flag; anthropic has none.
 - `tokens(x)` covers one call; after `call_llm_tools()` read
-  `attr(x, "tool_loop")` for true loop spend.
+  `x$tool_loop` for total loop spend.
 - Failed rows in tidy verbs carry diagnostics (`llm_failures()`); braces in
   user text are safe everywhere.
 - Local/open-weight: any OpenAI-compatible endpoint via

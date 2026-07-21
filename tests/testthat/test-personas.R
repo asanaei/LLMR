@@ -10,9 +10,9 @@ test_that("anes_2024_personas loads and is well-formed", {
                          ignore.case = TRUE)))                  # no respondent ids
 })
 
-test_that("llm_persona_dictionary and demographic_fields read the attributes", {
+test_that("persona helpers read the dictionary and demographic attributes", {
   data(anes_2024_personas, package = "LLMR")
-  d <- llm_persona_dictionary(anes_2024_personas)
+  d <- attr(anes_2024_personas, "dictionary")
   expect_s3_class(d, "data.frame")
   expect_true(all(c("handle", "question") %in% names(d)))
   df <- llm_persona_demographic_fields(anes_2024_personas)
@@ -40,7 +40,7 @@ test_that("the helpers degrade gracefully on a plain frame (no attributes)", {
   expect_equal(unname(s$demographics["age"]), "30")
   expect_true("party" %in% names(s$responses))
   # handles stand in for questions when there is no dictionary
-  expect_null(llm_persona_dictionary(pf))
+  expect_null(attr(pf, "dictionary"))
 })
 
 test_that("llm_persona_overview returns a compact display frame", {

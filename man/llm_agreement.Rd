@@ -9,7 +9,8 @@ llm_agreement(
   cols = NULL,
   prefix = NULL,
   normalize = TRUE,
-  metric = c("nominal", "ordinal", "interval")
+  metric = c("nominal", "ordinal", "interval"),
+  levels = NULL
 )
 }
 \arguments{
@@ -28,10 +29,15 @@ whitespace and lowercasing, so "Positive" and " positive" agree. Set to
 \item{metric}{Difference function for Krippendorff's alpha: \code{"nominal"}
 (default, categories either match or do not), \code{"ordinal"} (ordered
 categories), or \code{"interval"} (numeric distance). For \code{"ordinal"} and
-\code{"interval"}, labels that parse as numbers are ordered numerically (so "2"
-precedes "10"); \code{"interval"} requires numeric labels and returns \code{NA} with a
-warning otherwise. The default reproduces the previous nominal-only behavior
-exactly.}
+\code{"interval"}, labels must parse as numbers, be ordered factors, or have an
+explicit order supplied through \code{levels}. Explicit categorical levels are
+treated as equally spaced for the interval metric. The default reproduces
+the previous nominal-only behavior exactly.}
+
+\item{levels}{Optional character vector giving the category order for
+\code{metric = "ordinal"} or \code{"interval"}. When omitted, a common ordered-factor
+level set is used if present; otherwise every observed label must parse as
+numeric.}
 }
 \value{
 An object of class \code{llmr_agreement}: a list with

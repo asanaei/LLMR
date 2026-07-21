@@ -55,10 +55,10 @@ strict burst limits.}
 \item{.request_hash}{Logical. If \code{TRUE}, append a \code{request_hash}
 column (the same key \code{\link{llm_request_hash}()} produces) so the
 results can be joined to the audit log. Default \code{FALSE}; the column is
-omitted unless requested. See also \code{\link{llm_add_request_hash}()}.}
+omitted unless requested.}
 }
 \value{
-A tibble containing all original columns plus:
+An \code{llmr_experiment} tibble containing all original columns plus:
 \itemize{
 \item \code{response_text} - assistant text (or \code{NA} on failure)
 \item \code{raw_response_json} - raw JSON string (on failure: the

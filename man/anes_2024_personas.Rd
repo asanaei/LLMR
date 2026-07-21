@@ -46,7 +46,7 @@ social attitudes decoded to their value labels. It is an ordinary data frame:
 select columns and filter rows with \link[dplyr:dplyr-package]{dplyr} or base R,
 then hand the result to a consumer (for example \code{FocusGroup::create_agents_from_data()}
 or \code{LLMRpanel::panel_from_personas()}). The helpers \code{\link[=llm_persona_split]{llm_persona_split()}},
-\code{\link[=llm_persona_overview]{llm_persona_overview()}}, and \code{\link[=llm_persona_dictionary]{llm_persona_dictionary()}} read the frame.
+\code{\link[=llm_persona_overview]{llm_persona_overview()}}, and \code{\link[=llm_persona_demographic_fields]{llm_persona_demographic_fields()}} read the frame.
 }
 \details{
 The 100 respondents were chosen by diversity sampling (a greedy maximin pass

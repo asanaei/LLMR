@@ -2,7 +2,7 @@
 % Please edit documentation in R/usage.R
 \name{llm_methods_text}
 \alias{llm_methods_text}
-\title{Draft a methods-section paragraph from an LLM run}
+\title{Deprecated methods-paragraph helper}
 \usage{
 llm_methods_text(x, prefix = NULL, task = NULL)
 }
@@ -13,31 +13,15 @@ llm_methods_text(x, prefix = NULL, task = NULL)
 diagnostics to summarize (e.g. \code{"answer"}). Inferred automatically when a
 single diagnostic block is present; required when several are.}
 
-\item{task}{Optional one-clause description of what the model was asked to
-do (e.g., \code{"to code open-ended survey responses into topics"}); it is
-spliced into the first sentence.}
+\item{task}{Optional clause describing what the model was asked to do.}
 }
 \value{
-A character scalar (one paragraph). Print it with \code{cat()}.
+A character scalar from \code{\link[=report]{report()}}.
 }
 \description{
-Turns the diagnostic columns of a finished run into a first draft of the
-transparency paragraph that journals and methodological guidelines now ask
-for: which model(s) and provider(s), how many calls, the inference settings
-that were recorded, token totals, and the failure/truncation counts. Edit
-the draft; it states only what the result frame actually contains and marks
-anything unknown as such.
-}
-\examples{
-res <- tibble::tibble(
-  model = "openai/gpt-oss-20b", provider = "groq",
-  success = c(TRUE, TRUE), finish_reason = c("stop", "stop"),
-  sent_tokens = c(10L, 12L), rec_tokens = c(5L, 7L),
-  total_tokens = c(15L, 19L), reasoning_tokens = NA_integer_,
-  duration = c(0.4, 0.5)
-)
-cat(llm_methods_text(res, task = "to classify sample sentences"))
+\code{llm_methods_text()} is retained for compatibility. Use \code{\link[=report]{report()}} on an
+\code{llmr_experiment} instead.
 }
 \seealso{
-\code{\link[=llm_usage]{llm_usage()}}, \code{\link[=llm_log_enable]{llm_log_enable()}} for the per-call audit trail.
+\code{\link[=report]{report()}}
 }

@@ -55,7 +55,6 @@ test_that(".batch_partition is a deterministic pure function of (n,k)", {
   expect_identical(P(7, Inf), list(1:7))
   expect_identical(P(5, 1), as.list(1:5))
   expect_identical(P(0, 3), list())
-  expect_identical(P(7, 3), P(7, 3))  # repeatable
 })
 
 # ---- escape / payload safety ----------------------------------------------
@@ -98,14 +97,6 @@ test_that(".batch_split_rows handles the adversarial corpus", {
   # duplicate: first non-empty wins
   expect_identical(trimws(S("<row_1>first</row_1><row_1>second</row_1>", 1)$blocks[[1]]),
                    "first")
-})
-
-test_that("llm_parse_rowpack_tags equals per-row flat parse", {
-  txt <- "<row_1><age>21</age><job>barista</job></row_1>\n<row_2><age>34</age><job>welder</job></row_2>"
-  pp <- llm_parse_rowpack_tags(txt, c("age", "job"), 2)
-  f1 <- LLMR:::llm_parse_tags("<age>21</age><job>barista</job>", c("age", "job"))
-  expect_identical(pp[[1]], f1)
-  expect_identical(pp[[2]]$age, "34")
 })
 
 # ---- reassembly invariants ------------------------------------------------

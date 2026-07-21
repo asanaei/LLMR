@@ -5,7 +5,6 @@
 \alias{llm_log_disable}
 \alias{llm_log_status}
 \alias{llm_log_active}
-\alias{llm_log_merge}
 \title{Record every LLM call in a local audit log}
 \usage{
 llm_log_enable(path = "llmr_log.jsonl", include_messages = TRUE)
@@ -15,13 +14,11 @@ llm_log_disable()
 llm_log_status()
 
 llm_log_active()
-
-llm_log_merge(path)
 }
 \arguments{
-\item{path}{File path for the log. For \code{llm_log_enable()}, created on first
-write and appended to if it exists; for \code{llm_log_merge()}, the base log
-path whose per-process shard files should be folded in.}
+\item{path}{File path for the log. It is opened for append when logging is
+enabled, creating the file if needed; an unusable destination errors before
+logging is activated.}
 
 \item{include_messages}{Logical. If \code{TRUE} (default), the request body and
 the reply text are stored. If \code{FALSE}, only metadata is stored.}
@@ -66,10 +63,9 @@ message.
 }
 
 Records are appended line by line. Under multisession parallel execution,
-workers write per-process shard files and \code{\link[=llm_log_merge]{llm_log_merge()}} folds those
-shards back into the main log after the parallel call completes. The log
-contains your prompts and the model's replies in clear text. It never
-contains API keys.
+workers write per-process shard files, which LLMR folds back into the main
+log after the parallel call completes. The log contains your prompts and the
+model's replies in clear text. It never contains API keys.
 
 Set \code{include_messages = FALSE} to omit request bodies and reply text
 (keeping only metadata, parameters, usage, and identifiers), e.g. when
@@ -87,6 +83,6 @@ log_df <- jsonlite::stream_in(file("annotation_run.jsonl"), verbose = FALSE)
 }
 }
 \seealso{
-\code{\link[=llm_usage]{llm_usage()}} for token summaries, \code{\link[=llm_methods_text]{llm_methods_text()}} for a
+\code{\link[=llm_usage]{llm_usage()}} for token summaries, \code{\link[=report]{report()}} for a
 draft methods paragraph.
 }

@@ -65,6 +65,9 @@ DeepSeek \code{reasoning_content}); \code{NA} otherwise.
 \item \code{duration_s}: numeric seconds from request to parse.
 \item \code{raw}: parsed provider JSON (list).
 \item \code{raw_json}: raw JSON string.
+\item \code{messages}, \code{tool_history}, \code{tool_loop}: tool-loop provenance present on
+responses returned by \code{\link[=call_llm_tools]{call_llm_tools()}}; respectively, the full
+conversation, executed-call table, and aggregate loop usage.
 }
 }
 

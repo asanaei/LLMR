@@ -82,7 +82,7 @@ The answer quotes numbers the model could only have obtained by calling the
 function. Every execution is on the record:
 
 ```{r tool-history}
-attr(r, "tool_history")
+r$tool_history
 ```
 
 Two accounting details deserve attention. First, a tool loop is *several*
@@ -90,7 +90,7 @@ model calls, so `tokens(r)` -- which describes the final call only -- would
 undercount it. The aggregate is attached to the response:
 
 ```{r tool-loop-spend}
-attr(r, "tool_loop")
+r$tool_loop
 ```
 
 Second, a loop can run away: a confused model may call tools again and

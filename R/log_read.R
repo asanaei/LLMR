@@ -81,8 +81,8 @@ llm_log_read <- function(log) {
       request_hash   = if (is.null(r[["request"]])) NA_character_ else
                          llm_request_hash(
                            provider = r$provider, model = r$model,
-                           messages = .llmr_messages_from_turns(
-                             .llmr_turns(provider = r$provider, request = r[["request"]])),
+                           messages = .llmr_turns(
+                             provider = r$provider, request = r[["request"]]),
                            extra = list(params = .llmr_body_params(r[["request"]]))),
       record_hash    = .llmr_line_hash(records[[i]]$raw)
     )

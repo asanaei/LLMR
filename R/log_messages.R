@@ -17,27 +17,29 @@
   if (!is.null(request)) {
     turns <- list()
     if (!is.null(request$systemInstruction) || !is.null(request$contents)) {
-      sys <- .llmr_text(request$systemInstruction)
-      if (nzchar(sys)) turns[[length(turns) + 1L]] <- list(role = "system", content = sys)
+      sys <- .llmr_canonical_turn("system", request$systemInstruction)
+      if (nzchar(sys$content)) turns[[length(turns) + 1L]] <- sys
       for (msg in request$contents %||% list()) {
-        turns[[length(turns) + 1L]] <- list(
-          role = .llmr_role(msg$role %||% "user"),
-          content = .llmr_text(msg$parts %||% msg$content %||% msg$text))
+        turns[[length(turns) + 1L]] <- .llmr_canonical_turn(
+          msg$role %||% "user", msg$parts %||% msg$content %||% msg$text)
       }
       return(turns)
     }
-    sys <- .llmr_text(request$system)
-    if (nzchar(sys)) turns[[length(turns) + 1L]] <- list(role = "system", content = sys)
+    sys <- .llmr_canonical_turn("system", request$system)
+    if (nzchar(sys$content)) turns[[length(turns) + 1L]] <- sys
     for (msg in request$messages %||% list()) {
-      turns[[length(turns) + 1L]] <- list(
-        role = .llmr_role(msg$role %||% "user"),
-        content = .llmr_text(msg$content %||% msg$parts %||% msg$text))
+      turns[[length(turns) + 1L]] <- .llmr_canonical_turn(
+        msg$role %||% "user", msg$content %||% msg$parts %||% msg$text,
+        msg$non_text)
     }
     return(turns)
   }
 
   if (is.null(messages)) return(list())
   if (is.character(messages)) {
+    if (!is.null(names(messages)) && any(names(messages) %in% "file")) {
+      return(.llmr_turns(messages = .normalize_messages(messages)))
+    }
     roles <- names(messages)
     if (is.null(roles)) roles <- rep("user", length(messages))
     return(lapply(seq_along(messages), function(i)
@@ -50,14 +52,25 @@
     return(lapply(seq_along(messages), function(i) {
       msg <- messages[[i]]
       if (.llmr_is_turn(msg)) {
-        list(role = .llmr_role(msg$role %||% roles[i]),
-             content = .llmr_text(msg$content))
+        .llmr_canonical_turn(msg$role %||% roles[i], msg$content, msg$non_text)
       } else {
-        list(role = .llmr_role(roles[i]), content = .llmr_text(msg))
+        .llmr_canonical_turn(roles[i], msg)
       }
     }))
   }
   rlang::abort("`messages` must be a character vector or a list of role/content pairs.")
+}
+
+# Text-only turns retain their historical two-field representation. A third
+# field appears only when a turn carries inline content, preserving every
+# existing text-only request hash.
+#' @keywords internal
+#' @noRd
+.llmr_canonical_turn <- function(role, content, non_text = NULL) {
+  out <- list(role = .llmr_role(role), content = .llmr_text(content))
+  hashes <- non_text %||% .llmr_nontext_hashes(content)
+  if (length(hashes)) out$non_text <- unname(as.character(hashes))
+  out
 }
 
 #' @keywords internal
@@ -106,6 +119,75 @@
   unlist(lapply(x, .llmr_text_vec), use.names = FALSE)
 }
 
+# Hash the decoded bytes of inline file/image content. Provider builders spell
+# the same payload differently, so only the content digest enters the canonical
+# turn, not the provider-specific block type or MIME wrapper.
+#' @keywords internal
+#' @noRd
+.llmr_payload_hash <- function(x, encoding = c("auto", "base64", "file")) {
+  encoding <- match.arg(encoding)
+  if (encoding == "file") {
+    if (!file.exists(x)) stop("File not found at path: ", x)
+    x <- readBin(x, what = "raw", n = file.info(x)$size)
+  }
+  if (is.raw(x)) return(digest::digest(x, algo = "sha256", serialize = FALSE))
+
+  x <- as.character(x)[1]
+  marker <- regexec("sha256=([0-9a-f]{64})", x)
+  hit <- regmatches(x, marker)[[1]]
+  if (length(hit) == 2L) return(hit[[2]])
+
+  if (startsWith(x, "data:")) {
+    comma <- regexpr(",", x, fixed = TRUE)[1]
+    meta <- substr(x, 1L, comma - 1L)
+    payload <- substr(x, comma + 1L, nchar(x))
+    x <- if (grepl(";base64", meta, ignore.case = TRUE)) {
+      base64enc::base64decode(payload)
+    } else {
+      charToRaw(enc2utf8(utils::URLdecode(payload)))
+    }
+  } else if (encoding == "base64") {
+    x <- base64enc::base64decode(x)
+  } else {
+    x <- charToRaw(enc2utf8(x))
+  }
+  digest::digest(x, algo = "sha256", serialize = FALSE)
+}
+
+#' @keywords internal
+#' @noRd
+.llmr_nontext_hashes <- function(x) {
+  if (is.null(x)) return(character(0))
+  if (is.raw(x)) return(.llmr_payload_hash(x))
+  if (!is.list(x)) return(character(0))
+
+  nm <- names(x)
+  if (!is.null(nm)) {
+    type <- tolower(as.character(x$type %||% "")[1])
+    if (type %in% c("text", "input_text", "output_text")) return(character(0))
+    if ("path" %in% nm && type %in% c("file", "image", "document", "input_file")) {
+      return(.llmr_payload_hash(path.expand(x$path), "file"))
+    }
+    if ("image_url" %in% nm) {
+      url <- if (is.list(x$image_url)) x$image_url$url else x$image_url
+      return(.llmr_payload_hash(url))
+    }
+    if (!is.null(x$data_uri)) return(.llmr_payload_hash(x$data_uri))
+    inline <- x$inlineData %||% x$inline_data
+    if (is.list(inline) && !is.null(inline$data)) {
+      return(.llmr_payload_hash(inline$data, "base64"))
+    }
+    if (is.list(x$source) && !is.null(x$source$data)) {
+      return(.llmr_payload_hash(x$source$data, "base64"))
+    }
+    if (!is.null(x$file_data)) return(.llmr_payload_hash(x$file_data))
+    if (!is.null(x$data) && type %in% c("file", "image", "document", "input_image")) {
+      return(.llmr_payload_hash(x$data, "base64"))
+    }
+  }
+  unlist(lapply(x, .llmr_nontext_hashes), use.names = FALSE)
+}
+
 # Coerce a possibly-NULL/empty value to a length-1 numeric, or NA.
 #' @keywords internal
 #' @noRd
@@ -120,6 +202,9 @@
 #' @noRd
 .llmr_messages_from_turns <- function(turns) {
   if (!length(turns)) return(stats::setNames(character(0), character(0)))
+  if (any(vapply(turns, function(x) length(x$non_text %||% character()), integer(1)))) {
+    return(unname(turns))
+  }
   stats::setNames(vapply(turns, `[[`, character(1), "content"),
                   vapply(turns, `[[`, character(1), "role"))
 }

@@ -504,7 +504,9 @@ get_endpoint <- function(config, default_endpoint) {
 #'   stored as `api_url` in `model_params` and overrides the default endpoint.
 #' @param embedding `NULL` (default), `TRUE`, or `FALSE`. If `TRUE`, the call
 #'   is routed to the provider's embeddings API; if `FALSE`, to the chat API.
-#'   If `NULL`, LLMR infers embeddings when `model` contains `"embedding"`.
+#'   Voyage is always routed to embeddings because it is an embeddings-only
+#'   provider. For other providers, `NULL` infers embeddings when `model`
+#'   contains `"embedding"`.
 #' @param no_change Logical. If `TRUE`, LLMR **never** auto-renames/adjusts
 #'   provider parameters. If `FALSE` (default), well-known compatibility shims
 #'   may apply (e.g., renaming OpenAI's `max_tokens` -> `max_completion_tokens`
@@ -757,9 +759,10 @@ format.llm_config <- function(x, ...) {
 }
 
 # Internal: should this config be routed to the provider's embeddings API?
-# Explicit embedding = TRUE/FALSE always wins; with embedding = NULL the model
-# name decides (the documented inference: it contains "embedding").
+# Voyage is embeddings-only. Elsewhere explicit embedding = TRUE/FALSE wins;
+# with embedding = NULL the model name decides.
 .is_embedding_config <- function(config) {
+  if (identical(tolower(config$provider %||% ""), "voyage")) return(TRUE)
   if (!is.null(config$embedding)) return(isTRUE(config$embedding))
   grepl("embedding", config$model %||% "", ignore.case = TRUE)
 }
@@ -1181,9 +1184,9 @@ call_llm.anthropic <- function(config, messages, verbose = FALSE) {
 
   max_tok <- params$max_tokens %||% 2048
   if (thinking_enabled && !is.null(budget_tokens) && max_tok <= budget_tokens) {
-    warning(sprintf(
-      "Anthropic requires max_tokens > thinking_budget; you supplied max_tokens=%s and thinking_budget=%s. The request will likely be rejected; raise max_tokens (it must cover thinking plus the visible reply).",
-      max_tok, budget_tokens))
+    stop(sprintf(
+      "Anthropic constraint: max_tokens must exceed thinking_budget; you supplied max_tokens=%s and thinking_budget=%s.",
+      max_tok, budget_tokens), call. = FALSE)
   }
 
   mp0 <- config$model_params %||% list()
@@ -1910,13 +1913,7 @@ parse_embeddings <- function(embedding_response) {
   return(embeddings_matrix)
 }
 
-#' Bind tools to a config (provider-agnostic)
-#'
-#' @param config llm_config
-#' @param tools list of tools (each with name, description, and parameters/input_schema)
-#' @param tool_choice optional tool_choice spec (provider-specific shape)
-#' @return modified llm_config
-#' @export
+# Internal helper for attaching provider-shaped tool definitions to a config.
 bind_tools <- function(config, tools, tool_choice = NULL) {
   stopifnot(inherits(config, "llm_config"))
   mp <- config$model_params %||% list()
@@ -1952,9 +1949,11 @@ bind_tools <- function(config, tools, tool_choice = NULL) {
 #'
 #' @return A numeric matrix where each row is an embedding vector for the corresponding text.
 #'   Columns are named \code{v1}, \code{v2}, ..., \code{vK} where K is the embedding dimension.
-#'   If embedding fails for certain texts, those rows will be filled with NA values.
-#'   The matrix will always have the same number of rows as the input texts.
-#'   Returns NULL if no embeddings were successfully generated.
+#'   If a transient failure exhausts its retries after another batch succeeds,
+#'   or a successful response omits particular vectors, the affected rows are
+#'   filled with \code{NA}. Authentication, invalid-request, and transport errors
+#'   propagate, and the function errors if no batch yields an embedding. The
+#'   matrix otherwise has the same number of rows as the input texts.
 #'
 #' @inheritSection llm_fn Batching, chunking, and row packing
 #' @seealso
@@ -2006,6 +2005,7 @@ get_batched_embeddings <- function(texts,
   batches <- split(seq_len(n_docs), ceiling(seq_len(n_docs) / batch_size))
   emb_list <- vector("list", n_docs)
   first_emb_dim <- NULL
+  last_error <- NULL
 
   if (verbose) {
     message("Processing ", n_docs, " texts in ", length(batches), " batches of up to ", batch_size, " texts each")
@@ -2020,52 +2020,43 @@ get_batched_embeddings <- function(texts,
       message("Processing batch ", b, "/", length(batches), " (texts ", min(idx), "-", max(idx), ")")
     }
 
-    tryCatch({
-      # Call LLM for this batch using the robust caller
-      resp <- call_llm_robust(embed_config, batch_texts, verbose = FALSE,
-                              tries = tries, wait_seconds = wait_seconds,
-                              backoff_factor = backoff_factor)
-      emb_chunk <- parse_embeddings(resp)
+    resp <- tryCatch(
+      call_llm_robust(embed_config, batch_texts, verbose = FALSE,
+                      tries = tries, wait_seconds = wait_seconds,
+                      backoff_factor = backoff_factor),
+      error = function(e) {
+        if (!inherits(e, c("llmr_api_rate_limit_error", "llmr_api_server_error"))) {
+          stop(e)
+        }
+        last_error <<- e
+        NULL
+      }
+    )
 
-      # A degenerate chunk (provider returned empty data, or fewer rows than
-      # requested) must not lock in a wrong dimension; route it to the NA path.
-      if (is.null(emb_chunk) || ncol(emb_chunk) == 0L || nrow(emb_chunk) < length(idx)) {
-        stop("degenerate embedding chunk for this batch")
-      }
+    if (is.null(resp)) {
+      if (verbose) message("Batch ", b, " exhausted retries; retaining NA rows.")
+      for (i in idx) emb_list[[i]] <- NA
+      next
+    }
 
-      # Capture the embedding dimension only from a genuine, non-empty chunk, so
-      # a later real batch can still establish it if early batches degenerate.
-      if (is.null(first_emb_dim) && ncol(emb_chunk) > 0L && !all(is.na(emb_chunk))) {
-        first_emb_dim <- ncol(emb_chunk)
-      }
+    emb_chunk <- parse_embeddings(resp)
+    if (is.null(emb_chunk) || nrow(emb_chunk) == 0L || ncol(emb_chunk) == 0L ||
+        all(is.na(emb_chunk))) {
+      last_error <- simpleError(sprintf("Embedding batch %d returned no usable vectors.", b))
+      for (i in idx) emb_list[[i]] <- NA
+      next
+    }
 
-      # Store per-document embeddings
-      for (i in seq_along(idx)) {
-        emb_list[[idx[i]]] <- emb_chunk[i, ]
-      }
-
-    }, error = function(e) {
-      if (verbose) {
-        message("Error in batch ", b, ": ", conditionMessage(e))
-        message("Skipping batch and continuing...")
-      }
-      # Store NA for failed batch
-      for (i in idx) {
-        emb_list[[i]] <- NA
-      }
-    })
+    if (is.null(first_emb_dim)) first_emb_dim <- ncol(emb_chunk)
+    for (i in seq_along(idx)) {
+      emb_list[[idx[i]]] <- if (i <= nrow(emb_chunk)) emb_chunk[i, ] else NA
+    }
   }
 
   # Determine the dimension of the embeddings from the first successful result
   if (is.null(first_emb_dim)) {
-    # Find the first non-NA element to determine dimensionality
-    successful_emb <- purrr::detect(emb_list, ~ !all(is.na(.x)))
-    if (!is.null(successful_emb)) {
-      first_emb_dim <- length(successful_emb)
-    } else {
-      if (verbose) message("No embeddings were successfully generated.")
-      return(NULL)
-    }
+    if (!is.null(last_error)) stop(last_error)
+    stop("No embedding batch returned a usable vector.", call. = FALSE)
   }
 
   # Replace NA placeholders with vectors of NAs of the correct dimension

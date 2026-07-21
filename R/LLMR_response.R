@@ -25,6 +25,9 @@
 #' - `duration_s`: numeric seconds from request to parse.
 #' - `raw`: parsed provider JSON (list).
 #' - `raw_json`: raw JSON string.
+#' - `messages`, `tool_history`, `tool_loop`: tool-loop provenance present on
+#'   responses returned by [call_llm_tools()]; respectively, the full
+#'   conversation, executed-call table, and aggregate loop usage.
 #'
 #' ## Printing
 #' `print()` shows the text, then a compact status line with model, finish reason,

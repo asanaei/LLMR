@@ -218,13 +218,13 @@ tool_calls <- function(x) {
 #'   ceilings (e.g. agent frameworks) can catch that class.
 #' @param verbose Print each tool invocation as it happens.
 #' @param tries,wait_seconds Retry controls passed to [call_llm_robust()].
-#' @return The final [llmr_response]. The full conversation (including tool
-#'   results) is attached as `attr(x, "messages")`; a tibble of executed
-#'   calls as `attr(x, "tool_history")` with columns `round`, `name`,
-#'   `arguments` (JSON), `result`; and aggregate spend across the whole loop
-#'   as `attr(x, "tool_loop")`, a list with `model_calls`, `sent`, `rec`
+#' @return The final [llmr_response]. Its `messages` field contains the full
+#'   conversation, including tool results; `tool_history` is a tibble of
+#'   executed calls with columns `round`, `name`, `arguments` (JSON), and
+#'   `result`; and `tool_loop` is a list with `model_calls`, `sent`, `rec`
 #'   (token totals over every internal model call, `NA` when the provider
-#'   reported none), and `tool_calls`. Note that `tokens(x)` alone covers
+#'   reported none), and `tool_calls`. The same values remain available as
+#'   attributes for backward compatibility. Note that `tokens(x)` alone covers
 #'   only the final model call.
 #' @examples
 #' \dontrun{
@@ -237,7 +237,7 @@ tool_calls <- function(x) {
 #' cfg <- llm_config("groq", "openai/gpt-oss-20b", temperature = 0)
 #' r <- call_llm_tools(cfg, "What is the weather in Tunis?", tools = weather)
 #' as.character(r)
-#' attr(r, "tool_history")
+#' r$tool_history
 #' }
 #' @seealso [llm_tool()], [tool_calls()], [call_llm()]
 #' @export
@@ -298,9 +298,12 @@ call_llm_tools <- function(config, messages, tools,
     account_call(resp)
     calls <- tool_calls(resp)
     if (!length(calls)) {
-      attr(resp, "messages") <- convo
-      attr(resp, "tool_history") <- .llmr_tool_history(history)
-      attr(resp, "tool_loop") <- loop_attr()
+      resp$messages <- convo
+      resp$tool_history <- .llmr_tool_history(history)
+      resp$tool_loop <- loop_attr()
+      attr(resp, "messages") <- resp$messages
+      attr(resp, "tool_history") <- resp$tool_history
+      attr(resp, "tool_loop") <- resp$tool_loop
       return(resp)
     }
 
@@ -358,9 +361,12 @@ call_llm_tools <- function(config, messages, tools,
   warning("call_llm_tools() reached max_rounds = ", max_rounds,
           " with tool calls still pending; returning the last response.",
           call. = FALSE)
-  attr(resp, "messages") <- convo
-  attr(resp, "tool_history") <- .llmr_tool_history(history)
-  attr(resp, "tool_loop") <- loop_attr()
+  resp$messages <- convo
+  resp$tool_history <- .llmr_tool_history(history)
+  resp$tool_loop <- loop_attr()
+  attr(resp, "messages") <- resp$messages
+  attr(resp, "tool_history") <- resp$tool_history
+  attr(resp, "tool_loop") <- resp$tool_loop
   resp
 }
 

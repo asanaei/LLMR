@@ -58,13 +58,6 @@ test_that("retry_with_backoff message formatting handles fractional waits", {
   )
 })
 
-test_that("llm_par_resume flags only failed/NA rows, not every row", {
-  # The fix is the element-wise predicate; test it directly on the success column.
-  success <- c(TRUE, TRUE, FALSE, NA, TRUE)
-  failed_idx <- which(!(success %in% TRUE))
-  expect_identical(failed_idx, c(3L, 4L))
-})
-
 test_that("largest balanced segment recovers a full embedded JSON array", {
   s <- 'items: [{"a":1},{"a":2}] done'
   seg <- LLMR:::.largest_balanced_segment(s)

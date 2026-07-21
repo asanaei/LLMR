@@ -97,10 +97,14 @@ llm_replicate <- function(.data, output, prompt, .config,
 #' @param metric Difference function for Krippendorff's alpha: `"nominal"`
 #'   (default, categories either match or do not), `"ordinal"` (ordered
 #'   categories), or `"interval"` (numeric distance). For `"ordinal"` and
-#'   `"interval"`, labels that parse as numbers are ordered numerically (so "2"
-#'   precedes "10"); `"interval"` requires numeric labels and returns `NA` with a
-#'   warning otherwise. The default reproduces the previous nominal-only behavior
-#'   exactly.
+#'   `"interval"`, labels must parse as numbers, be ordered factors, or have an
+#'   explicit order supplied through `levels`. Explicit categorical levels are
+#'   treated as equally spaced for the interval metric. The default reproduces
+#'   the previous nominal-only behavior exactly.
+#' @param levels Optional character vector giving the category order for
+#'   `metric = "ordinal"` or `"interval"`. When omitted, a common ordered-factor
+#'   level set is used if present; otherwise every observed label must parse as
+#'   numeric.
 #' @return An object of class `llmr_agreement`: a list with
 #'   \describe{
 #'     \item{`by_row`}{a tibble with one row per unit: `majority` (modal
@@ -117,7 +121,8 @@ llm_replicate <- function(.data, output, prompt, .config,
 #' @seealso [llm_replicate()]
 #' @export
 llm_agreement <- function(.data, cols = NULL, prefix = NULL, normalize = TRUE,
-                          metric = c("nominal", "ordinal", "interval")) {
+                          metric = c("nominal", "ordinal", "interval"),
+                          levels = NULL) {
   stopifnot(is.data.frame(.data))
   metric <- match.arg(metric)
   if (is.null(cols)) {
@@ -131,11 +136,44 @@ llm_agreement <- function(.data, cols = NULL, prefix = NULL, normalize = TRUE,
   miss <- setdiff(cols, names(.data))
   if (length(miss)) stop("Columns not found: ", paste(miss, collapse = ", "), call. = FALSE)
 
-  m <- as.matrix(.data[, cols, drop = FALSE])
+  selected <- .data[, cols, drop = FALSE]
+  ordered_cols <- selected[vapply(selected, is.ordered, logical(1))]
+  level_order <- if (metric == "nominal") NULL else levels
+  if (metric != "nominal" && is.null(level_order) && length(ordered_cols)) {
+    candidates <- lapply(ordered_cols, base::levels)
+    if (!all(vapply(candidates, identical, logical(1), candidates[[1]]))) {
+      stop("Ordered replicate columns must use the same level order.", call. = FALSE)
+    }
+    level_order <- candidates[[1]]
+  }
+
+  m <- as.matrix(selected)
   storage.mode(m) <- "character"
   if (isTRUE(normalize)) {
     m[] <- tolower(trimws(m))
     m[m == ""] <- NA_character_
+    if (!is.null(level_order)) level_order <- tolower(trimws(as.character(level_order)))
+  } else if (!is.null(level_order)) {
+    level_order <- as.character(level_order)
+  }
+
+  if (!is.null(level_order)) {
+    if (!length(level_order) || anyNA(level_order) || any(!nzchar(level_order)) ||
+        anyDuplicated(level_order)) {
+      stop("`levels` must be a non-empty vector of unique, non-missing labels.",
+           call. = FALSE)
+    }
+    unknown <- setdiff(stats::na.omit(unique(as.vector(m))), level_order)
+    if (length(unknown)) {
+      stop("Observed labels absent from `levels`: ", paste(unknown, collapse = ", "),
+           call. = FALSE)
+    }
+  } else if (metric != "nominal") {
+    observed <- stats::na.omit(unique(as.vector(m)))
+    if (length(observed) && anyNA(suppressWarnings(as.numeric(observed)))) {
+      stop("`metric = \"", metric, "\"` requires numeric labels, explicit `levels`, ",
+           "or ordered-factor replicate columns.", call. = FALSE)
+    }
   }
 
   n_units <- nrow(m)
@@ -174,13 +212,19 @@ llm_agreement <- function(.data, cols = NULL, prefix = NULL, normalize = TRUE,
   alpha <- if (identical(metric, "nominal")) {
     .krippendorff_alpha_nominal(m)            # unchanged path
   } else {
-    .krippendorff_alpha(m, metric = metric)
+    .krippendorff_alpha(m, metric = metric, levels = level_order)
+  }
+
+  mean_pairwise <- if (any(!is.na(pair_agree))) {
+    mean(pair_agree, na.rm = TRUE)
+  } else {
+    NA_real_
   }
 
   summary <- tibble::tibble(
     n_units = n_units,
     n_replicates = k,
-    mean_pairwise_agreement = mean(pair_agree, na.rm = TRUE),
+    mean_pairwise_agreement = mean_pairwise,
     krippendorff_alpha = alpha,
     n_unanimous = sum(by_row$unanimous %in% TRUE),
     n_ties = sum(by_row$tie %in% TRUE)
@@ -249,7 +293,8 @@ print.llmr_agreement <- function(x, ...) {
 # the interval metric (ordinal uses the sorted label order, values optional).
 #' @keywords internal
 #' @noRd
-.krippendorff_alpha <- function(m, metric = c("ordinal", "interval")) {
+.krippendorff_alpha <- function(m, metric = c("ordinal", "interval"),
+                                levels = NULL) {
   metric <- match.arg(metric)
   keep <- rowSums(!is.na(m)) >= 2L
   m <- m[keep, , drop = FALSE]
@@ -258,21 +303,15 @@ print.llmr_agreement <- function(x, ...) {
   uniq <- unique(stats::na.omit(as.vector(m)))
   if (length(uniq) < 2L) return(1)
 
-  # Order matters for ordinal/interval. When the labels are numeric, order them
-  # NUMERICALLY (so "2" < "10", and the interval distances use the real values);
-  # otherwise fall back to the labels' sort order. interval requires numeric
-  # labels and is undefined (NA) without them.
-  num_vals <- suppressWarnings(as.numeric(uniq))
-  if (!anyNA(num_vals)) {
+  # Order matters for ordinal/interval. Numeric labels use their values;
+  # explicit categorical levels use equally spaced ranks.
+  if (!is.null(levels)) {
+    vals <- levels[levels %in% uniq]
+    num_vals <- seq_along(vals)
+  } else {
+    num_vals <- suppressWarnings(as.numeric(uniq))
     vals <- uniq[order(num_vals)]
     num_vals <- sort(num_vals)
-  } else {
-    if (metric == "interval") {
-      warning("interval metric needs numeric category labels; returning NA.",
-              call. = FALSE)
-      return(NA_real_)
-    }
-    vals <- sort(uniq)        # ordinal on non-numeric labels: lexicographic order
   }
 
   # per-unit category counts

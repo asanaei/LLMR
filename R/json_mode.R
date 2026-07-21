@@ -41,8 +41,6 @@
 #' If `NULL`, OpenAI-compatible providers enforce a JSON object; Gemini switches
 #' to JSON mime type; Anthropic only injects a tool when a schema is supplied.
 #' @param name Character. Schema/tool name for providers requiring one. Default "llmr_schema".
-#' @param method One of c("auto","json_mode","tool_call"). "auto" chooses the best
-#'   per provider. You rarely need to change this.
 #' @param strict Logical. Request strict validation when supported
 #'   (OpenAI-compatible). Strict mode has formal requirements of its own:
 #'   every object must set `additionalProperties: false` and list all its
@@ -77,10 +75,8 @@
 enable_structured_output <- function(config,
                               schema = NULL,
                                      name = "llmr_schema",
-                                     method = c("auto","json_mode","tool_call"),
                               strict = TRUE) {
   stopifnot(inherits(config, "llm_config"))
-  method <- match.arg(method)
 
   mp <- config$model_params %||% list()
   prov <- config$provider
@@ -904,5 +900,4 @@ call_llm_par_structured <- function(experiments, schema = NULL, .fields = NULL, 
   class(out2) <- unique(c("llmr_experiment", class(out2)))
   out2
 }
-
 

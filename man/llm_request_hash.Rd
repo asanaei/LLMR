@@ -26,14 +26,15 @@ character vector of roles, or a list of \code{list(role=, content=)} turns --
 whatever was passed to \code{\link[=call_llm]{call_llm()}}. Canonicalized to a provider-neutral
 list of role/content turns before hashing, so the message \emph{shape} (a bare
 string vs a named vector vs a turn list) does not change the hash; only the
-roles and text do.}
+roles and text do. File and image parts are keyed by a SHA-256 digest of
+their decoded bytes, not by their path or provider-specific wrapper.}
 
 \item{provider, model}{Provider and model ids. Taken from \code{config} when it is
 given; supply them directly (with \code{extra$params}) when hashing a call read
 from an audit log, where there is no \code{config}.}
 
-\item{tools}{Optional tool definitions (as passed to \code{\link[=call_llm]{call_llm()}} /
-\code{\link[=bind_tools]{bind_tools()}}). Their signature is included when present.}
+\item{tools}{Optional provider tool definitions. Their signature is included
+when present.}
 
 \item{response_format}{Optional response-format directive (e.g. a JSON-mode
 flag or object) that constrains the output.}
@@ -52,7 +53,7 @@ A 64-character lowercase SHA-256 hex string (see \code{\link[=llm_hash]{llm_hash
 }
 \description{
 A request hash identifies the question asked. It keys on provider, model, the
-canonical role/content turns, and the generation parameters
+canonical role/content turns, attachment-content digests, and the generation parameters
 (\code{model_params} minus transport and internal knobs), plus any explicit tool,
 response-format, or schema signature. It is the key the archive layer uses for
 deduplication and replay, and the value to record when reproducibility of a

@@ -55,7 +55,7 @@ test_that("parallel audit shards merge back into the base log", {
 
   expect_false(file.exists(log_file))
   expect_true(file.exists(shard))
-  merged <- llm_log_merge(log_file)
+  merged <- LLMR:::.llmr_log_merge(log_file)
   # the returned shard path points at the same file (separators may differ by OS)
   expect_equal(normalizePath(merged, winslash = "/", mustWork = FALSE),
                normalizePath(shard,  winslash = "/", mustWork = FALSE))
@@ -64,14 +64,14 @@ test_that("parallel audit shards merge back into the base log", {
   expect_length(readLines(log_file), 1L)
 })
 
-test_that("llm_log_merge creates a missing base file and escapes regex basenames", {
+test_that("the internal shard merger creates a missing base file and escapes regex basenames", {
   log_file <- file.path(tempdir(), paste0("llmr.log+[", Sys.getpid(), "].jsonl"))
   shard <- paste0(log_file, ".10001")
   on.exit(unlink(c(log_file, shard)), add = TRUE)
   unlink(c(log_file, shard))
   writeLines('{"kind":"call","schema_version":"1.0"}', shard)
 
-  merged <- llm_log_merge(log_file)
+  merged <- LLMR:::.llmr_log_merge(log_file)
 
   expect_equal(normalizePath(merged, winslash = "/", mustWork = FALSE),
                normalizePath(shard,  winslash = "/", mustWork = FALSE))

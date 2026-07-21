@@ -7,7 +7,7 @@
 diagnostics(x, ...)
 }
 \arguments{
-\item{x}{An object returned by an LLMR method package.}
+\item{x}{An LLMR experiment or an object returned by an LLMR method package.}
 
 \item{...}{Passed to methods.}
 }

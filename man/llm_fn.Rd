@@ -143,6 +143,6 @@ llm_fn(df, "Classify '{text}' from {source}.", cfg, .return = "columns")
 }
 \seealso{
 \code{\link[=llm_mutate]{llm_mutate()}}, \code{\link[=llm_fn_structured]{llm_fn_structured()}}, \code{\link[=llm_fn_tags]{llm_fn_tags()}},
-\code{\link[=llm_parse_rowpack_tags]{llm_parse_rowpack_tags()}}, \code{\link[=setup_llm_parallel]{setup_llm_parallel()}}, \code{\link[=call_llm_broadcast]{call_llm_broadcast()}},
+\code{\link[=setup_llm_parallel]{setup_llm_parallel()}}, \code{\link[=call_llm_broadcast]{call_llm_broadcast()}},
 \code{\link[=get_batched_embeddings]{get_batched_embeddings()}}
 }

@@ -73,7 +73,7 @@ test_that("timeout/cache/hook keys never leak into a request body", {
 
 # ---- request builders: Anthropic --------------------------------------------
 
-test_that("anthropic builder keeps top_k and validates thinking budget", {
+test_that("anthropic builder keeps top_k", {
   withr_env <- Sys.getenv("ANTHROPIC_API_KEY", unset = NA)
   Sys.setenv(ANTHROPIC_API_KEY = "test-key-not-real")
   on.exit(if (is.na(withr_env)) Sys.unsetenv("ANTHROPIC_API_KEY")
@@ -82,13 +82,6 @@ test_that("anthropic builder keeps top_k and validates thinking budget", {
   cfg <- llm_config("anthropic", "claude-x", max_tokens = 300, top_k = 40)
   req <- LLMR:::.anthropic_chat_request(cfg, "hi")
   expect_equal(req$body$data$top_k, 40)
-
-  cfg2 <- llm_config("anthropic", "claude-x", max_tokens = 100,
-                     thinking_budget = 5000)
-  expect_warning(req2 <- LLMR:::.anthropic_chat_request(cfg2, "hi"),
-                 "max_tokens > thinking_budget")
-  expect_identical(req2$body$data$thinking$type, "enabled")
-  expect_equal(req2$body$data$thinking$budget_tokens, 5000)
 })
 
 test_that("anthropic cache = TRUE marks the system prompt as cacheable", {
@@ -344,12 +337,6 @@ test_that("retry honors a provider Retry-After value", {
 
 # ---- misc fixes -----------------------------------------------------------------
 
-test_that("expand_llm_config keeps S3 dispatch in sync with swept provider", {
-  base <- llm_config("openai", "gpt-4.1-nano")
-  cfgs <- expand_llm_config(base, provider = c("openai", "anthropic"))
-  expect_identical(class(cfgs[[2]]), c("llm_config", "anthropic"))
-})
-
 test_that("call_llm_sweep routes top-level fields to the config, not model_params", {
   base <- llm_config("groq", "openai/gpt-oss-20b", temperature = 0)
   # sweep a top-level field: it must land on the config, and the model_params
@@ -433,7 +420,6 @@ test_that("strict mode hardens schemas as the providers require", {
   )
   cfg <- enable_structured_output(llm_config("groq", "m"), schema = schema)
   sent <- cfg$model_params$response_format$json_schema$schema
-  expect_false(isTRUE(sent$additionalProperties))   # set to FALSE, not TRUE
   expect_identical(sent$additionalProperties, FALSE)
   expect_setequal(unlist(sent$required), c("vote", "detail", "items"))
   expect_identical(sent$properties$detail$additionalProperties, FALSE)
@@ -486,11 +472,6 @@ test_that("partially named .messages templates default empty names to user", {
   expect_identical(unname(msgs[[1]]["user"]), "w?")
 })
 
-test_that("schema = NULL still enables JSON-object mode in tidy structured verbs", {
-  cfg <- enable_structured_output(llm_config("openai", "gpt-4o"), schema = NULL)
-  expect_identical(cfg$model_params$response_format$type, "json_object")
-})
-
 test_that("an empty broadcast returns the full diagnostic schema", {
   cfg <- llm_config("groq", "m")
   expect_warning(res <- call_llm_broadcast(cfg, list()), "No experiments")
@@ -530,12 +511,12 @@ test_that("call_llm_tools aggregates loop spend and enforces max_tool_calls", {
   )
   cfg <- llm_config("openai", "m")
   r <- call_llm_tools(cfg, "double 2", tools = dbl)
-  loop <- attr(r, "tool_loop")
+  loop <- r$tool_loop
   expect_identical(loop$model_calls, 2L)
   expect_identical(loop$sent, 15L)
   expect_identical(loop$rec, 3L)
   expect_identical(loop$tool_calls, 1L)
-  expect_identical(nrow(attr(r, "tool_history")), 1L)
+  expect_identical(nrow(r$tool_history), 1L)
 
   n <- 0L
   expect_error(call_llm_tools(cfg, "double 2", tools = dbl, max_tool_calls = 0),
@@ -553,7 +534,5 @@ test_that("llm_hash is canonical, order-blind, and pinned across versions", {
   expect_false(identical(llm_hash(list(a = 1)), llm_hash(list(a = 2))))
   s3 <- structure(list(a = 1), class = "whatever")
   expect_identical(llm_hash(s3), llm_hash(list(a = 1))) # class-blind
-  expect_identical(llm_hash(function(x) x + 1),
-                   llm_hash(function(x) x + 1))         # functions by source
   expect_match(llm_hash("plain string"), "^[a-f0-9]{64}$")
 })

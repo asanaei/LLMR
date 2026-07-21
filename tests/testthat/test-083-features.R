@@ -121,7 +121,7 @@ test_that("llm_usage reports cached tokens and a price estimate", {
   expect_equal(u2$cost_estimate, (120 * 1 + 80 * 0.1 + 100 * 2) / 1e6)
 })
 
-test_that("llm_methods_text drafts a faithful paragraph", {
+test_that("report drafts a faithful experiment paragraph", {
   res <- tibble::tibble(
     model = "openai/gpt-oss-20b", provider = "groq", temperature = 0,
     success = c(TRUE, FALSE), finish_reason = c("stop", "error:server"),
@@ -129,7 +129,8 @@ test_that("llm_methods_text drafts a faithful paragraph", {
     total_tokens = c(15L, NA), reasoning_tokens = NA_integer_,
     duration = c(0.4, 0.1)
   )
-  txt <- llm_methods_text(res, task = "to classify items")
+  class(res) <- unique(c("llmr_experiment", class(res)))
+  txt <- report(res, task = "to classify items")
   expect_match(txt, "gpt-oss-20b")
   expect_match(txt, "groq")
   expect_match(txt, "to classify items")

@@ -55,25 +55,11 @@ llm_hash <- function(x) {
   digest::digest(as.character(canon), algo = "sha256", serialize = FALSE)
 }
 
-# A per-session monotone counter for llm_uuid().
+# A per-session monotone counter for internal identifiers.
 .llmr_uuid_state <- new.env(parent = emptyenv())
 .llmr_uuid_state$n <- 0L
 
-#' A short, sortable, process-unique identifier
-#'
-#' Mints a compact id without a UUID dependency, useful for tagging runs, spans,
-#' or records. The id sorts in creation order within a session: it is a base-36
-#' timestamp, the process id, and a monotone counter, joined by `-` (with an
-#' optional prefix). It is unique within a process and practically unique across
-#' processes on a host; it is not a registered UUID and makes no cross-host
-#' global-uniqueness guarantee.
-#'
-#' @param prefix Optional short string prepended as `prefix-...`.
-#' @return A character scalar.
-#' @examples
-#' llm_uuid()
-#' llm_uuid("run")
-#' @export
+# Internal short, sortable, process-unique identifier.
 llm_uuid <- function(prefix = NULL) {
   .llmr_uuid_state$n <- .llmr_uuid_state$n + 1L
   ts <- format(as.numeric(Sys.time()) * 1000, scientific = FALSE)

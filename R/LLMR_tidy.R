@@ -217,7 +217,7 @@
 #' land on, so sums can slightly undercount in heavy-recovery runs.
 #'
 #' @seealso [llm_mutate()], [llm_fn_structured()], [llm_fn_tags()],
-#'   [llm_parse_rowpack_tags()], [setup_llm_parallel()], [call_llm_broadcast()],
+#'   [setup_llm_parallel()], [call_llm_broadcast()],
 #'   [get_batched_embeddings()]
 #'
 #' @examples
@@ -481,7 +481,7 @@ llm_fn <- function(x,
 #'
 #' @seealso [llm_fn()], [llm_mutate_structured()], [llm_mutate_tags()],
 #'   [llm_parse_structured_col()], [llm_parse_tags_col()],
-#'   [llm_parse_rowpack_tags()], [call_llm_broadcast()], [setup_llm_parallel()]
+#'   [call_llm_broadcast()], [setup_llm_parallel()]
 #' @examples
 #' \dontrun{
 #' library(dplyr)

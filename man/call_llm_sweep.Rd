@@ -18,7 +18,7 @@ call_llm_sweep(base_config, param_name, param_values, messages, ...)
 \item{...}{Additional arguments passed to \code{call_llm_par} (e.g., tries, verbose, progress).}
 }
 \value{
-A tibble with columns: swept_param_name, the varied parameter column,
+An \code{llmr_experiment} tibble with columns: swept_param_name, the varied parameter column,
 the \code{config} list-column (so \code{\link[=llm_par_resume]{llm_par_resume()}} can re-run failures),
 provider, model, all other model parameters, response_text,
 raw_response_json, success, error_message, and the other diagnostics

@@ -90,8 +90,8 @@ hide it.
 
 ## 3. A methods paragraph you can edit
 
-`llm_methods_text()` drafts the transparency paragraph from what a result
-frame actually records, marking anything unknown as unknown.
+`report()` drafts the transparency paragraph from what an experiment result
+actually records, marking anything unknown as unknown.
 
 ```{r methods}
 res <- call_llm_par(
@@ -100,7 +100,7 @@ res <- call_llm_par(
     user_prompts = c("Classify: 'great work'", "Classify: 'do better'")
   )
 )
-cat(llm_methods_text(res, task = "to classify short feedback messages"))
+cat(report(res, task = "to classify short feedback messages"))
 ```
 
 ## 4. What did it cost?

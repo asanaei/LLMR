@@ -19,17 +19,9 @@
   "military service", "attention to politics",
   paste0("demo_", c("age", "sex", "gender", "education", "race", "income")))
 
-#' The question dictionary attached to a persona data frame
-#'
-#' Persona frames may carry a `dictionary` attribute: a data frame mapping each
-#' tidy column handle to the human-readable question wording (and, when present,
-#' its domain and source-survey variable). [llm_persona_split()] and
-#' [llm_persona_overview()] use it to show questions rather than column handles.
-#'
-#' @param x A persona data frame (see [anes_2024_personas]).
-#' @return The dictionary data frame, or `NULL` if the frame carries none.
-#' @seealso [llm_persona_split()], [anes_2024_personas].
-#' @export
+#' Read the optional question dictionary from a persona frame
+#' @keywords internal
+#' @noRd
 llm_persona_dictionary <- function(x) {
   d <- attr(x, "dictionary")
   if (is.null(d) || !is.data.frame(d)) return(NULL)

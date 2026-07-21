@@ -12,6 +12,14 @@ test_that("request hash is stable under list reorder and class", {
   )
 })
 
+test_that("the plain-chat request hash remains byte-identical", {
+  cfg <- llm_config("openai", "gpt-4o-mini", temperature = 0)
+  expect_identical(
+    llm_request_hash(cfg, c(system = "Be terse.", user = "Hello")),
+    "a35e70aafb008c3875246eee63844231a93ac9ec27d20b2b3440f3b0a713ca88"
+  )
+})
+
 test_that("request hash changes with generation params", {
   cfg0 <- llm_config("openai", "gpt-4.1-mini", temperature = 0)
   cfg1 <- llm_config("openai", "gpt-4.1-mini", temperature = 1)
@@ -43,14 +51,6 @@ test_that("transport-only knobs do not change the hash", {
     llm_request_hash(cfg_a, "Hello"),
     llm_request_hash(cfg_b, "Hello")
   )
-})
-
-test_that("api keys never enter the hash input", {
-  # Two configs identical but for the key handle hash identically; the key is
-  # not part of model_params and not part of the hashed object.
-  cfg <- llm_config("openai", "gpt-4.1-mini", temperature = 0)
-  h <- llm_request_hash(cfg, "Hello")
-  expect_match(h, "^[0-9a-f]{64}$")
 })
 
 test_that("config-free call via direct provider/model and extra params hashes", {

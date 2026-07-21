@@ -52,7 +52,9 @@ stored as \code{api_url} in \code{model_params} and overrides the default endpoi
 
 \item{embedding}{\code{NULL} (default), \code{TRUE}, or \code{FALSE}. If \code{TRUE}, the call
 is routed to the provider's embeddings API; if \code{FALSE}, to the chat API.
-If \code{NULL}, LLMR infers embeddings when \code{model} contains \code{"embedding"}.}
+Voyage is always routed to embeddings because it is an embeddings-only
+provider. For other providers, \code{NULL} infers embeddings when \code{model}
+contains \code{"embedding"}.}
 
 \item{no_change}{Logical. If \code{TRUE}, LLMR \strong{never} auto-renames/adjusts
 provider parameters. If \code{FALSE} (default), well-known compatibility shims
