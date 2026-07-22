@@ -1,7 +1,7 @@
 library(testthat)
 library(LLMR)
 
-# llm_usage() / llm_failures() — pure readers over diagnostic columns. Offline.
+# llm_usage() / llm_failures() -- pure readers over diagnostic columns. Offline.
 
 # ---- call_llm_par-style (direct names) ------------------------------------
 

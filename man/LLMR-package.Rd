@@ -6,9 +6,9 @@
 \alias{LLMR-package}
 \title{LLMR: unified LLM workflows for R}
 \description{
-LLMR provides provider-agnostic text generation, embeddings, structured JSON,
-XML-like tag extraction, chat sessions, robust retries, and parallel
-experiment utilities.
+One configuration object (\code{\link[=llm_config]{llm_config()}}) and one calling interface
+(\code{\link[=call_llm]{call_llm()}} and its tidy, parallel, and batch variants) across
+language-model providers, for research workflows in R.
 }
 \section{Common workflows}{
 

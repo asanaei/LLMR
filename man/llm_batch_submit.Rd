@@ -36,10 +36,12 @@ with inline requests; developer API, not Vertex). All request-shaping
 features of \code{\link[=llm_config]{llm_config()}} apply: sampling parameters, structured output,
 tools, and hooks shape each request exactly as a live \code{\link[=call_llm]{call_llm()}} would.
 
-The returned job object contains no secrets (the config stores an
-environment-variable reference, not the key), so it can be saved to disk,
-shared, and fetched later or from another machine with the same
-environment variables set. Pass \code{state_path} to save it automatically.
+A job whose config stores an environment-variable reference (the default)
+contains no secrets: it can be saved to disk, shared, and fetched later or
+from another machine with the same environment variables set. Pass
+\code{state_path} to save it automatically. When the config carries a literal
+key string instead, \code{state_path} is refused rather than writing the key
+to disk; the in-memory job still works for the current session.
 }
 \section{Batching, chunking, and row packing}{
 

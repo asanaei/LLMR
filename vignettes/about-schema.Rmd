@@ -32,7 +32,7 @@ provider's guarantee.
   See [OpenAI Structured Outputs cookbook](https://cookbook.openai.com/examples/structured_outputs_intro), [Groq API (OpenAI-compatible)](https://console.groq.com/docs/structured-outputs), [Together: OpenAI compatibility](https://docs.together.ai/docs/json-mode), [x.ai: OpenAI API schema](https://docs.x.ai/docs/guides/structured-outputs), [DeepSeek: OpenAI-compatible endpoint](https://api-docs.deepseek.com/guides/json_mode)
 
 - **Anthropic (Claude)**  
-  No global “JSON mode.” Instead, you **define a tool** with an **`input_schema`** (JSON Schema) and **force** it via `tool_choice`, so the model must return a JSON object that validates the schema.  
+  No global "JSON mode." Instead, you **define a tool** with an **`input_schema`** (JSON Schema) and **force** it via `tool_choice`, so the model must return a JSON object that validates the schema.  
   See [Anthropic Messages API: tools & `input_schema`](https://platform.claude.com/docs/en/api/messages#tools)
 
 - **Google Gemini (REST)**  
@@ -57,7 +57,7 @@ provider's guarantee.
 
 - Models often wrap JSON in **code fences** or add pre/post text.  
 - Arrays/objects appear where you expected scalars; **ints vs doubles** vary by provider/sample.  
-- **Safety/length caps** can truncate output; detect and handle “finish_reason = length/filter.”  
+- **Safety/length caps** can truncate output; detect and handle "finish_reason = length/filter."  
 
 ### LLMR helpers for common parsing failures
 
@@ -98,11 +98,11 @@ safe({
 })
 ```
 
-**What could still fail?** Proxies labeled “OpenAI-compatible” sometimes accept `response_format` but don’t strictly enforce it; LLMR’s parser recovers from fences or pre/post text.
+**What could still fail?** Proxies labeled "OpenAI-compatible" sometimes accept `response_format` but do not strictly enforce it; LLMR's parser recovers from fences or pre/post text.
 
 ---
 
-### 2) **Schema mode that actually works** (Groq, open model)
+### 2) **Schema-constrained output on Groq** (open model)
 
 Groq serves `openai/gpt-oss-20b` with OpenAI-compatible APIs. Their
 **Structured Outputs** feature enforces JSON Schema and (notably) expects

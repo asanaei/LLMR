@@ -1,9 +1,9 @@
 ---
 name: llmr
-description: Unified LLM provider layer for R - one config across OpenAI/Anthropic/Gemini/Groq/DeepSeek/Together/OpenRouter/Ollama and more; structured output, tool calling, streaming, logprobs, embeddings, tidy data-frame verbs, parallel and batch execution, audit logging, replication and agreement, cost accounting.
+description: One provider-neutral configuration and call interface for language-model research in R, from single calls to parallel and batch experiments with audit logging.
 ---
 
-# LLMR — usage capsule for AI assistants
+# LLMR -- usage capsule for AI assistants
 
 This capsule summarizes how to use the package correctly. For more detail, see
 the vignettes `quickstart`, `tidy-and-structured`, `about-schema`,
@@ -18,13 +18,14 @@ install.packages("LLMR")    # CRAN; dev: remotes::install_github("asanaei/LLMR")
 Keys come from environment variables (`GROQ_API_KEY`, `OPENAI_API_KEY`,
 `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `DEEPSEEK_API_KEY`, ...). Never put
 a literal key in code; `llm_config()` resolves the provider's variable by
-default, and configs print masked. A missing key errors at call time —
+default, and configs print masked. A missing key errors at call time --
 report it, do not work around it.
 
 ## Core API
 
 ```r
-llm_config(provider, model, ..., api_key = NULL, embedding = NULL)
+llm_config(provider, model, api_key = NULL, troubleshooting = FALSE,
+           base_url = NULL, embedding = NULL, no_change = FALSE, ...)
   # canonical params: temperature, max_tokens, top_p, seed, logprobs,
   # top_logprobs, thinking_budget, timeout, cache; api_url for any
   # OpenAI-compatible server (vLLM, llama.cpp, localhost)
@@ -40,7 +41,8 @@ llm_parse_structured(x); llm_parse_structured_col(.data, ...)
 # scale
 build_factorial_experiments(...); call_llm_par(experiments, ...)
 call_llm_broadcast(config, messages, ...); llm_par_resume(...)
-llm_batch_submit(config, messages, state_path = NULL)   # half-price async
+llm_batch_submit(config, messages, state_path = NULL)   # provider batch API;
+                                        # pricing and delay are provider-defined
 llm_batch_status(job); llm_batch_fetch(job); llm_batch_cancel(job)
 
 # interactive layer
@@ -94,16 +96,18 @@ out <- llm_mutate_structured(df, ans, prompt = "...{text}",
 
 ## Rules and provider facts
 
-- For measurement, `temperature = 0`; for replication runs leave sampling
-  on and use `llm_replicate()` + `llm_agreement()` (Krippendorff alpha).
+- Choose temperature for the estimand: `temperature = 0` for single-label
+  annotation; for replication runs leave sampling on and use
+  `llm_replicate()` + `llm_agreement()` (Krippendorff alpha).
 - Strict JSON-schema mode is provider-gated: openai/groq/together/xai/
   openrouter/ollama take real schemas (auto-hardened:
   `additionalProperties: false`, required filled);
   deepseek/alibaba/zhipu/moonshot get JSON-object mode with local
   validation. Anthropic uses a schema tool; Gemini uses
   `responseJsonSchema`.
-- Logprobs: deepseek and openai expose them; groq and most gemini models
-  reject the flag; anthropic has none.
+- Logprobs: openai and deepseek expose them; support elsewhere varies by
+  model and endpoint (an unsupported endpoint returns a provider error);
+  anthropic has none.
 - `tokens(x)` covers one call; after `call_llm_tools()` read
   `x$tool_loop` for total loop spend.
 - Failed rows in tidy verbs carry diagnostics (`llm_failures()`); braces in
@@ -116,8 +120,8 @@ out <- llm_mutate_structured(df, ans, prompt = "...{text}",
 
 ## Error meanings
 
-- "Missing API key. Set environment variable ..." → export the named
+- "Missing API key. Set environment variable ..." -> export the named
   variable; do not paste keys into code.
-- 400 with "logprobs is not supported" → that model rejects the flag.
-- `llmr_tool_limit` condition → `max_tool_calls` cap reached mid-loop.
-- Batch "not finished" → poll `llm_batch_status()`; fetch later.
+- 400 with "logprobs is not supported" -> that model rejects the flag.
+- `llmr_tool_limit` condition -> `max_tool_calls` cap reached mid-loop.
+- Batch "not finished" -> poll `llm_batch_status()`; fetch later.

@@ -16,7 +16,7 @@ configurations <- list(
 )
 
 # 2) Prompts: only the name varies
-preamble <- "Rate the taxi service quality on an integer scale 0–10. Provide ONLY the number."
+preamble <- "Rate the taxi service quality on an integer scale 0-10. Provide ONLY the number."
 epilogue <- "The driver drove too fast (much above speed limit) but seemed respectful.
              What is the rating you give?
              higher numbers mean better service. 0 means horrible, 10 means excellent."
@@ -50,7 +50,7 @@ reset_llm_parallel()
 #    - Otherwise, extract the first standalone integer 1..10
 extract_rating_1to10 <- function(x) {
   if (!is.character(x) || !nzchar(x)) return(NA_real_)
-  # First integer token in [1..10] with boundaries; does not match the "1–10" range notation itself
+  # First integer token in [1..10] with boundaries; does not match the "1-10" range notation itself
   m <- str_match(x, "(?<!\\d)(10|[1-9])(?!\\d)")[, 2]
   suppressWarnings(as.numeric(m))
 }

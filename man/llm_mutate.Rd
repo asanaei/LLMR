@@ -86,7 +86,7 @@ unless \code{.fields = FALSE}.}
 
 \item{.rows_per_prompt}{Integer scalar, or \code{Inf}. Number of rows packed into a
 single generative request. The default, \code{1}, sends one request per row (the
-historical behaviour). When greater than \code{1}, rows are grouped and sent in
+historical behavior). When greater than \code{1}, rows are grouped and sent in
 one call wrapped in numbered \verb{<row_1>...</row_1>} tags (see \emph{Row batching}
 below); \code{Inf} sends all rows at once. Works in generative, tag, and
 structured modes; not applicable to embedding configurations.}
@@ -139,7 +139,7 @@ matching numbered tag; the reply is split back into rows by those numbers.
 This also composes with \code{.tags} (each \verb{<row_i>} then wraps the requested field
 tags) and with \code{.structured = TRUE} (rows are returned as one JSON object
 \verb{\{"results":[\{"row":i, ...\}]\}}, de-multiplexed by the integer \code{row} field; a
-one-time warning notes that this relies on the model honouring the protocol
+one-time warning notes that this relies on the model honoring the protocol
 and that strict provider-side schema validation is replaced by local parsing).
 Batching is most useful with capable models at \code{temperature = 0} and is a net
 loss when the model ignores the wrapping. Dropped, reordered, duplicated, or

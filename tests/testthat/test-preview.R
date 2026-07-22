@@ -1,7 +1,7 @@
 library(testthat)
 library(LLMR)
 
-# llm_preview() / llm_render_messages() — all offline, no API.
+# llm_preview() / llm_render_messages() -- all offline, no API.
 
 df <- tibble::tibble(text = c("alpha", "beta", "gamma"))
 
@@ -73,7 +73,7 @@ test_that("llm_preview flags file + .rows_per_prompt>1 as unsupported", {
 test_that("llm_preview file role kept as path string, no base64/IO", {
   d <- tibble::tibble(img = "~/some/where.png")
   m <- llm_render_messages(d, .messages = c(file = "{img}"))
-  # not expanded, not encoded — just the glued template
+  # not expanded, not encoded -- just the glued template
   expect_identical(unname(m[[1]]["file"]), "~/some/where.png")
 })
 

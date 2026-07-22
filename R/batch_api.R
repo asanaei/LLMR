@@ -34,10 +34,16 @@ print.llmr_batch_job <- function(x, ...) {
   invisible(x)
 }
 
-# Persist/load: the job (including its config, whose api_key is an env-var
-# handle, not a secret) round-trips through RDS.
+# Persist/load: the job round-trips through RDS. An env-var key handle
+# serializes as the variable's name; a literal key would serialize as the key
+# itself, so persistence refuses it rather than writing a credential to disk.
 .llmr_batch_save <- function(job, state_path) {
   if (!is.null(state_path)) {
+    if (inherits(job$config$api_key, "llmr_secret_literal")) {
+      stop("state_path would write this config's literal API key to disk. ",
+           "Build the config from an environment variable (the default, or ",
+           "llm_api_key_env()) and resubmit.", call. = FALSE)
+    }
     saveRDS(job, state_path)
   }
   job
@@ -167,10 +173,12 @@ print.llmr_batch_job <- function(x, ...) {
 #' features of [llm_config()] apply: sampling parameters, structured output,
 #' tools, and hooks shape each request exactly as a live [call_llm()] would.
 #'
-#' The returned job object contains no secrets (the config stores an
-#' environment-variable reference, not the key), so it can be saved to disk,
-#' shared, and fetched later or from another machine with the same
-#' environment variables set. Pass `state_path` to save it automatically.
+#' A job whose config stores an environment-variable reference (the default)
+#' contains no secrets: it can be saved to disk, shared, and fetched later or
+#' from another machine with the same environment variables set. Pass
+#' `state_path` to save it automatically. When the config carries a literal
+#' key string instead, `state_path` is refused rather than writing the key
+#' to disk; the in-memory job still works for the current session.
 #'
 #' @param config An [llm_config] for a generative model.
 #' @param messages An unnamed character vector (each element becomes one

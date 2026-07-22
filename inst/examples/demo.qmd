@@ -12,7 +12,7 @@ format:
     include-in-header:
       text: |
         \usepackage{fvextra}
-        %–– Make all verbatim (code + console) wrap automatically ––
+        %-- Make all verbatim (code + console) wrap automatically --
         \fvset{breaklines,breakanywhere,commandchars=\\\{\}}
 ---
 
@@ -20,7 +20,7 @@ LLMR is an R package for reproducible, provider-agnostic research with (and abou
 
 - A single configuration object across providers.
 - A standard response object with finish reasons and token usage.
-- A structured‑output workflow (JSON schema) that is robust and easy to use.
+- A structured-output workflow (JSON schema) that is robust and easy to use.
 - Parallel experiment utilities and tidy helpers.
 - Multimodal support with local files.
 - Reliable embeddings with batching.
@@ -132,7 +132,7 @@ as.character(robust_resp)
 
 # 2) Stateful chat
 
-`chat_session()` keeps history and token totals. Each `$send()` round‑trips the full history.
+`chat_session()` keeps history and token totals. Each `$send()` round-trips the full history.
 
 ```{r}
 #| label: chat
@@ -153,7 +153,7 @@ tail(chat, 2)
 as.data.frame(chat) |> head()
 ```
 
-# 3) Tidy helpers (non‑structured)
+# 3) Tidy helpers (non-structured)
 
 Use `llm_fn()` for vectors. Use `llm_mutate()` inside data pipelines. Both respect the active parallel plan.
 
@@ -164,7 +164,7 @@ setup_llm_parallel(workers = 4)
 mysentences <- tibble::tibble(text = c(
   "I absolutely loved this movie!",
   "This is the worst film.",
-  "It’s an ok movie; nothing special."
+  "It's an ok movie; nothing special."
 ))
 
 cfg_det <- llm_config(
@@ -181,7 +181,7 @@ sentiment <- llm_fn(
 )
 sentiment
 
-# Data‑frame mutate
+# Data-frame mutate
 results <- mysentences |>
   llm_mutate(
     rating,
@@ -209,7 +209,7 @@ reset_llm_parallel()
 
 LLMR can request structured JSON and parse it into typed columns.
 
-- Use `enable_structured_output()` (provider‑agnostic).
+- Use `enable_structured_output()` (provider-agnostic).
 - Call a structured helper.
 - Name fields to be hoisted.
 
@@ -228,7 +228,7 @@ schema <- list(
 
 ## 4.1) Vector helper: `llm_fn_structured()`
 
-Auto‑glues the prompt over a vector. If `.fields` is omitted, top‑level properties are auto‑hoisted.
+Auto-glues the prompt over a vector. If `.fields` is omitted, top-level properties are auto-hoisted.
 
 ```{r}
 #| label: fn-structured
@@ -247,7 +247,7 @@ out_vec |>
   kable()
 ```
 
-## 4.2) Data‑frame helper: `llm_mutate_structured()`
+## 4.2) Data-frame helper: `llm_mutate_structured()`
 
 We want to mutate data with structured responses from LLM.
 We want to identify one object and the attitude toward that object in each sentence 
@@ -397,7 +397,7 @@ setup_llm_parallel(workers = min(8, max(1, parallel::detectCores() - 1)))
 res <- call_llm_par_structured(
   experiments,
   # If schema wasn't enabled in configs, pass: schema = schema,
-  .fields  = c("answer","confidence"),   # optional – omit to auto‑hoist all top‑level props
+  .fields  = c("answer","confidence"),   # optional - omit to auto-hoist all top-level props
   progress = TRUE
 )
 reset_llm_parallel()
@@ -407,7 +407,7 @@ res |>
   print(n = Inf)
 ```
 
-## 5.1) A small bias experiment (non‑structured)
+## 5.1) A small bias experiment (non-structured)
 
 Two drivers. Many repetitions. Compare outcomes by name.
 This example is written without using the structured output functionality for
@@ -481,7 +481,7 @@ bias |>
   geom_histogram(position = "dodge", bins = 25) +
   facet_wrap(~ model, scales = "free_y") +
   labs(title = "Ratings by name",
-       x = "Safety index (0–100) [higher = safer]",
+       x = "Safety index (0-100) [higher = safer]",
        y = "Count",
        fill = "Name") +
   theme_minimal()
@@ -518,7 +518,7 @@ treatment_effects |>
   print(n = Inf)
 ```
 
-# 6) Low‑level parsing utilities
+# 6) Low-level parsing utilities
 
 If you already have JSON text, parse it with recovery and hoist fields.
 
@@ -723,8 +723,8 @@ cat("LLM output:\n", response$text, "\n")
 
 # 9) Tips and notes
 
-- For structured arrays, hoist elements via paths like `keywords[0]` or keep them as list‑columns (default).
+- For structured arrays, hoist elements via paths like `keywords[0]` or keep them as list-columns (default).
 - Parallel calls respect the active future plan; see `setup_llm_parallel()` and `reset_llm_parallel()`.
 - `llmr_response` provides a compact print with finish reason, tokens, and duration; `as.character()` extracts text.
-- For strict schemas on OpenAI‑compatible providers, `enable_structured_output()` uses `json_schema`; Anthropic injects a tool; Gemini sets JSON mime type and can attach `response_schema`.
+- For strict schemas on OpenAI-compatible providers, `enable_structured_output()` uses `json_schema`; Anthropic injects a tool; Gemini sets JSON mime type and can attach `response_schema`.
 - Raw JSON is attached as `attr(x, "raw_json")`.

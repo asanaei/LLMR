@@ -69,7 +69,7 @@ out_json <- df |>
       sep = "\n"
     ),
     .config = cfg_openai_json,
-    .schema = schema,                 # <— keep local guard ON
+    .schema = schema,                 # <-- keep local guard ON
     .fields = c("family","confidence")
   ) |>
   mutate(confidence = suppressWarnings(as.numeric(confidence)))

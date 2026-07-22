@@ -39,6 +39,12 @@
 #' layer's collision detection is the backstop for those cases: it flags when one
 #' replay key gathers records whose stored request hashes disagree.
 #'
+#' The config side hashes the request as declared. A declared parameter that a
+#' provider builder discards as unsupported (with its printed note, e.g.
+#' `top_k` on OpenAI) is still part of the declared identity, so the config-side
+#' hash and the logged transmitted body then differ; set `no_change = TRUE` to
+#' send the parameter as declared, or leave it out of the config.
+#'
 #' @param config An [llm_config()] (its `provider`, `model`, and the
 #'   answer-relevant entries of `model_params` are used), or `NULL` to supply
 #'   `provider`/`model` directly and the generation parameters through

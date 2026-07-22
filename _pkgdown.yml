@@ -92,7 +92,6 @@ reference:
   contents:
   - diagnostics
   - report
-  - llm_methods_text
   - reset
 - title: Tidy helpers and parallel
   contents:

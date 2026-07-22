@@ -14,8 +14,8 @@ knitr::opts_chunk$set(
 )
 ```
 
-A language model is an instrument, and instruments demand calibration records.
-Reviewers now ask, reasonably: which model, at which settings, on which date,
+A study that uses a language model to produce data will be asked: which
+model, at which settings, on which date,
 with what prompt, how stable are the labels, and what did it cost? This
 article shows how LLMR answers each question with one or two lines of code.
 Examples run on the open-weight `gpt-oss-20b` served by Groq, so they are
@@ -155,11 +155,11 @@ The fetched tibble has the same diagnostic columns as a live
 `llm_failures()` work on it unchanged. Batch jobs are supported for OpenAI,
 Groq, Anthropic, and Gemini.
 
-## 7. Seeds, versions, and honest limits
+## 7. Seeds, model versions, and reproducibility limits
 
 Pass `seed` in `llm_config()` and LLMR forwards it where the provider supports
 one. Treat it as a stabilizer, not a guarantee: providers update serving
 stacks behind fixed model names. That is why every response records
 `model_version`, the identifier the server reports having served, and why the
-audit log stores it per call. Determinism you cannot have; attribution you
-can.
+audit log stores it per call. A seed does not make the output deterministic;
+the recorded model version and call metadata make it attributable.

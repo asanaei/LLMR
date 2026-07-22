@@ -5,6 +5,15 @@
   audit-log destinations, tool-loop provenance, and experiment reporting.
   The inert structured-output `method` argument is gone, and ten non-core helpers
   are now internal.
+* A config with structured output enabled now produces the same request hash
+  as its logged request body: `enable_structured_output()`'s local bookkeeping
+  fields no longer enter the identity.
+* `llm_batch_submit(state_path = )` refuses to persist a job whose config
+  carries a literal API key; environment-variable handles round-trip as
+  before.
+* Removed: `llm_methods_text()` (use `report()`), the inert `json_output`
+  argument of `call_llm_par()`, and the inert `.fields` argument of the chat
+  session's `$send_structured()` and `$send_tags()`.
 * New provider `"openrouter"`: chat, streaming, and structured output through
   OpenRouter's OpenAI-compatible aggregator (model ids like
   `"openai/gpt-4o-mini"`; key from `OPENROUTER_API_KEY`). OpenRouter has no

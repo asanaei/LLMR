@@ -49,7 +49,7 @@
       old <- renames; new <- unname(map[renames])
       names(mp)[match(old, names(mp))] <- new
       .llmr_param_note(
-        sprintf("Renamed %s \u2192 %s for %s",
+        sprintf("Renamed %s -> %s for %s",
                 paste(old, collapse = ", "),
                 paste(new, collapse = ", "),
                 provider)

@@ -32,20 +32,6 @@ test_that("report covers experiment results without invented run metadata", {
   ))
 })
 
-test_that("llm_methods_text warns once and delegates to report", {
-  rlang::reset_warning_verbosity("llmr-llm_methods_text")
-  x <- experiment_result()
-  expected <- report(x, task = "to classify short texts")
-
-  expect_warning(
-    first <- llm_methods_text(x, task = "to classify short texts"),
-    "deprecated"
-  )
-  expect_silent(second <- llm_methods_text(x, task = "to classify short texts"))
-  expect_identical(first, expected)
-  expect_identical(second, expected)
-})
-
 test_that("llmr_experiment prints a concise status line", {
   printed <- capture.output(print(experiment_result()))
 

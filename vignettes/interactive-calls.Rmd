@@ -22,7 +22,7 @@ data-frame pipelines see `vignette("tidy-and-structured")`; for enforced JSON
 shapes, `vignette("about-schema")`; for logging, replication, caching, and
 batch jobs, `vignette("reproducibility-and-cost")`.)
 
-One caveat up front: provider support varies. Tool calling works on the
+Provider support varies. Tool calling works on the
 OpenAI-compatible providers and Anthropic; streaming works across the major
 providers; logprobs are the patchiest -- OpenAI and DeepSeek expose them,
 Anthropic does not, and several hosts reject the flag model by model. The
@@ -160,7 +160,7 @@ alts <- lp$top_logprobs[[1]]
 transform(alts, p = exp(logprob))[, c("token", "p")]
 ```
 
-Two cautions keep this honest. Logprobs are *token-level*, not semantic:
+Two limitations. Logprobs are *token-level*, not semantic:
 the figure is the probability of that token in that position, which tracks
 "confidence in the label" only when the prompt constrains the answer to a
 single label token -- hence the one-word instruction above. For multi-token

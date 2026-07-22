@@ -218,11 +218,15 @@
   if (!is.list(model_params) || !length(model_params)) return(list())
   # Knobs that change HOW a call is issued or routed, not WHAT is asked, plus
   # local-only handles that never reach a provider body. None belong in request
-  # identity.
+  # identity. json_schema and llmr_schema_tool are enable_structured_output()'s
+  # local bookkeeping (the schema itself travels in the provider-ready field:
+  # response_format, tools, or response_json_schema), so a config and the body
+  # built from it agree once they are excluded.
   drop <- c("req_builder", "request_modifier", "response_modifier",
             "timeout", "api_url", "base_url", "max_tries", "verbose",
             "cache", "use_responses_api", "anthropic_beta",
-            "vertex", "project", "location", "stream", "stream_options")
+            "vertex", "project", "location", "stream", "stream_options",
+            "json_schema", "llmr_schema_tool")
   keep <- model_params[setdiff(names(model_params), drop)]
   # Drop NULL, scalar NA, and zero-length entries so an absent or empty
   # parameter does not change the hash relative to a call that never set it.

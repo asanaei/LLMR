@@ -1,7 +1,7 @@
 library(testthat)
 library(LLMR)
 
-# llm_response_record() — one flattening path from a call to a provenance row.
+# llm_response_record() -- one flattening path from a call to a provenance row.
 # Offline; fabricated llmr_response objects, no keys needed.
 
 fake_response <- function(text = "Hello!", ...) {

@@ -54,7 +54,7 @@ vector such as \code{c(person_age = "age")}, or \code{FALSE} to keep only \code{
 
 \item{.rows_per_prompt}{Integer scalar, or \code{Inf}. Number of rows packed into a
 single generative request. The default, \code{1}, sends one request per row (the
-historical behaviour). When greater than \code{1}, rows are grouped and sent in
+historical behavior). When greater than \code{1}, rows are grouped and sent in
 one call wrapped in numbered \verb{<row_1>...</row_1>} tags (see \emph{Row batching}
 below); \code{Inf} sends all rows at once. Works in generative, tag, and
 structured modes; not applicable to embedding configurations.}

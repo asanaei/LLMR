@@ -418,8 +418,6 @@ call_llm_compare <- function(configs_list,
 #'   cache, so deduplication is per worker, not global.
 #' @param max_workers Integer. Maximum number of parallel workers. If NULL, auto-detects.
 #' @param progress Logical. If TRUE, shows progress bar.
-#' @param json_output Deprecated. Raw JSON string is always included as raw_response_json.
-#'                  This parameter is kept for backward compatibility but has no effect.
 #' @param start_jitter Each call starts after a uniformly distributed delay
 #'   between 0 and \code{start_jitter} seconds. The default is 0 (no delay);
 #'   set a few seconds when launching very large runs against a provider with
@@ -488,13 +486,8 @@ call_llm_par <- function(experiments,
                          memoize = FALSE,
                          max_workers = NULL,
                          progress = FALSE,
-                         json_output = NULL,
                          start_jitter = 0,
                          .request_hash = FALSE) {
-
-  if (!is.null(json_output) && verbose) {
-    message("Note: The 'json_output' parameter is deprecated. Raw JSON is always included as 'raw_response_json'.")
-  }
 
   if (!requireNamespace("future", quietly = TRUE)) {
     stop("The 'future' package is required. Please install it with: install.packages('future')")

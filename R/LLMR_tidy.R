@@ -148,7 +148,7 @@
 #'   available together with `.tags`.
 #' @param .rows_per_prompt Integer scalar, or `Inf`. Number of input elements packed
 #'   into a single generative request. The default, `1`, sends one request per
-#'   element (the historical behaviour). When greater than `1`, elements are
+#'   element (the historical behavior). When greater than `1`, elements are
 #'   grouped and transmitted in one call wrapped in numbered
 #'   `<row_1>...</row_1>` tags (see *Row batching* below); `Inf` sends all
 #'   elements in a single call. Ignored for embedding configurations, which use
@@ -409,7 +409,7 @@ llm_fn <- function(x,
 #'   unless `.fields = FALSE`.
 #' @param .rows_per_prompt Integer scalar, or `Inf`. Number of rows packed into a
 #'   single generative request. The default, `1`, sends one request per row (the
-#'   historical behaviour). When greater than `1`, rows are grouped and sent in
+#'   historical behavior). When greater than `1`, rows are grouped and sent in
 #'   one call wrapped in numbered `<row_1>...</row_1>` tags (see *Row batching*
 #'   below); `Inf` sends all rows at once. Works in generative, tag, and
 #'   structured modes; not applicable to embedding configurations.
@@ -452,7 +452,7 @@ llm_fn <- function(x,
 #' This also composes with `.tags` (each `<row_i>` then wraps the requested field
 #' tags) and with `.structured = TRUE` (rows are returned as one JSON object
 #' `{"results":[{"row":i, ...}]}`, de-multiplexed by the integer `row` field; a
-#' one-time warning notes that this relies on the model honouring the protocol
+#' one-time warning notes that this relies on the model honoring the protocol
 #' and that strict provider-side schema validation is replaced by local parsing).
 #' Batching is most useful with capable models at `temperature = 0` and is a net
 #' loss when the model ignores the wrapping. Dropped, reordered, duplicated, or

@@ -16,12 +16,14 @@ A 64-character lowercase SHA-256 hex string.
 \description{
 One hash convention for the whole LLMR ecosystem: prompts, codebooks,
 coding protocols, archived requests. The object is reduced to a canonical
-form (classes stripped, named lists sorted by name, functions replaced by
-their deparsed source), rendered as canonical JSON, and hashed with
+form (list classes stripped, named lists sorted by name, functions replaced
+by their deparsed source), rendered as canonical JSON, and hashed with
 SHA-256 over the UTF-8 bytes of that string. Two consequences worth
 stating: equal content hashes equally regardless of construction order or
-S3 class, and the hash does not depend on R's serialization format, so a
-value recorded in a paper today is checkable on any machine later.
+list class, and the hash does not depend on R's serialization format, so a
+value recorded in a paper today is checkable on any machine later. Atomic
+vectors hash by their canonical JSON rendering, class included: a \code{Date}
+hashes as its date string, not as its unclassed integer.
 }
 \details{
 Downstream packages treat these hashes as identifiers of record

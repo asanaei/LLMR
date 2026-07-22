@@ -14,7 +14,6 @@ call_llm_par(
   memoize = FALSE,
   max_workers = NULL,
   progress = FALSE,
-  json_output = NULL,
   start_jitter = 0,
   .request_hash = FALSE
 )
@@ -43,9 +42,6 @@ cache, so deduplication is per worker, not global.}
 \item{max_workers}{Integer. Maximum number of parallel workers. If NULL, auto-detects.}
 
 \item{progress}{Logical. If TRUE, shows progress bar.}
-
-\item{json_output}{Deprecated. Raw JSON string is always included as raw_response_json.
-This parameter is kept for backward compatibility but has no effect.}
 
 \item{start_jitter}{Each call starts after a uniformly distributed delay
 between 0 and \code{start_jitter} seconds. The default is 0 (no delay);

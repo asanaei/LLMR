@@ -15,9 +15,9 @@
 
 #' LLMR: unified LLM workflows for R
 #'
-#' LLMR provides provider-agnostic text generation, embeddings, structured JSON,
-#' XML-like tag extraction, chat sessions, robust retries, and parallel
-#' experiment utilities.
+#' One configuration object ([llm_config()]) and one calling interface
+#' ([call_llm()] and its tidy, parallel, and batch variants) across
+#' language-model providers, for research workflows in R.
 #'
 #' @section Common workflows:
 #' - One prompt: [call_llm()] or [call_llm_robust()]
@@ -39,7 +39,7 @@
 
 # ----- Internal Helper Functions -----
 
-#' Normalise message inputs  (LLMR.R)
+#' Normalize message inputs  (LLMR.R)
 #'
 #' Called once in `call_llm()` (not in embedding mode).
 #' Rules, in order:

@@ -107,11 +107,11 @@
 #'     return it. `text` may also be a named character vector using the same
 #'     multimodal shortcut as [call_llm()], e.g.
 #'     `chat$send(c(user = "Describe this image.", file = "plot.png"))`.}
-#'   \item{\code{$send_structured(text, schema, ..., role = "user", .fields = NULL, .validate_local = TRUE)}}{
+#'   \item{\code{$send_structured(text, schema, ..., role = "user", .validate_local = TRUE)}}{
 #'     Send a message with structured-output enabled using `schema`, append the assistant's reply,
 #'     parse JSON (and optionally validate locally when `.validate_local = TRUE`),
 #'     returning the parsed result invisibly.}
-#'   \item{\code{$send_tags(text, .tags, ..., role = "user", .fields = NULL)}}{
+#'   \item{\code{$send_tags(text, .tags, ..., role = "user")}}{
 #'     Send a message with XML-like tag instructions injected, append the
 #'     assistant's reply, parse the requested tags, and invisibly return
 #'     the parsed list.}
@@ -239,7 +239,7 @@ chat_session <- function(config, system = NULL, quiet = FALSE, ...) {
   }
 
   send_structured <- function(text, schema, ..., role = "user",
-                              .fields = NULL, .validate_local = TRUE) {
+                              .validate_local = TRUE) {
     stopifnot(is.list(schema))
     e$messages <- append(e$messages, list(.msg(role, text)))
 
@@ -272,7 +272,7 @@ chat_session <- function(config, system = NULL, quiet = FALSE, ...) {
     invisible(parsed)
   }
 
-  send_tags <- function(text, .tags, ..., role = "user", .fields = NULL) {
+  send_tags <- function(text, .tags, ..., role = "user") {
     tags <- .validate_tags(.tags)
     instruction <- .tag_prompt(tags)
     augmented <- paste(text, instruction, sep = "\n\n")

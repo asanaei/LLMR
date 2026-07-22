@@ -43,7 +43,7 @@ columns (\code{{col}}); with a vector the placeholder is \code{{x}}.}
 
 \item{.rows_per_prompt}{Integer scalar, or \code{Inf}. Number of input elements packed
 into a single generative request. The default, \code{1}, sends one request per
-element (the historical behaviour). When greater than \code{1}, elements are
+element (the historical behavior). When greater than \code{1}, elements are
 grouped and transmitted in one call wrapped in numbered
 \verb{<row_1>...</row_1>} tags (see \emph{Row batching} below); \code{Inf} sends all
 elements in a single call. Ignored for embedding configurations, which use

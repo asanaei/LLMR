@@ -80,6 +80,12 @@ that differ only in features outside this key -- the OpenAI Responses API
 defaults -- may hash the same across the config and log sides. The archive
 layer's collision detection is the backstop for those cases: it flags when one
 replay key gathers records whose stored request hashes disagree.
+
+The config side hashes the request as declared. A declared parameter that a
+provider builder discards as unsupported (with its printed note, e.g.
+\code{top_k} on OpenAI) is still part of the declared identity, so the config-side
+hash and the logged transmitted body then differ; set \code{no_change = TRUE} to
+send the parameter as declared, or leave it out of the config.
 }
 
 \examples{

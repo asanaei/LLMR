@@ -43,7 +43,7 @@ dilemmas <- tibble::tibble(
 )
 ```
 
-## Vectorised Execution with Soft Structuring
+## Vectorized Execution with Soft Structuring
 
 To extract the model's decisions, we call `llm_mutate()`. Rather than imposing a rigid JSON schema, which some inference endpoints handle poorly, we ask the model to mark its answer with simple XML-like tags. Tags place fewer demands on the provider than schema validation, so the same prompt works across a wider range of endpoints.
 

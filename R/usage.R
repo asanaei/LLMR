@@ -412,24 +412,3 @@ report.llmr_experiment <- function(x, prefix = NULL, task = NULL, ...) {
   )
 }
 
-#' Deprecated methods-paragraph helper
-#'
-#' `llm_methods_text()` is retained for compatibility. Use [report()] on an
-#' `llmr_experiment` instead.
-#'
-#' @inheritParams llm_usage
-#' @param task Optional clause describing what the model was asked to do.
-#' @return A character scalar from [report()].
-#' @seealso [report()]
-#' @export
-llm_methods_text <- function(x, prefix = NULL, task = NULL) {
-  rlang::warn(
-    "`llm_methods_text()` is deprecated; use `report()` instead.",
-    .frequency = "once",
-    .frequency_id = "llmr-llm_methods_text"
-  )
-  if (!inherits(x, "llmr_experiment")) {
-    class(x) <- unique(c("llmr_experiment", class(x)))
-  }
-  report(x, prefix = prefix, task = task)
-}

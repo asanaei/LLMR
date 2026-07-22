@@ -71,11 +71,11 @@ print the assistant's reply (unless \code{quiet = TRUE}), and invisibly
 return it. \code{text} may also be a named character vector using the same
 multimodal shortcut as \code{\link[=call_llm]{call_llm()}}, e.g.
 \code{chat$send(c(user = "Describe this image.", file = "plot.png"))}.}
-\item{\code{$send_structured(text, schema, ..., role = "user", .fields = NULL, .validate_local = TRUE)}}{
+\item{\code{$send_structured(text, schema, ..., role = "user", .validate_local = TRUE)}}{
 Send a message with structured-output enabled using \code{schema}, append the assistant's reply,
 parse JSON (and optionally validate locally when \code{.validate_local = TRUE}),
 returning the parsed result invisibly.}
-\item{\code{$send_tags(text, .tags, ..., role = "user", .fields = NULL)}}{
+\item{\code{$send_tags(text, .tags, ..., role = "user")}}{
 Send a message with XML-like tag instructions injected, append the
 assistant's reply, parse the requested tags, and invisibly return
 the parsed list.}

@@ -3,7 +3,7 @@
 # template vector into the per-row message objects that the generative call
 # path consumes. Both llm_fn() and llm_mutate() delegate here, and llm_preview()
 # reuses the very same code so a dry-run can never drift from what is actually
-# sent. Behaviour is locked by golden tests in test-render-messages.R.
+# sent. Behavior is locked by golden tests in test-render-messages.R.
 
 # Roles accepted in a `.messages` template. Kept identical to the value used at
 # the llm_fn()/llm_mutate() call sites.
