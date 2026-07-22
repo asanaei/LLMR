@@ -61,3 +61,14 @@ test_that("zero-row experiment paths preserve the experiment class", {
   expect_s3_class(compare, "llmr_experiment")
   expect_match(report(compare), "contains no calls")
 })
+
+test_that("llm_methods_text warns once and delegates to report", {
+  rlang::reset_warning_verbosity("llmr-llm_methods_text")
+  x <- experiment_result()
+  expected <- report(x, task = "to classify short texts")
+  expect_warning(
+    first <- llm_methods_text(x, task = "to classify short texts"),
+    "deprecated"
+  )
+  expect_identical(first, expected)
+})

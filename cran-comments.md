@@ -32,5 +32,9 @@ Both notes are environmental, not package issues:
 
 ## Reverse dependencies
 
-None on CRAN. Several of the author's other packages depend on LLMR and will be
-submitted after it is accepted.
+LLMR.shiny 0.1.1 and LLMRagent 0.8.0 (both this maintainer's) were checked
+against this version: Status OK for both. `llm_methods_text()`, which
+LLMRagent 0.8.0 calls, is kept as a deprecated wrapper for this release and
+will be removed once the already-prepared LLMRagent update is on CRAN.
+Updates of both packages, and three new packages that depend on LLMR, follow
+this submission.

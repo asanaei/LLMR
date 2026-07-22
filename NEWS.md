@@ -11,9 +11,10 @@
 * `llm_batch_submit(state_path = )` refuses to persist a job whose config
   carries a literal API key; environment-variable handles round-trip as
   before.
-* Removed: `llm_methods_text()` (use `report()`), the inert `json_output`
-  argument of `call_llm_par()`, and the inert `.fields` argument of the chat
-  session's `$send_structured()` and `$send_tags()`.
+* Removed: the inert `json_output` argument of `call_llm_par()` and the inert
+  `.fields` argument of the chat session's `$send_structured()` and
+  `$send_tags()`. `llm_methods_text()` is deprecated in favor of `report()`
+  and will be removed once the current 'LLMRagent' release no longer calls it.
 * New provider `"openrouter"`: chat, streaming, and structured output through
   OpenRouter's OpenAI-compatible aggregator (model ids like
   `"openai/gpt-4o-mini"`; key from `OPENROUTER_API_KEY`). OpenRouter has no

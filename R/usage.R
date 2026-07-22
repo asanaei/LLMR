@@ -412,3 +412,27 @@ report.llmr_experiment <- function(x, prefix = NULL, task = NULL, ...) {
   )
 }
 
+
+#' Deprecated methods-paragraph helper
+#'
+#' Deprecated: use [report()] on an `llmr_experiment`. This wrapper keeps the
+#' released 'LLMRagent' 0.8.0 functional and will be removed once its update
+#' is on CRAN.
+#'
+#' @inheritParams llm_usage
+#' @param task Optional clause describing what the model was asked to do.
+#' @return A character scalar from [report()].
+#' @seealso [report()]
+#' @keywords internal
+#' @export
+llm_methods_text <- function(x, prefix = NULL, task = NULL) {
+  rlang::warn(
+    "`llm_methods_text()` is deprecated; use `report()` instead.",
+    .frequency = "once",
+    .frequency_id = "llmr-llm_methods_text"
+  )
+  if (!inherits(x, "llmr_experiment")) {
+    class(x) <- unique(c("llmr_experiment", class(x)))
+  }
+  report(x, prefix = prefix, task = task)
+}
