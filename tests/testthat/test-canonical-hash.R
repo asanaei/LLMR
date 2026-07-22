@@ -69,7 +69,7 @@ test_that("the log side also picks up a body-only param, and agrees with config"
 })
 
 test_that("config-side and log-side hashes agree after provider param renames", {
-  # The provider builders rename canonical params (Gemini camelCase, OpenAI
+  # The provider builders rename common generation settings (Gemini camelCase, OpenAI
   # o-series max_completion_tokens); the log side must reverse those so a logged
   # body and the config that produced it still hash identically.
   # Building a request resolves the API key into headers, so give each provider

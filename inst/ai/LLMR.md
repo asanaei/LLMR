@@ -1,9 +1,9 @@
 ---
 name: llmr
-description: One provider-neutral configuration and call interface for language-model research in R, from single calls to parallel and batch experiments with audit logging.
+description: One provider-neutral configuration and call interface for language-model research in R, from single calls to parallel and batch experiments with call logging.
 ---
 
-# LLMR -- usage capsule for AI assistants
+# LLMR -- usage capsule
 
 This capsule summarizes how to use the package correctly. For more detail, see
 the vignettes `quickstart`, `tidy-and-structured`, `about-schema`,
@@ -26,7 +26,7 @@ report it, do not work around it.
 ```r
 llm_config(provider, model, api_key = NULL, troubleshooting = FALSE,
            base_url = NULL, embedding = NULL, no_change = FALSE, ...)
-  # canonical params: temperature, max_tokens, top_p, seed, logprobs,
+  # common generation settings: temperature, max_tokens, top_p, seed, logprobs,
   # top_logprobs, thinking_budget, timeout, cache; api_url for any
   # OpenAI-compatible server (vLLM, llama.cpp, localhost)
 call_llm(config, messages, verbose = FALSE)      # -> llmr_response
@@ -60,7 +60,7 @@ llm_log_enable(path, include_messages = TRUE); llm_log_disable()
 llm_replicate(.data, output, prompt, .config, .times = 3, ...)
 llm_agreement(.data, cols = NULL, prefix = NULL)
 llm_usage(x, price_table = NULL); report(x, ...)
-llm_hash(x)        # the ecosystem content-hash convention
+llm_hash(x)        # the stable content hash used across these packages
 chat_session(config, system = NULL, ...)
 ```
 
@@ -72,7 +72,7 @@ c(system = "be terse", user = "the question")          # named multi-role
 c(user = "describe this", file = "path/to/image.png")  # multimodal
 ```
 
-## Canonical patterns
+## Common usage patterns
 
 ```r
 cfg <- llm_config("groq", "openai/gpt-oss-20b", temperature = 0)
@@ -92,6 +92,22 @@ schema <- list(type = "object",
                required = list("stance"))
 out <- llm_mutate_structured(df, ans, prompt = "...{text}",
                              .config = cfg, .schema = schema)
+
+# comparative experiment with a call log
+cfg2 <- llm_config("groq", "llama-3.1-8b-instant", temperature = 0)
+design <- build_factorial_experiments(
+  configs = list(cfg, cfg2),
+  user_prompts = c("Summarize the Apollo program.",
+                   "Summarize the Manhattan Project."),
+  repetitions = 2
+)
+log_path <- tempfile(fileext = ".jsonl")
+llm_log_enable(log_path)
+study <- call_llm_par(design)
+llm_log_disable()
+llm_usage(study)
+llm_failures(study)
+report(study)
 ```
 
 ## Rules and provider facts

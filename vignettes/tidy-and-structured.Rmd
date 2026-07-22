@@ -14,12 +14,13 @@ knitr::opts_chunk$set(
 )
 ```
 
-We will show both unstructured and structured pipelines, using open models:
-- deepseek-chat (DeepSeek)
-- llama-3.1-8b-instant (Groq)
-- openai/gpt-oss-20b (Groq)
+Many studies apply one measurement instruction to each value in a vector or
+each row in a data frame. `llm_fn()` and `llm_mutate()` express that operation,
+while their structured variants return named fields for subsequent analysis.
 
-You will need environment variables DEEPSEEK_API_KEY and GROQ_API_KEY.
+This vignette compares unstructured and structured pipelines with one DeepSeek
+model and two Groq-hosted models. Live examples require `DEEPSEEK_API_KEY`,
+`GROQ_API_KEY`, and `LLMR_RUN_VIGNETTES=true` in the R environment.
 
 ```{r}
 library(LLMR)

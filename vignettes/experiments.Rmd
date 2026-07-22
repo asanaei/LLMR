@@ -15,15 +15,17 @@ knitr::opts_chunk$set(
 
 ## Overview
 
-This vignette demonstrates:
+Comparative studies ask whether responses change across models, conditions, and
+repeated draws. This example covers three model configurations and two task
+conditions, runs the factorial design in parallel, and compares unstructured
+with schema-structured results.
 
-1. Building factorial experiment designs with `build_factorial_experiments()`
-2. Running experiments in parallel with `call_llm_par()`
-3. Comparing unstructured vs. structured output across providers
-
-The workflow builds a factorial design, runs the calls in parallel, and then analyzes the returned tibble.
-
-We will compare three configurations on two prompts, once unstructured and once with structured output. We use open models via DeepSeek and Groq to ensure fast and low-cost execution.
+For broader designs, `repetitions`, `call_llm_compare()`, `call_llm_sweep()`,
+`llm_par_resume()`, `llm_failures()`, and `llm_log_enable()` support repeated
+runs, direct comparisons, parameter sweeps, interrupted-run recovery,
+diagnostics, and call logging. Those facilities are outside this example. Live
+execution requires `DEEPSEEK_API_KEY`, `GROQ_API_KEY`, and
+`LLMR_RUN_VIGNETTES=true` in the R environment.
 
 ```{r}
 library(LLMR)
@@ -89,5 +91,4 @@ res_structured |>
 
 
 ```
-
 

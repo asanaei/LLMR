@@ -1167,7 +1167,7 @@ call_llm.anthropic <- function(config, messages, verbose = FALSE) {
     )
   })
 
-  # Translate canonical params but keep unknowns
+  # Translate common generation settings but keep unknowns
   params <- .translate_params("anthropic", config$model_params,
                               auto_fix = !isTRUE(config$no_change))
 

@@ -14,17 +14,13 @@ knitr::opts_chunk$set(
 )
 ```
 
-This vignette shows basic chat usage with four models across two open providers:
-- DeepSeek: deepseek-chat
-- DeepSeek: deepseek-reasoner
-- Groq: llama-3.1-8b-instant
-- Groq: openai/gpt-oss-20b
+A stateful conversation is useful when a later question depends on earlier
+instructions or replies. `chat_session()` retains that context across turns and
+provides access to the resulting conversation history.
 
-You will need API keys in these environment variables: DEEPSEEK_API_KEY, GROQ_API_KEY.
-
-To run these examples locally, set a local flag:
-- Sys.setenv(LLMR_RUN_VIGNETTES = "true")
-- or add LLMR_RUN_VIGNETTES=true to ~/.Renviron
+The examples use two DeepSeek models and two Groq-hosted models. To run them,
+set `DEEPSEEK_API_KEY`, `GROQ_API_KEY`, and `LLMR_RUN_VIGNETTES=true` in the R
+environment.
 
 ## DeepSeek: deepseek-chat
 ```{r}

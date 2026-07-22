@@ -101,7 +101,7 @@ to `"tool"` marks an *intermediate* state -- a response asking for tools, not
 a final answer; `call_llm_tools()` handles those for you, and you only meet
 them if you drive the loop yourself with `tool_calls()`.
 
-A privacy note: `tool_history` (and the audit log, if enabled) records tool
+A privacy note: `tool_history` (and the call log, if enabled) records tool
 arguments and results verbatim. If tools touch sensitive data, treat those
 records with the same care as the data.
 
@@ -169,11 +169,11 @@ high probability means the model was sure, not that it was right; on
 well-posed items the interesting observations are precisely the low-`p`
 cases, which are natural candidates for human review.
 
-## Where the other machinery lives
+## Related features
 
 These three features compose with everything else: a tool loop streams its
 final answer no differently, a logprobs request travels through
-`call_llm_par()` like any config, and all of it lands in the audit log when
+`call_llm_par()` like any config, and all of it lands in the call log when
 `llm_log_enable()` is on. For that log, replication helpers, cost
 accounting, prompt caching, and the half-price batch APIs, continue with
 `vignette("reproducibility-and-cost")`.

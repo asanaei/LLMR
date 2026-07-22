@@ -1,4 +1,4 @@
-# Offline tests for the persona-frame contract helpers and the bundled dataset.
+# Offline tests for the persona data-frame helpers and the bundled dataset.
 
 test_that("anes_2024_personas loads and is well-formed", {
   data(anes_2024_personas, package = "LLMR")

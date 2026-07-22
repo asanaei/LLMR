@@ -24,116 +24,119 @@ articles:
 - title: Getting Started
   contents:
   - quickstart
+  - reproducibility-and-cost
   - chat-basics
   - tidy-and-structured
+- title: Experiments
+  contents:
+  - experiments
+  - trolley-dilemma-experiment
 - title: Structured Output
   contents:
-  - trolley-dilemma-experiment
   - about-schema
 - title: Advanced
   contents:
-  - experiments
   - interactive-calls
-  - reproducibility-and-cost
   - presidential_embeddings
 reference:
-- title: Core
+- title: Configure, call, and transform data
   contents:
   - llm_config
-  - print.llm_config
-  - llm_api_key_env
   - call_llm
-  - call_llm_stream
+  - llm_fn
+  - llm_mutate
   - llmr_response
   - finish_reason
   - tokens
   - is_truncated
-  - chat_session
-- title: Structured output
+  - llm_api_key_env
+  - print.llm_config
+- title: Experiments and model comparisons
   contents:
-  - enable_structured_output
-  - disable_structured_output
-  - llm_parse_structured
-  - llm_parse_structured_col
-  - llm_parse_tags
-  - llm_parse_tags_col
-  - llm_validate_structured_col
-  - llm_fn_structured
-  - llm_mutate_structured
-  - llm_mutate_tags
-  - llm_fn_tags
-  - call_llm_par_structured
-  - call_llm_par_tags
-- title: Inspecting and summarizing runs
-  contents:
-  - llm_preview
-  - llm_render_messages
-  - transcript_as_messages
-  - ensure_alternating_messages
-  - llm_usage
-  - llm_failures
-  - llm_log_enable
-  - llm_log_read
-  - llm_logprobs
-  - llm_hash
-- title: Provenance and replay
-  desc: >
-    Turning an audit log back into a reproducible request: a content hash of a
-    request, the response record it produced, and the reconstruction of a
-    request from a logged call.
-  contents:
-  - llm_request_hash
-  - llm_request_from_log
-  - llm_response_record
-- title: Reporting and family generics
-  desc: >
-    Experiment reporting plus shared generics implemented by LLMR family
-    packages on their result objects.
-  contents:
-  - diagnostics
-  - report
-  - reset
-- title: Tidy helpers and parallel
-  contents:
-  - llm_fn
-  - llm_mutate
-  - llm_replicate
-  - llm_agreement
   - build_factorial_experiments
   - call_llm_par
   - call_llm_broadcast
   - call_llm_sweep
   - call_llm_compare
-  - llm_par_resume
   - llm_judge
   - setup_llm_parallel
   - reset_llm_parallel
-- title: Batch APIs (asynchronous, discounted)
+- title: Logs, replication, and reporting
+  desc: >
+    Local call logs, repeated measurements, usage summaries, failures, and
+    study reports.
+  contents:
+  - llm_log_enable
+  - llm_log_disable
+  - llm_log_status
+  - llm_log_active
+  - llm_log_read
+  - llm_replicate
+  - llm_agreement
+  - llm_usage
+  - llm_failures
+  - report
+  - llm_methods_text
+- title: Structured and tagged outputs
+  contents:
+  - enable_structured_output
+  - disable_structured_output
+  - llm_fn_structured
+  - llm_mutate_structured
+  - call_llm_par_structured
+  - llm_parse_structured
+  - llm_parse_structured_col
+  - llm_validate_structured_col
+  - llm_fn_tags
+  - llm_mutate_tags
+  - call_llm_par_tags
+  - llm_parse_tags
+  - llm_parse_tags_col
+- title: Conversations, tools, and streaming
+  contents:
+  - chat_session
+  - llm_tool
+  - llm_tool_signature
+  - call_llm_tools
+  - tool_calls
+  - call_llm_stream
+  - llm_logprobs
+- title: Embeddings
+  contents:
+  - get_batched_embeddings
+  - parse_embeddings
+- title: Asynchronous batch jobs
   contents:
   - llm_batch_submit
   - llm_batch_status
   - llm_batch_fetch
   - llm_batch_cancel
-- title: Tools (function calling)
+- title: Inspection, reliability, and recovery
   contents:
-  - llm_tool
-  - llm_tool_signature
-  - call_llm_tools
-  - tool_calls
-- title: Embeddings
-  contents:
-  - parse_embeddings
-  - get_batched_embeddings
-- title: Reliability
-  contents:
+  - llm_preview
+  - llm_render_messages
   - call_llm_robust
-- title: Persona data
+  - llm_par_resume
+- title: Persona and transcript data
   desc: >
-    A bundled example persona dataset and the small contract helpers that read
-    such frames, shared across the LLMR family.
+    A bundled example persona dataset and functions for inspecting and
+    validating persona data frames shared across the LLMR family.
   contents:
   - anes_2024_personas
   - llm_persona_split
   - llm_persona_overview
   - llm_persona_demographic_fields
   - llm_validate_persona_frame
+  - transcript_as_messages
+  - ensure_alternating_messages
+- title: Request records and shared methods
+  desc: >
+    Reconstruct calls from logs, inspect request records, and use common
+    diagnostics and reset methods for package results.
+  contents:
+  - llm_request_hash
+  - llm_request_from_log
+  - llm_response_record
+  - llm_hash
+  - diagnostics
+  - reset

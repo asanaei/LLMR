@@ -23,9 +23,14 @@ run_llmr_vignette <-
   !is_package_check
 ```
 
-This vignette demonstrates how to use LLMR for embedding analysis of presidential inaugural speeches.
+Which selected inaugural-address excerpts are closest in an embedding space?
+This vignette represents the excerpts as vectors and compares their cosine
+similarity. Similarity among these selected excerpts is not a measure of
+presidential rhetoric in general; it describes these passages under one
+embedding model and preprocessing workflow.
 
-**Note:** This vignette requires a valid Gemini API key and never runs live API calls during package checks. To run it locally, set `LLMR_RUN_VIGNETTES=true` before rendering.
+Live calls require `GEMINI_API_KEY` and `LLMR_RUN_VIGNETTES=true` in the R
+environment. They do not run during package checks.
 
 ```{r setup}
 library(LLMR)

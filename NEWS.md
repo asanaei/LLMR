@@ -53,7 +53,7 @@ A bug-fix release; all changes are backward compatible.
 * Bundled example data `anes_2024_personas`: 100 participant profiles derived
   from the ANES 2024 public release, the shared persona dataset of the LLMR
   family.
-* Persona-frame contract helpers: `llm_persona_split()`,
+* Persona data-frame helpers: `llm_persona_split()`,
   `llm_persona_overview()`, `llm_persona_dictionary()`,
   `llm_persona_demographic_fields()`, `llm_validate_persona_frame()`.
 
@@ -67,7 +67,7 @@ A bug-fix release; all changes are backward compatible.
 
 * Row-packing controls renamed (`.batch_size` -> `.rows_per_prompt`, and kin);
   the word "batch" is now reserved for the asynchronous provider Batch API.
-* `llm_log_read()`: parse a JSONL audit log into records plus a per-record
+* `llm_log_read()`: parse a JSONL call log into records plus a per-record
   manifest with record and request hashes.
 * `llm_request_hash()` canonicalizes message shape and keys on all generation
   parameters, so a logged call and its config hash identically.
@@ -75,7 +75,7 @@ A bug-fix release; all changes are backward compatible.
 
 # LLMR 0.8.5
 
-* Provenance helpers: `llm_response_record()` (one-row response contract; a
+* Provenance helpers: `llm_response_record()` (one-row response record; a
   failed call is a row, never a dropped call) and `llm_request_hash()` (stable
   identity for a call).
 
@@ -89,7 +89,7 @@ A bug-fix release; all changes are backward compatible.
 * Provider Batch APIs at roughly half price: `llm_batch_submit()`,
   `llm_batch_status()`, `llm_batch_fetch()`, `llm_batch_cancel()` (OpenAI,
   Groq, Anthropic, Gemini).
-* Audit log for reproducible research (`llm_log_enable()`), a draft methods
+* Call log for reproducible research (`llm_log_enable()`), a draft methods
   paragraph (`llm_methods_text()`), and replication with agreement statistics
   (`llm_replicate()`, `llm_agreement()`).
 * Native tool calling (`llm_tool()`, `call_llm_tools()`) and streaming
@@ -128,7 +128,7 @@ A bug-fix release; all changes are backward compatible.
 * Soft structured output via XML-like tags: `.tags` on `llm_mutate()`, plus
   `llm_mutate_tags()`, `llm_fn_tags()`, and the tag parsers.
 * Four new providers (Xiaomi, Alibaba/Qwen, Zhipu, Moonshot) and Gemini on
-  Vertex AI.
+  Google Cloud Vertex.
 
 # LLMR 0.6.3
 

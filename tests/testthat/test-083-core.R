@@ -7,7 +7,7 @@ library(LLMR)
 
 # ---- request builders: OpenAI-compatible -----------------------------------
 
-test_that("compat builder forwards canonical params, seed, and logprobs", {
+test_that("compat builder forwards common generation settings, seed, and logprobs", {
   cfg <- llm_config("groq", "openai/gpt-oss-20b",
                     temperature = 0.2, top_p = 0.9, max_tokens = 50,
                     seed = 110, logprobs = TRUE, top_logprobs = 3)
