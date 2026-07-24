@@ -277,3 +277,7 @@ among model agents. An overview of the family lives at the
 
 Bug reports and feature requests: [GitHub Issues](https://github.com/asanaei/LLMR/issues).
 Pull requests welcome. See [CONTRIBUTING.md](https://github.com/asanaei/LLMR/blob/main/CONTRIBUTING.md).
+
+## License
+
+This project uses the MIT License; see `LICENSE`.
