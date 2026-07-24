@@ -16,19 +16,20 @@ exported.
 
 ## R CMD check results
 
-0 errors | 0 warnings | 2 notes
+0 errors | 0 warnings | 3 notes
 
-Both notes are environmental, not package issues:
+The notes are environmental, not package issues:
 
+- "checking CRAN incoming feasibility ... NOTE": new-version housekeeping. It
+  may also report the `man/anes_2024_personas.Rd` \source URL
+  (electionstudies.org) as "possibly invalid" because that host returns HTTP
+  403 to automated requests; the URL is correct and reachable in a browser.
 - "checking for future file timestamps ... NOTE (unable to verify current time)":
   a clock-comparison artifact of the local build machine; it does not appear on
   CRAN's check machines.
 - "checking HTML version of manual ... NOTE": emitted by an older system `tidy`
   that does not recognize valid HTML5 elements (`<main>`, `<details>`) in the help
   pages R itself generates; it does not reproduce on CRAN.
-- The `man/anes_2024_personas.Rd` \source URL (electionstudies.org) may be
-  flagged as "possibly invalid" because that host returns HTTP 403 to automated
-  requests; it is correct and reachable in a browser.
 
 ## Reverse dependencies
 
