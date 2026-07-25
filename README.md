@@ -1,6 +1,4 @@
-# LLMR
-
-<img src="https://github.com/asanaei/LLMR/raw/main/assets/LLMR_512x512.png" width="120" alt="LLMR logo">
+# LLMR <img src="man/figures/logo.png" align="right" width="120" alt="LLMR icon" />
 
 [![CRAN status](https://www.r-pkg.org/badges/version/LLMR)](https://CRAN.R-project.org/package=LLMR)
 [![CRAN downloads](https://cranlogs.r-pkg.org/badges/grand-total/LLMR)](https://cran.r-project.org/package=LLMR)
