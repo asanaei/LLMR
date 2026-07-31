@@ -70,10 +70,16 @@ using the wrong region returns HTTP 401.
 hosted models; its optional attribution headers (\code{HTTP-Referer},
 \code{X-Title}) can be added through the \code{req_builder} hook of
 \code{\link[=llm_config]{llm_config()}}. No embeddings or batch API.
-\item \strong{Error handling:} HTTP errors raise structured conditions with
-classes like \code{llmr_api_param_error}, \code{llmr_api_rate_limit_error},
-\code{llmr_api_server_error}; see the condition fields for status, code,
-request id, and (where supplied) the offending parameter.
+\item \strong{Error handling:} HTTP errors raise structured conditions
+classed by cause: \code{llmr_api_param_error}, \code{llmr_api_auth_error},
+\code{llmr_api_billing_error}, \code{llmr_api_rate_limit_error},
+\code{llmr_api_server_error}, \code{llmr_api_unknown_error}. Classification
+uses each provider's documented error codes, so the same signal is
+read per provider (OpenAI's \code{insufficient_quota} is an empty
+balance; DashScope's is throttling). Billing blocks are never
+retried. The condition fields carry status, code, request id, the
+parsed body (\code{response_body}), and, where supplied, the offending
+parameter.
 }
 }
 

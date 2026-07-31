@@ -9,6 +9,17 @@
   model-params tip appears only for parameter errors, with the flagged
   parameter named when the provider identifies one.
 
+* API failures are classified against a catalog of each provider's documented
+  error codes (R/errors_catalog.R) rather than by HTTP status alone. A new
+  `llmr_api_billing_error` class marks empty balances and spend caps, and
+  `call_llm_robust()` fails fast on it instead of retrying: OpenAI's
+  `insufficient_quota` (a 429) is an account block, while DashScope's
+  same-named code is throttling, and Moonshot separates quota, rate limit,
+  and overload behind one 429. Ollama's bare-string errors and Voyage's
+  `detail` field now surface as the reason instead of falling back to raw
+  JSON, and the condition's `code` field carries the provider's code, type,
+  or status string when one is sent.
+
 # LLMR 0.8.11
 
 * Fast-follow corrections cover attachment-aware request hashes, embedding

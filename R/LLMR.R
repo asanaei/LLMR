@@ -210,28 +210,19 @@ perform_request <- function(req, verbose, provider = NULL, model = NULL, config 
     err <- try(httr2::resp_body_json(resp, check_type = FALSE), silent = TRUE)
     raw_err <- try(httr2::resp_body_string(resp), silent = TRUE)
     raw_err <- if (inherits(raw_err, "try-error")) NA_character_ else trimws(raw_err)
-    category <- if (code >= 500) "server" else if (code == 429) "rate_limit"
-    else if (code %in% c(401L, 403L)) "auth"
-    else if (code == 408) "server"            # request timeout: transient, retried like a 5xx
-    else if (code == 400) "param" else "unknown"
-    bad_param <- if (!inherits(err, "try-error")) err$error$param %||% err$param %||% NA_character_ else NA_character_
     raw_tail <- if (!is.na(raw_err) && nzchar(raw_err)) substr(raw_err, 1L, 2000L) else NULL
-    err_reason <- if (!inherits(err, "try-error")) {
-      err$error$message %||% err$message %||% err$error$type %||% err$error$code %||%
-        raw_tail %||% "No message supplied"
-    } else {
-      raw_tail %||% "No message supplied"
-    }
-    # The tip is advice about malformed requests; it misleads when the provider
-    # is refusing for other reasons (spend caps, quotas) that also arrive as 400.
-    quota_like <- grepl("usage limit|quota|billing|credit|insufficient",
-                        err_reason, ignore.case = TRUE)
+    fields <- .llmr_error_fields(err, raw_tail)
+    err_reason <- fields$reason
+    bad_param  <- fields$param
+    category   <- .llmr_classify_error(provider, code, fields$code, err_reason)
     msg_lines <- c(
       "LLM API request failed.",
       paste0("HTTP status: ", code),
       paste0("Reason: ", err_reason),
       if (!is.na(bad_param)) paste0("Provider flagged parameter: ", bad_param)
-      else if (category == "param" && !quota_like)
+      else if (category == "billing")
+        "The account is blocked by billing or a spend limit, not by this request."
+      else if (category == "param")
         "Tip: check model params for provider/API version."
     )
     .llmr_log_event(
@@ -246,7 +237,7 @@ perform_request <- function(req, verbose, provider = NULL, model = NULL, config 
       provider    = provider %||% NA_character_,
       model       = model %||% NA_character_,
       param       = bad_param,
-      code        = if (!inherits(err, "try-error")) err$error$code %||% err$code %||% NA_character_ else NA_character_,
+      code        = fields$code,
       request_id  = httr2::resp_header(resp, "x-request-id") %||%
         httr2::resp_header(resp, "request-id"),
       retry_after = suppressWarnings(as.numeric(httr2::resp_header(resp, "retry-after") %||% NA_real_)),
@@ -829,10 +820,16 @@ format.llm_config <- function(x, ...) {
 #'         hosted models; its optional attribution headers (`HTTP-Referer`,
 #'         `X-Title`) can be added through the `req_builder` hook of
 #'         [llm_config()]. No embeddings or batch API.
-#'   \item \strong{Error handling:} HTTP errors raise structured conditions with
-#'         classes like `llmr_api_param_error`, `llmr_api_rate_limit_error`,
-#'         `llmr_api_server_error`; see the condition fields for status, code,
-#'         request id, and (where supplied) the offending parameter.
+#'   \item \strong{Error handling:} HTTP errors raise structured conditions
+#'         classed by cause: `llmr_api_param_error`, `llmr_api_auth_error`,
+#'         `llmr_api_billing_error`, `llmr_api_rate_limit_error`,
+#'         `llmr_api_server_error`, `llmr_api_unknown_error`. Classification
+#'         uses each provider's documented error codes, so the same signal is
+#'         read per provider (OpenAI's `insufficient_quota` is an empty
+#'         balance; DashScope's is throttling). Billing blocks are never
+#'         retried. The condition fields carry status, code, request id, the
+#'         parsed body (`response_body`), and, where supplied, the offending
+#'         parameter.
 #' }
 #'
 #' @section Message normalization:

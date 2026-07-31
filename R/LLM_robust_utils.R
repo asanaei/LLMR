@@ -31,13 +31,14 @@
 #' Classes produced:
 #'   - llmr_api_param_error
 #'   - llmr_api_auth_error
+#'   - llmr_api_billing_error
 #'   - llmr_api_rate_limit_error
 #'   - llmr_api_server_error
 #'   - llmr_api_unknown_error
 #'
 #' @keywords internal
 #' @noRd
-.llmr_error <- function(message, category = c("param","auth","rate_limit","server","unknown"),
+.llmr_error <- function(message, category = c("param","auth","billing","rate_limit","server","unknown"),
                         status_code = NA_integer_,
                         provider = NA_character_,
                         model = NA_character_,
@@ -212,8 +213,10 @@ call_llm_robust <- function(config, messages,
   # on a second attempt.
   is_retryable_error <- function(e) {
     # Typed LLMR conditions carry an exact category: rate limits and server
-    # errors are transient; param/auth/unknown are permanent, whatever their
-    # message text happens to contain (e.g., "context length exceeded").
+    # errors are transient; param/auth/billing/unknown are permanent, whatever
+    # their message text happens to contain (e.g., "context length exceeded").
+    # Billing blocks in particular cannot clear on a retry: the account has to
+    # change first.
     if (inherits(e, "llmr_api_rate_limit_error") || inherits(e, "llmr_api_server_error")) {
       return(TRUE)
     }
