@@ -650,7 +650,7 @@ call_llm_par <- function(experiments,
       cod0 <- tryCatch(e$code,        error = function(...) NA)
       # the provider's raw error body, when the typed condition carries one,
       # is preserved in raw_response_json so failures stay inspectable
-      bod0 <- tryCatch(e$body, error = function(...) NULL)
+      bod0 <- tryCatch(e$response_body, error = function(...) NULL)
       raw_err_json <- if (!is.null(bod0)) {
         tryCatch(as.character(jsonlite::toJSON(bod0, auto_unbox = TRUE, null = "null")),
                  error = function(...) raw_json_str)

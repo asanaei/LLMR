@@ -23,7 +23,10 @@
 #'
 #' Creates a typed error with a category-specific subclass, plus a common
 #' `llmr_api_error` base class. Extra fields (e.g., `param`) are attached
-#' as condition attributes for handlers to inspect.
+#' as condition attributes for handlers to inspect. The parsed provider
+#' payload travels as `response_body`; the name `body` is reserved by rlang
+#' for message bullets (character or function), and storing a list there
+#' breaks the top-level display of any uncaught error.
 #'
 #' Classes produced:
 #'   - llmr_api_param_error
@@ -42,7 +45,8 @@
                         code = NA_character_,
                         request_id = NA_character_,
                         retry_after = NA_real_,
-                        body = NULL) {
+                        response_body = NULL,
+                        call = rlang::caller_env()) {
 
   category <- match.arg(category)
   cls <- c(
@@ -60,6 +64,7 @@
     cli::cli_abort(
       message = safe_message,
       class   = cls,
+      call    = call,
       # attach fields for tryCatch handlers
       status_code = status_code,
       provider    = provider,
@@ -68,12 +73,13 @@
       code        = code,
       request_id  = request_id,
       retry_after = retry_after,
-      body        = body
+      response_body = response_body
     )
   } else {
     rlang::abort(
       message = message,
       class   = cls,
+      call    = call,
       status_code = status_code,
       provider    = provider,
       model       = model,
@@ -81,7 +87,7 @@
       code        = code,
       request_id  = request_id,
       retry_after = retry_after,
-      body        = body
+      response_body = response_body
     )
   }
 }

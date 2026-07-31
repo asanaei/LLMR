@@ -102,3 +102,25 @@ test_that("print.llmr_response prints a status line for non-standard finish reas
   expect_true(any(nzchar(out)))                  # the status line did not vanish
   expect_true(any(grepl("finish=end_turn", out, fixed = TRUE)))
 })
+
+test_that("uncaught API errors render at top level despite a list payload", {
+  # 0.8.11 stored the parsed provider payload under `body`, a condition field
+  # rlang reserves for message bullets; signal_abort() then failed inside
+  # cnd_body() and masked the real message for every uncaught API error.
+  cnd <- rlang::catch_cnd(
+    LLMR:::.llmr_error(
+      "LLM API request failed.\nHTTP status: 400\nReason: quota reached.",
+      category = "param", status_code = 400L, provider = "anthropic",
+      model = "m",
+      response_body = list(type = "error",
+                           error = list(type = "invalid_request_error",
+                                        message = "quota reached."))
+    )
+  )
+  expect_s3_class(cnd, "llmr_api_param_error")
+  expect_identical(cnd$response_body$error$message, "quota reached.")
+  expect_null(cnd$body)
+  # the exact path signal_abort() takes when the error is not caught
+  expect_no_error(rlang::cnd_message(cnd, inherit = TRUE, prefix = TRUE))
+  expect_match(conditionMessage(cnd), "quota reached")
+})

@@ -1,3 +1,14 @@
+# LLMR 0.8.12
+
+* Uncaught API errors print their message again. The parsed provider payload
+  now travels on the condition as `response_body`; the previous field name,
+  `body`, is reserved by rlang for message bullets, and storing a list there
+  made top-level display fail with "`body` field must be a character vector
+  or a function" while hiding the provider's reason. Error headers now show
+  the raising call instead of the internal constructor, and the
+  model-params tip appears only for parameter errors, with the flagged
+  parameter named when the provider identifies one.
+
 # LLMR 0.8.11
 
 * Fast-follow corrections cover attachment-aware request hashes, embedding

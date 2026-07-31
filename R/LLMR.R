@@ -222,11 +222,17 @@ perform_request <- function(req, verbose, provider = NULL, model = NULL, config 
     } else {
       raw_tail %||% "No message supplied"
     }
+    # The tip is advice about malformed requests; it misleads when the provider
+    # is refusing for other reasons (spend caps, quotas) that also arrive as 400.
+    quota_like <- grepl("usage limit|quota|billing|credit|insufficient",
+                        err_reason, ignore.case = TRUE)
     msg_lines <- c(
       "LLM API request failed.",
       paste0("HTTP status: ", code),
       paste0("Reason: ", err_reason),
-      "Tip: check model params for provider/API version."
+      if (!is.na(bad_param)) paste0("Provider flagged parameter: ", bad_param)
+      else if (category == "param" && !quota_like)
+        "Tip: check model params for provider/API version."
     )
     .llmr_log_event(
       kind = "error", provider = provider, model = model, status = code,
@@ -244,8 +250,8 @@ perform_request <- function(req, verbose, provider = NULL, model = NULL, config 
       request_id  = httr2::resp_header(resp, "x-request-id") %||%
         httr2::resp_header(resp, "request-id"),
       retry_after = suppressWarnings(as.numeric(httr2::resp_header(resp, "retry-after") %||% NA_real_)),
-      body        = if (!inherits(err, "try-error")) err
-                    else if (!is.null(raw_tail)) list(raw = raw_tail) else NULL
+      response_body = if (!inherits(err, "try-error")) err
+                      else if (!is.null(raw_tail)) list(raw = raw_tail) else NULL
     )
   }
 
