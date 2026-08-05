@@ -1,8 +1,8 @@
 # hash.R ------------------------------------------------------------------------
 # The ecosystem's content hash. Downstream packages (LLMRcontent protocols,
 # LLMRcontent archives) use these hashes as scientific identifiers -- a value
-# cited in a paper must be reproducible on any machine, in any R version,
-# forever. Hence: canonical form (list classes stripped, named lists sorted,
+# cited in a paper must be reproducible wherever the canonical form below
+# is implemented. Hence: canonical form (list classes stripped, named lists sorted,
 # functions deparsed), canonical JSON, SHA-256 over the UTF-8 bytes of that
 # string -- never over R's serialization of it, which varies by R version.
 
@@ -34,7 +34,9 @@
 #' SHA-256 over the UTF-8 bytes of that string. Two consequences worth
 #' stating: equal content hashes equally regardless of construction order or
 #' list class, and the hash does not depend on R's serialization format, so a
-#' value recorded in a paper today is checkable on any machine later. Atomic
+#' value recorded in a paper today is checkable later under this same
+#' canonicalization (call it hash schema v1: canonical JSON, SHA-256 over its
+#' UTF-8 bytes). Atomic
 #' vectors hash by their canonical JSON rendering, class included: a `Date`
 #' hashes as its date string, not as its unclassed integer.
 #'

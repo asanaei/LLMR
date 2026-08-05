@@ -124,3 +124,45 @@ test_that("uncaught API errors render at top level despite a list payload", {
   expect_no_error(rlang::cnd_message(cnd, inherit = TRUE, prefix = TRUE))
   expect_match(conditionMessage(cnd), "quota reached")
 })
+
+test_that("metadata-only logging keeps generation parameters", {
+  log <- tempfile(fileext = ".jsonl")
+  old <- options(llmr.log_file = log, llmr.log_messages = FALSE)
+  on.exit(options(old), add = TRUE)
+  fake_request <- list(body = list(data = list(
+    model = "m1", temperature = 0.3, max_tokens = 64,
+    messages = list(list(role = "user", content = "confidential corpus text"))
+  )))
+  LLMR:::.llmr_log_event(kind = "call", provider = "openai", model = "m1",
+                         status = 200L, request = fake_request)
+  line <- readLines(log, warn = FALSE)
+  rec <- jsonlite::fromJSON(line[[1]])
+  expect_equal(rec$parameters$temperature, 0.3)
+  expect_equal(rec$parameters$max_tokens, 64)
+  expect_false(grepl("confidential corpus text", line[[1]], fixed = TRUE))
+  expect_null(rec$request)
+
+  # With messages included, the full body is stored alongside the parameters.
+  options(llmr.log_messages = TRUE)
+  LLMR:::.llmr_log_event(kind = "call", provider = "openai", model = "m1",
+                         status = 200L, request = fake_request)
+  line2 <- readLines(log, warn = FALSE)[[2]]
+  expect_true(grepl("confidential corpus text", line2, fixed = TRUE))
+  expect_true(grepl("\"parameters\"", line2, fixed = TRUE))
+})
+
+test_that("a failed log write warns once and is counted", {
+  dir <- tempfile("logdir-")
+  dir.create(dir)
+  old <- options(llmr.log_file = dir, llmr.log_messages = FALSE,
+                 llmr.log_failures = 0L)
+  on.exit(options(old), add = TRUE)
+  expect_warning(
+    LLMR:::.llmr_log_event(kind = "call", provider = "p", model = "m"),
+    "audit logging failed")
+  expect_silent(
+    LLMR:::.llmr_log_event(kind = "call", provider = "p", model = "m"))
+  expect_identical(getOption("llmr.log_failures"), 2L)
+  status <- capture.output(llm_log_status())
+  expect_true(any(grepl("2 logging write", status)))
+})

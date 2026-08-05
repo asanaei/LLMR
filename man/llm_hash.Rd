@@ -21,7 +21,9 @@ by their deparsed source), rendered as canonical JSON, and hashed with
 SHA-256 over the UTF-8 bytes of that string. Two consequences worth
 stating: equal content hashes equally regardless of construction order or
 list class, and the hash does not depend on R's serialization format, so a
-value recorded in a paper today is checkable on any machine later. Atomic
+value recorded in a paper today is checkable later under this same
+canonicalization (call it hash schema v1: canonical JSON, SHA-256 over its
+UTF-8 bytes). Atomic
 vectors hash by their canonical JSON rendering, class included: a \code{Date}
 hashes as its date string, not as its unclassed integer.
 }

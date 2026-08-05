@@ -9,6 +9,15 @@
   model-params tip appears only for parameter errors, with the flagged
   parameter named when the provider identifies one.
 
+* The audit log keeps its documented contract when `include_messages =
+  FALSE`: generation parameters now land in a `parameters` field (the
+  request body minus its message-bearing fields), where previously nothing
+  of the body survived. A failed log write warns once and is counted;
+  `llm_log_status()` reports the count, since a silently unlogged call
+  defeats an audit log. The `llm_hash()` documentation states its
+  portability claim as the stable canonicalization it is (hash schema v1)
+  rather than as a promise about all machines forever.
+
 * API failures are classified against a catalog of each provider's documented
   error codes (R/errors_catalog.R) rather than by HTTP status alone. A new
   `llmr_api_billing_error` class marks empty balances and spend caps, and
