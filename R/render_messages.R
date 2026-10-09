@@ -114,3 +114,82 @@
 
   msgs
 }
+
+#' Fill `{column}` placeholders in one experiments-frame message
+#'
+#' The experiment runners call_llm_par_structured() and call_llm_par_tags()
+#' receive messages that are often already rendered and can carry braces from
+#' the data: example JSON, LaTeX, code. Only `{name}`, where `name` (trimmed) is
+#' a column of `row`, is replaced, and the value is inserted as text; nothing
+#' inside braces is evaluated. A doubled pair with no braces inside, `{{...}}`,
+#' is glue's escape and becomes the literal `{...}`. Every other brace is kept
+#' as written, so nested JSON such as `{"a": {"b": 1}}` passes unchanged.
+#'
+#' @param s A character scalar.
+#' @param row A one-row data.frame holding the metadata columns.
+#' @return A list: `text`, the filled string; `unmatched`, names that look like
+#'   placeholders (syntactic names in single braces) but match no usable column.
+#' @keywords internal
+#' @noRd
+.llmr_fill_columns <- function(s, row) {
+  none <- character(0)
+  if (length(s) != 1L || is.na(s) || !grepl("{", s, fixed = TRUE)) {
+    return(list(text = s, unmatched = none))
+  }
+  hits <- gregexpr("\\{\\{[^{}]*\\}\\}|\\{[^{}]*\\}", s, perl = TRUE)
+  tokens <- regmatches(s, hits)[[1]]
+  if (!length(tokens)) return(list(text = s, unmatched = none))
+  unmatched <- none
+  filled <- vapply(tokens, function(tok) {
+    if (startsWith(tok, "{{") && endsWith(tok, "}}")) {
+      return(substr(tok, 2L, nchar(tok) - 1L))
+    }
+    name <- trimws(substr(tok, 2L, nchar(tok) - 1L))
+    if (name %in% names(row)) {
+      v <- row[[name]]
+      if (is.list(v)) v <- v[[1L]]
+      if (is.atomic(v) && length(v) == 1L) {
+        return(if (is.na(v)) "" else as.character(v))
+      }
+    }
+    if (grepl("^[A-Za-z.][A-Za-z0-9._]*$", name)) unmatched <<- c(unmatched, name)
+    tok
+  }, character(1), USE.NAMES = FALSE)
+  regmatches(s, hits) <- list(filled)
+  list(text = s, unmatched = unmatched)
+}
+
+#' Fill `{column}` placeholders in every character message of an experiments frame
+#'
+#' Metadata columns are all columns other than `config` and `messages`.
+#' Message names (roles) are kept. Placeholders that match no usable column are
+#' sent as written and reported in one warning.
+#'
+#' @param ex An experiments data.frame with `config` and `messages` columns.
+#' @return The list of messages, one element per row.
+#' @keywords internal
+#' @noRd
+.llmr_fill_experiment_messages <- function(ex) {
+  meta <- setdiff(names(ex), c("config", "messages"))
+  unmatched <- character(0)
+  msgs <- lapply(seq_len(nrow(ex)), function(i) {
+    msg <- ex$messages[[i]]
+    if (!is.character(msg)) return(msg)
+    row <- ex[i, meta, drop = FALSE]
+    for (k in seq_along(msg)) {
+      r <- .llmr_fill_columns(msg[[k]], row)
+      msg[[k]] <- r$text
+      unmatched <<- c(unmatched, r$unmatched)
+    }
+    msg
+  })
+  unmatched <- unique(unmatched)
+  if (length(unmatched)) {
+    shown <- paste0("{", utils::head(unmatched, 5L), "}", collapse = ", ")
+    more <- if (length(unmatched) > 5L) sprintf(" and %d more", length(unmatched) - 5L) else ""
+    warning(sprintf(paste0(
+      "Placeholder(s) %s%s match no metadata column of `experiments` and were ",
+      "sent as written."), shown, more), call. = FALSE)
+  }
+  msgs
+}

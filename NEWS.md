@@ -1,3 +1,10 @@
+# LLMR 0.8.13
+
+* `call_llm_par_structured()` and `call_llm_par_tags()` fill `{column}`
+  placeholders without evaluating anything inside braces, and send other
+  braces as written. A message with example JSON used to go out with its
+  placeholders unfilled.
+
 # LLMR 0.8.12
 
 * Uncaught API errors print their message again. The parsed provider payload

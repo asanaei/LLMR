@@ -427,6 +427,14 @@ llm_fn_tags <- function(x,
 #' Injects tag instructions into each experiment row, runs [call_llm_par()],
 #' then parses XML-like tags from each response via [llm_parse_tags_col()].
 #'
+#' Character messages may refer to metadata columns of `experiments` (any
+#' column other than `config` and `messages`) as `{column}`. Each such
+#' placeholder is replaced by that row's value, inserted as text. Nothing inside
+#' braces is evaluated, and braces that do not name a column, such as example
+#' JSON or LaTeX, are sent as written. A doubled pair such as `{{column}}` sends
+#' the literal text `{column}`. A placeholder that looks like a name but matches
+#' no column is sent as written, with a warning.
+#'
 #' @param experiments Tibble with `config` and `messages` list-columns.
 #' @param .tags Character vector of tag names to request and parse.
 #' @param .fields `NULL` to extract all tags, a character vector of tags, a named
@@ -444,21 +452,11 @@ call_llm_par_tags <- function(experiments, .tags, .fields = NULL, ...) {
   tags <- .validate_tags(.tags)
 
   ex <- experiments
-  # Character messages are glue-templated against the experiment's metadata
-  # columns; strings glue cannot parse (e.g. literal braces) pass through
-  # verbatim instead of aborting the run.
-  ex$messages <- lapply(seq_len(nrow(ex)), function(i) {
-    msg <- ex$messages[[i]]
-    rowdf <- ex[i, setdiff(names(ex), c("config", "messages")), drop = FALSE]
-    if (is.character(msg)) {
-      nm <- names(msg)
-      out <- vapply(msg, function(s) {
-        tryCatch(as.character(glue::glue_data(rowdf, s, .na = "")),
-                 error = function(e) s)
-      }, character(1), USE.NAMES = FALSE)
-      if (!is.null(nm)) names(out) <- nm
-      msg <- out
-    }
+  # {column} placeholders are filled from the metadata columns; braces from the
+  # data are sent as written and never evaluated. Tag instructions are added
+  # after filling, so their own text is never treated as a placeholder.
+  filled <- .llmr_fill_experiment_messages(ex)
+  ex$messages <- lapply(filled, function(msg) {
     prompted <- .add_tag_prompt(msg, NULL, tags)
     prompted$.messages %||% msg
   })
