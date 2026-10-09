@@ -51,6 +51,13 @@ answers in plain text (or \code{max_rounds} is reached). Supported for
 OpenAI-compatible providers (openai, groq, together, deepseek, xai,
 alibaba, zhipu, moonshot, xiaomi, ollama) and Anthropic.
 }
+\details{
+A tool call whose arguments are not a valid JSON object, and every tool call
+in a reply cut off by the output-token limit, is not run: the model receives
+an error result instead and can call the tool again. Such calls do not count
+toward \code{max_tool_calls}, and \code{tool_history} records their argument text as
+received.
+}
 \examples{
 \dontrun{
 weather <- llm_tool(

@@ -11,6 +11,11 @@
   partial text as a finished reply. Unparseable events now draw a warning, and
   streamed calls are logged with their request.
 
+* `call_llm_tools()` no longer runs a tool whose arguments are not valid JSON,
+  or any tool called in a reply cut off by the token limit; such calls used to
+  run with the tool's default arguments. `tool_calls()` reports the argument
+  text as sent in `arguments_raw` and its validity in `arguments_ok`.
+
 # LLMR 0.8.12
 
 * Uncaught API errors print their message again. The parsed provider payload

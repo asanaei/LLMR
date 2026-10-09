@@ -11,8 +11,12 @@ tool_calls(x)
 }
 \value{
 A list with one element per requested call:
-\code{list(id =, name =, arguments =)} where \code{arguments} is a named list.
-\code{list()} when the response contains no tool calls.
+\code{list(id =, name =, arguments =, arguments_raw =, arguments_ok =)}.
+\code{arguments} is a named list. \code{arguments_raw} is the argument text as the
+model sent it (\code{NA} when the provider delivers parsed arguments).
+\code{arguments_ok} is \code{FALSE} when that text is not a JSON object, for example
+when the reply was cut off mid-call; \code{arguments} is then empty and the call
+should not be run. \code{list()} when the response contains no tool calls.
 }
 \description{
 When a model decides to call tools, \code{finish_reason(x)} is \code{"tool"} and this

@@ -127,8 +127,12 @@ print.llmr_tool <- function(x, ...) {
 #'
 #' @param x An [llmr_response] object.
 #' @return A list with one element per requested call:
-#'   `list(id =, name =, arguments =)` where `arguments` is a named list.
-#'   `list()` when the response contains no tool calls.
+#'   `list(id =, name =, arguments =, arguments_raw =, arguments_ok =)`.
+#'   `arguments` is a named list. `arguments_raw` is the argument text as the
+#'   model sent it (`NA` when the provider delivers parsed arguments).
+#'   `arguments_ok` is `FALSE` when that text is not a JSON object, for example
+#'   when the reply was cut off mid-call; `arguments` is then empty and the call
+#'   should not be run. `list()` when the response contains no tool calls.
 #' @seealso [call_llm_tools()], [llm_tool()]
 #' @export
 tool_calls <- function(x) {
@@ -136,18 +140,17 @@ tool_calls <- function(x) {
   content <- x$raw
   out <- list()
 
-  # OpenAI-compatible chat completions
+  # OpenAI-compatible chat completions: arguments arrive as JSON text
   tcs <- tryCatch(content$choices[[1]]$message$tool_calls, error = function(e) NULL)
   if (!is.null(tcs) && length(tcs)) {
     for (tc in tcs) {
-      args <- tryCatch(
-        jsonlite::fromJSON(tc$`function`$arguments %||% "{}", simplifyVector = FALSE),
-        error = function(e) list()
-      )
+      parsed <- .llmr_parse_tool_arguments(tc$`function`$arguments)
       out[[length(out) + 1L]] <- list(
         id = tc$id %||% paste0("call_", length(out) + 1L),
         name = tc$`function`$name %||% "",
-        arguments = args
+        arguments = parsed$arguments,
+        arguments_raw = parsed$raw,
+        arguments_ok = parsed$ok
       )
     }
     return(out)
@@ -160,7 +163,9 @@ tool_calls <- function(x) {
         out[[length(out) + 1L]] <- list(
           id = b$id %||% paste0("call_", length(out) + 1L),
           name = b$name %||% "",
-          arguments = b$input %||% list()
+          arguments = b$input %||% list(),
+          arguments_raw = NA_character_,
+          arguments_ok = is.list(b$input %||% list())
         )
       }
     }
@@ -175,12 +180,52 @@ tool_calls <- function(x) {
         out[[length(out) + 1L]] <- list(
           id = paste0("call_", length(out) + 1L),
           name = p$functionCall$name %||% "",
-          arguments = p$functionCall$args %||% list()
+          arguments = p$functionCall$args %||% list(),
+          arguments_raw = NA_character_,
+          arguments_ok = is.list(p$functionCall$args %||% list())
         )
       }
     }
   }
   out
+}
+
+# Parse OpenAI-compatible tool arguments. Absent, empty, or `null` text means
+# no arguments, which tools without parameters depend on. Text that does not
+# parse to a JSON object is kept as sent and flagged, so that no caller runs the
+# tool with its defaults in place of the arguments the model meant to send.
+.llmr_parse_tool_arguments <- function(raw) {
+  none <- structure(list(), names = character(0))
+  if (is.null(raw)) return(list(arguments = none, raw = NA_character_, ok = TRUE))
+  if (is.list(raw)) return(list(arguments = raw, raw = NA_character_, ok = TRUE))
+  if (!is.character(raw) || length(raw) != 1L || is.na(raw)) {
+    return(list(arguments = none, raw = paste(format(raw), collapse = " "), ok = FALSE))
+  }
+  if (!nzchar(trimws(raw)) || identical(trimws(raw), "null")) {
+    return(list(arguments = none, raw = raw, ok = TRUE))
+  }
+  args <- tryCatch(jsonlite::fromJSON(raw, simplifyVector = FALSE),
+                   error = function(e) NULL)
+  is_object <- is.list(args) && (!length(args) || !is.null(names(args)))
+  if (!is_object) return(list(arguments = none, raw = raw, ok = FALSE))
+  list(arguments = args, raw = raw, ok = TRUE)
+}
+
+# The tool result sent back instead of running a call, or NULL when the call
+# may run: a reply cut off by the output-token limit may hold a partial call,
+# and arguments that did not parse would leave the tool to its defaults.
+.llmr_tool_refusal <- function(call, truncated) {
+  if (isTRUE(truncated)) {
+    return(paste0("ERROR: the reply was cut off by the output-token limit while ",
+                  "this tool call was being written, so the tool was not run. ",
+                  "Call it again with complete arguments."))
+  }
+  if (!isTRUE(call$arguments_ok %||% TRUE)) {
+    return(paste0("ERROR: the arguments for this tool call are not valid JSON, ",
+                  "so the tool was not run. Received: ",
+                  substr(call$arguments_raw %||% "", 1L, 500L)))
+  }
+  NULL
 }
 
 # ---- execution loop -----------------------------------------------------------
@@ -206,6 +251,12 @@ tool_calls <- function(x) {
 #' answers in plain text (or `max_rounds` is reached). Supported for
 #' OpenAI-compatible providers (openai, groq, together, deepseek, xai,
 #' alibaba, zhipu, moonshot, xiaomi, ollama) and Anthropic.
+#'
+#' A tool call whose arguments are not a valid JSON object, and every tool call
+#' in a reply cut off by the output-token limit, is not run: the model receives
+#' an error result instead and can call the tool again. Such calls do not count
+#' toward `max_tool_calls`, and `tool_history` records their argument text as
+#' received.
 #'
 #' @param config An [llm_config] for a generative model.
 #' @param messages Messages as in [call_llm()].
@@ -307,25 +358,39 @@ call_llm_tools <- function(config, messages, tools,
       return(resp)
     }
 
+    # Every call gets a result, as both protocols require, but a call from a
+    # truncated reply or with unparseable arguments is answered with an error
+    # instead of being run, and does not count toward max_tool_calls.
+    truncated <- identical(resp$finish_reason, "length")
+    run_call <- function(cl) {
+      refusal <- .llmr_tool_refusal(cl, truncated)
+      if (!is.null(refusal)) {
+        if (verbose) message(sprintf("[tool] %s not run: %s", cl$name, refusal))
+        return(refusal)
+      }
+      assert_tool_limit()
+      executed <<- executed + 1L
+      tool <- tool_index[[cl$name]]
+      if (is.null(tool)) return(paste0("ERROR: unknown tool '", cl$name, "'"))
+      if (verbose) message(sprintf("[tool] %s(%s)", cl$name,
+                                   jsonlite::toJSON(cl$arguments, auto_unbox = TRUE)))
+      .llmr_run_tool(tool, cl$arguments)
+    }
+    record <- function(cl, result) {
+      history[[length(history) + 1L]] <<- list(
+        round = round, name = cl$name, arguments = cl$arguments,
+        arguments_raw = if (isTRUE(cl$arguments_ok %||% TRUE)) NULL else cl$arguments_raw,
+        result = result)
+    }
+
     if (is_anthropic) {
       # assistant turn: the raw content blocks (text + tool_use), verbatim
       convo <- append(convo, list(list(role = "assistant",
                                        content = resp$raw$content)))
       result_blocks <- list()
       for (cl in calls) {
-        assert_tool_limit()
-        executed <- executed + 1L
-        tool <- tool_index[[cl$name]]
-        result <- if (is.null(tool)) {
-          paste0("ERROR: unknown tool '", cl$name, "'")
-        } else {
-          if (verbose) message(sprintf("[tool] %s(%s)", cl$name,
-                                       jsonlite::toJSON(cl$arguments, auto_unbox = TRUE)))
-          .llmr_run_tool(tool, cl$arguments)
-        }
-        history[[length(history) + 1L]] <- list(round = round, name = cl$name,
-                                                arguments = cl$arguments,
-                                                result = result)
+        result <- run_call(cl)
+        record(cl, result)
         result_blocks[[length(result_blocks) + 1L]] <- list(
           type = "tool_result", tool_use_id = cl$id, content = result
         )
@@ -338,19 +403,8 @@ call_llm_tools <- function(config, messages, tools,
       amsg$content <- amsg$content %||% ""
       convo <- append(convo, list(amsg))
       for (cl in calls) {
-        assert_tool_limit()
-        executed <- executed + 1L
-        tool <- tool_index[[cl$name]]
-        result <- if (is.null(tool)) {
-          paste0("ERROR: unknown tool '", cl$name, "'")
-        } else {
-          if (verbose) message(sprintf("[tool] %s(%s)", cl$name,
-                                       jsonlite::toJSON(cl$arguments, auto_unbox = TRUE)))
-          .llmr_run_tool(tool, cl$arguments)
-        }
-        history[[length(history) + 1L]] <- list(round = round, name = cl$name,
-                                                arguments = cl$arguments,
-                                                result = result)
+        result <- run_call(cl)
+        record(cl, result)
         convo <- append(convo, list(list(role = "tool",
                                          tool_call_id = cl$id,
                                          content = result)))
@@ -379,7 +433,8 @@ call_llm_tools <- function(config, messages, tools,
     round = vapply(history, function(h) as.integer(h$round), integer(1)),
     name = vapply(history, function(h) as.character(h$name), character(1)),
     arguments = vapply(history, function(h)
-      as.character(jsonlite::toJSON(h$arguments, auto_unbox = TRUE, null = "null")),
+      h$arguments_raw %||%
+        as.character(jsonlite::toJSON(h$arguments, auto_unbox = TRUE, null = "null")),
       character(1)),
     result = vapply(history, function(h) as.character(h$result), character(1))
   )
