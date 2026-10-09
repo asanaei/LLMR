@@ -16,6 +16,11 @@
   run with the tool's default arguments. `tool_calls()` reports the argument
   text as sent in `arguments_raw` and its validity in `arguments_ok`.
 
+* Gemini totals include thinking tokens: `total_tokens` comes from the
+  provider's `totalTokenCount`, in ordinary and streamed calls, and the cost
+  estimate bills everything beyond the prompt as output. Both used to leave
+  thinking tokens out. `rec_tokens` remains the visible output.
+
 * LLMR requires httr2 1.1.1 or later. Streaming uses functions added in httr2
   1.0.4 and relies on `resp_stream_sse()` returning event data as one string,
   as it does from 1.1.1.

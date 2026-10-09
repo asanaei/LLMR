@@ -111,7 +111,9 @@ call_llm_stream <- function(config, messages,
     usage         = list(
       sent      = out$sent %||% NA_integer_,
       rec       = out$rec %||% NA_integer_,
-      total     = {
+      # A provider-reported total wins (it counts Gemini's thinking tokens);
+      # otherwise the sum of the parts, when any part is known.
+      total     = if (!is.null(out$total) && !is.na(out$total)) as.integer(out$total) else {
         s <- out$sent; r <- out$rec
         if (is.null(s) && is.null(r)) NA_integer_
         else if (is.na(s %||% NA_integer_) && is.na(r %||% NA_integer_)) NA_integer_
@@ -265,7 +267,7 @@ call_llm_stream <- function(config, messages,
 
   acc <- new.env(parent = emptyenv())
   acc$text <- character(0); acc$thinking <- character(0)
-  acc$finish <- NULL; acc$sent <- NULL; acc$rec <- NULL
+  acc$finish <- NULL; acc$sent <- NULL; acc$rec <- NULL; acc$total <- NULL
   acc$reasoning_tokens <- NULL; acc$cached <- NULL
   acc$id <- NULL; acc$model_version <- NULL; acc$last <- NULL; acc$done <- NULL
 
@@ -289,6 +291,7 @@ call_llm_stream <- function(config, messages,
     if (!is.null(j$usage)) {
       acc$sent <- as.integer(j$usage$prompt_tokens %||% NA_integer_)
       acc$rec  <- as.integer(j$usage$completion_tokens %||% NA_integer_)
+      acc$total <- as.integer(j$usage$total_tokens %||% NA_integer_)
       acc$reasoning_tokens <- as.integer(
         tryCatch(j$usage$completion_tokens_details$reasoning_tokens,
                  error = function(e) NA_integer_) %||% NA_integer_)
@@ -301,7 +304,7 @@ call_llm_stream <- function(config, messages,
   list(text = paste(acc$text, collapse = ""),
        thinking = paste(acc$thinking, collapse = ""),
        finish = .map_stream_finish(acc$finish),
-       sent = acc$sent, rec = acc$rec,
+       sent = acc$sent, rec = acc$rec, total = acc$total,
        reasoning_tokens = acc$reasoning_tokens, cached = acc$cached,
        id = acc$id, model_version = acc$model_version, raw = acc$last,
        status = ev$status, req = ev$req)
@@ -355,7 +358,7 @@ call_llm_stream <- function(config, messages,
   acc <- new.env(parent = emptyenv())
   acc$text <- character(0); acc$thinking <- character(0)
   acc$finish <- NULL; acc$sent <- NULL; acc$rec <- NULL; acc$cached <- NULL
-  acc$reasoning_tokens <- NULL
+  acc$total <- NULL; acc$reasoning_tokens <- NULL
   acc$id <- NULL; acc$model_version <- NULL; acc$last <- NULL; acc$done <- NULL
 
   ev <- .stream_events(req, config, acc = acc, call = call, handle = function(j) {
@@ -383,6 +386,7 @@ call_llm_stream <- function(config, messages,
       um <- j$usageMetadata
       acc$sent <- as.integer(um$promptTokenCount %||% NA_integer_)
       acc$rec  <- as.integer(um$candidatesTokenCount %||% NA_integer_)
+      acc$total <- as.integer(um$totalTokenCount %||% NA_integer_)
       acc$reasoning_tokens <- as.integer(um$thoughtsTokenCount %||% NA_integer_)
       acc$cached <- as.integer(um$cachedContentTokenCount %||% NA_integer_)
     }
@@ -391,7 +395,7 @@ call_llm_stream <- function(config, messages,
   list(text = paste(acc$text, collapse = ""),
        thinking = paste(acc$thinking, collapse = ""),
        finish = .map_stream_finish(acc$finish),
-       sent = acc$sent, rec = acc$rec, cached = acc$cached,
+       sent = acc$sent, rec = acc$rec, total = acc$total, cached = acc$cached,
        reasoning_tokens = acc$reasoning_tokens,
        id = acc$id, model_version = acc$model_version, raw = acc$last,
        status = ev$status, req = ev$req)

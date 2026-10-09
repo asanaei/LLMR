@@ -291,8 +291,14 @@ perform_request <- function(req, verbose, provider = NULL, model = NULL, config 
   tc  <- .token_counts(content)
   rt  <- .reasoning_tokens_from(content)
 
-  # Support Responses API fallback for total tokens
-  direct_total <- if (!is.null(content$usage) && !is.null(content$usage$total_tokens)) content$usage$total_tokens else NULL
+  # A provider-reported total wins: OpenAI-style `usage$total_tokens`, or
+  # Gemini's `usageMetadata$totalTokenCount`, which, unlike its
+  # candidatesTokenCount, includes thinking tokens.
+  direct_total <- if (!is.null(content$usage) && !is.null(content$usage$total_tokens)) {
+    content$usage$total_tokens
+  } else if (!is.null(content$usageMetadata) && !is.null(content$usageMetadata$totalTokenCount)) {
+    content$usageMetadata$totalTokenCount
+  } else NULL
 
   sent_i <- as.integer(tc$sent %||% NA_integer_)
   rec_i  <- as.integer(tc$rec  %||% NA_integer_)

@@ -241,6 +241,7 @@ llm_usage <- function(x, prefix = NULL, price_table = NULL) {
   }
   sent   <- .llm_get_col(x, m[["sent"]],   NA_integer_)
   rec    <- .llm_get_col(x, m[["rec"]],    NA_integer_)
+  total  <- .llm_get_col(x, m[["total"]],  NA_integer_)
   cached <- .llm_get_col(x, m[["cached"]], NA_integer_)
 
   if ("model" %in% names(x)) {
@@ -266,8 +267,14 @@ llm_usage <- function(x, prefix = NULL, price_table = NULL) {
   sent0   <- ifelse(is.na(sent),   0, as.numeric(sent))
   rec0    <- ifelse(is.na(rec),    0, as.numeric(rec))
   fresh   <- pmax(sent0 - cached0, 0)
+  # Billed output is everything beyond the prompt: total minus sent when both
+  # are known. That equals the received tokens for providers whose total is
+  # their sum, and includes Gemini's thinking tokens, which its received count
+  # (candidatesTokenCount) leaves out.
+  out0 <- ifelse(!is.na(total) & !is.na(sent),
+                 pmax(as.numeric(total) - as.numeric(sent), rec0), rec0)
 
-  cost <- fresh * p_in + cached0 * p_cache + rec0 * p_out
+  cost <- fresh * p_in + cached0 * p_cache + out0 * p_out
   sum(cost, na.rm = TRUE) / 1e6
 }
 
