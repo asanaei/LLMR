@@ -112,12 +112,10 @@ call_llm_stream <- function(config, messages,
       sent      = out$sent %||% NA_integer_,
       rec       = out$rec %||% NA_integer_,
       # A provider-reported total wins (it counts Gemini's thinking tokens);
-      # otherwise the sum of the parts, when any part is known.
+      # otherwise the sum of both parts, and NA when either is unknown.
       total     = if (!is.null(out$total) && !is.na(out$total)) as.integer(out$total) else {
-        s <- out$sent; r <- out$rec
-        if (is.null(s) && is.null(r)) NA_integer_
-        else if (is.na(s %||% NA_integer_) && is.na(r %||% NA_integer_)) NA_integer_
-        else as.integer(sum(c(s, r), na.rm = TRUE))
+        s <- out$sent %||% NA_integer_; r <- out$rec %||% NA_integer_
+        if (is.na(s) || is.na(r)) NA_integer_ else as.integer(s + r)
       },
       reasoning = out$reasoning_tokens %||% NA_integer_,
       cached    = out$cached %||% NA_integer_

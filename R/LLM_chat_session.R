@@ -48,6 +48,12 @@
 ## An unknown usage value (NA) contributes nothing to a running total rather
 ## than poisoning it to NA.
 .add0 <- function(x) { v <- suppressWarnings(as.integer(x %||% 0L)); if (length(v) != 1L || is.na(v)) 0L else v }
+# 1 when a reply's usage is unknown (either count missing), else 0: the running
+# totals add known counts only, and this tally says how many replies they omit.
+.usage_unknown <- function(s, r) {
+  as.integer(is.null(s) || is.null(r) || length(s) != 1L || length(r) != 1L ||
+             is.na(s) || is.na(r))
+}
 
 ## provider-agnostic token counter ------------------------------------------
 .token_counts <- function(j) {
@@ -61,12 +67,17 @@
   if (!is.null(j$usageMetadata)) {
     m <- j$usageMetadata
     # Gemini omits zero-valued integer fields, so candidatesTokenCount can be
-    # absent (e.g. thinking models that produce no visible output). Keep the
-    # prompt count rather than discarding the whole usage record.
+    # absent (e.g. thinking models that produce no visible output). An absent
+    # count reads as zero only in a complete record, one that carries
+    # totalTokenCount; without it (a partial record) the count is unknown.
     if (!is.null(m$promptTokenCount) || !is.null(m$candidatesTokenCount)) {
-      sent <- m$promptTokenCount %||% 0L
-      rec  <- m$candidatesTokenCount %||%
-        (if (!is.null(m$totalTokenCount)) max(0L, m$totalTokenCount - sent) else 0L)
+      if (!is.null(m$totalTokenCount)) {
+        sent <- m$promptTokenCount %||% 0L
+        rec  <- m$candidatesTokenCount %||% max(0L, m$totalTokenCount - sent)
+      } else {
+        sent <- m$promptTokenCount %||% NA_integer_
+        rec  <- m$candidatesTokenCount %||% NA_integer_
+      }
       return(list(sent = sent, rec = rec))
     }
   }
@@ -117,7 +128,10 @@
 #'     the parsed list.}
 #'   \item{\code{$history()}}{Raw list of messages.}
 #'   \item{\code{$history_df()}}{Two-column data frame (`role`, `content`).}
-#'   \item{\code{$tokens_sent()}/\code{$tokens_received()}}{Running token totals.}
+#'   \item{\code{$tokens_sent()}/\code{$tokens_received()}}{Running token totals
+#'     over the replies whose usage the provider reported.}
+#'   \item{\code{$usage_unknown()}}{The number of replies whose usage was not
+#'     reported and is therefore missing from the running totals.}
 #'   \item{\code{$reset()}}{Clear history (retains the optional system message).}
 #' }
 #'
@@ -166,6 +180,7 @@ chat_session <- function(config, system = NULL, quiet = FALSE, ...) {
   e$raw      <- list()
   e$sent     <- 0
   e$received <- 0
+  e$unknown  <- 0L
   defaults   <- list(...)
 
   call_robust <- function(extra = list()) {
@@ -215,6 +230,7 @@ chat_session <- function(config, system = NULL, quiet = FALSE, ...) {
 
     e$sent     <- e$sent     + .add0(tc$sent)
     e$received <- e$received + .add0(tc$rec)
+    e$unknown  <- e$unknown  + .usage_unknown(tc$sent, tc$rec)
     e$raw      <- append(e$raw, list(if (inherits(resp, "llmr_response")) resp else raw))
 
     e$messages <- append(e$messages, list(.msg("assistant", txt)))
@@ -266,6 +282,7 @@ chat_session <- function(config, system = NULL, quiet = FALSE, ...) {
 
     e$sent     <- e$sent     + .add0(tokens(resp)$sent)
     e$received <- e$received + .add0(tokens(resp)$rec)
+    e$unknown  <- e$unknown  + .usage_unknown(tokens(resp)$sent, tokens(resp)$rec)
     e$raw      <- append(e$raw, list(resp))
     e$messages <- append(e$messages, list(.msg("assistant", txt)))
     if (!quiet) print(resp)
@@ -290,6 +307,7 @@ chat_session <- function(config, system = NULL, quiet = FALSE, ...) {
 
     e$sent     <- e$sent     + .add0(tokens(resp)$sent)
     e$received <- e$received + .add0(tokens(resp)$rec)
+    e$unknown  <- e$unknown  + .usage_unknown(tokens(resp)$sent, tokens(resp)$rec)
     e$raw      <- append(e$raw, list(resp))
     e$messages <- append(e$messages, list(.msg("assistant", txt)))
     if (!quiet) print(resp)
@@ -304,9 +322,10 @@ chat_session <- function(config, system = NULL, quiet = FALSE, ...) {
   )
   tokens_sent      <- function() e$sent
   tokens_received  <- function() e$received
+  usage_unknown    <- function() e$unknown
   reset <- function() {
     e$messages <- if (is.null(system)) list() else list(.msg("system", system))
-    e$raw <- list(); e$sent <- 0; e$received <- 0
+    e$raw <- list(); e$sent <- 0; e$received <- 0; e$unknown <- 0L
     invisible(NULL)
   }
 
@@ -319,6 +338,7 @@ chat_session <- function(config, system = NULL, quiet = FALSE, ...) {
       history_df      = history_df,
       tokens_sent     = tokens_sent,
       tokens_received = tokens_received,
+      usage_unknown   = usage_unknown,
       reset           = reset
     ),
     class = "llm_chat_session"
@@ -346,6 +366,7 @@ summary.llm_chat_session <- function(object, ...) {
     exchanges        = sum(hist$role == "assistant"),
     tokens_sent      = object$tokens_sent(),
     tokens_received  = object$tokens_received(),
+    usage_unknown    = if (is.function(object$usage_unknown)) object$usage_unknown() else NA_integer_,
     last_assistant   = tail(hist$content[hist$role == "assistant"], 1)
   )
   class(out) <- "summary.llm_chat_session"
@@ -360,6 +381,9 @@ print.summary.llm_chat_session <- function(x, ...) {
       "Exchanges:        ", x$exchanges,       "\n",
       "Tokens sent:      ", x$tokens_sent,     "\n",
       "Tokens received:  ", x$tokens_received, "\n",
+      if (isTRUE(x$usage_unknown > 0))
+        sprintf("Usage unknown:    %d repl%s, not in the totals\n", x$usage_unknown,
+                if (x$usage_unknown == 1L) "y" else "ies"),
       "Last assistant:   ", x$last_assistant,  "\n", sep = "")
   invisible(x)
 }

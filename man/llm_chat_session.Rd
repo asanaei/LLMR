@@ -81,7 +81,10 @@ assistant's reply, parse the requested tags, and invisibly return
 the parsed list.}
 \item{\code{$history()}}{Raw list of messages.}
 \item{\code{$history_df()}}{Two-column data frame (\code{role}, \code{content}).}
-\item{\code{$tokens_sent()}/\code{$tokens_received()}}{Running token totals.}
+\item{\code{$tokens_sent()}/\code{$tokens_received()}}{Running token totals
+over the replies whose usage the provider reported.}
+\item{\code{$usage_unknown()}}{The number of replies whose usage was not
+reported and is therefore missing from the running totals.}
 \item{\code{$reset()}}{Clear history (retains the optional system message).}
 }
 }

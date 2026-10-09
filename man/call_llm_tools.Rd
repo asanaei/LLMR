@@ -40,7 +40,8 @@ conversation, including tool results; \code{tool_history} is a tibble of
 executed calls with columns \code{round}, \code{name}, \code{arguments} (JSON), and
 \code{result}; and \code{tool_loop} is a list with \code{model_calls}, \code{sent}, \code{rec}
 (token totals over every internal model call, \code{NA} when the provider
-reported none), and \code{tool_calls}. The same values remain available as
+reported none), \code{tool_calls}, and \code{n_unknown_usage} (model calls whose
+usage was not reported, and so is missing from \code{sent} and \code{rec}). The same values remain available as
 attributes for backward compatibility. Note that \code{tokens(x)} alone covers
 only the final model call.
 }

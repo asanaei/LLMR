@@ -117,10 +117,13 @@ print.llmr_batch_job <- function(x, ...) {
     finish_reason    = tryCatch(.std_finish_reason(content), error = function(e) NA_character_),
     sent_tokens      = as.integer(tc$sent %||% NA_integer_),
     rec_tokens       = as.integer(tc$rec %||% NA_integer_),
+    # A provider-reported total wins (Gemini's counts thinking tokens);
+    # otherwise the sum of both parts, and NA when either part is unknown.
     total_tokens     = as.integer(
                          content$usage$total_tokens %||%
-                         if (is.null(tc$sent) && is.null(tc$rec)) NA_integer_
-                         else sum(c(tc$sent, tc$rec), na.rm = TRUE)),
+                         content$usageMetadata$totalTokenCount %||%
+                         if (is.na(tc$sent %||% NA) || is.na(tc$rec %||% NA)) NA_integer_
+                         else tc$sent + tc$rec),
     reasoning_tokens = as.integer(.reasoning_tokens_from(content) %||% NA_integer_),
     cached_tokens    = as.integer(.cached_tokens_from(content) %||% NA_integer_),
     response_id      = .response_id_from(content),

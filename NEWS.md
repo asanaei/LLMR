@@ -21,6 +21,13 @@
   estimate bills everything beyond the prompt as output. Both used to leave
   thinking tokens out. `rec_tokens` remains the visible output.
 
+* Unknown usage stays unknown. A total is recorded only when the provider
+  reports one or both counts are known; batch replies without usage, streams
+  that report one count, and partial Gemini records used to show a total
+  anyway, sometimes 0. Chat sessions count replies with unknown usage
+  (`$usage_unknown()`, also in `summary()`), and the tool loop reports
+  `n_unknown_usage`.
+
 * LLMR requires httr2 1.1.1 or later. Streaming uses functions added in httr2
   1.0.4 and relies on `resp_stream_sse()` returning event data as one string,
   as it does from 1.1.1.

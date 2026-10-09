@@ -274,7 +274,8 @@ tool_calls <- function(x) {
 #'   executed calls with columns `round`, `name`, `arguments` (JSON), and
 #'   `result`; and `tool_loop` is a list with `model_calls`, `sent`, `rec`
 #'   (token totals over every internal model call, `NA` when the provider
-#'   reported none), and `tool_calls`. The same values remain available as
+#'   reported none), `tool_calls`, and `n_unknown_usage` (model calls whose
+#'   usage was not reported, and so is missing from `sent` and `rec`). The same values remain available as
 #'   attributes for backward compatibility. Note that `tokens(x)` alone covers
 #'   only the final model call.
 #' @examples
@@ -319,6 +320,7 @@ call_llm_tools <- function(config, messages, tools,
   # call, which silently undercounts multi-round loops)
   n_model_calls <- 0L
   agg_sent <- 0L; agg_rec <- 0L; saw_usage <- FALSE
+  n_unknown <- 0L
   executed <- 0L
   account_call <- function(resp) {
     n_model_calls <<- n_model_calls + 1L
@@ -326,12 +328,16 @@ call_llm_tools <- function(config, messages, tools,
     s <- suppressWarnings(as.integer(u$sent)); r <- suppressWarnings(as.integer(u$rec))
     if (length(s) == 1L && !is.na(s)) { agg_sent <<- agg_sent + s; saw_usage <<- TRUE }
     if (length(r) == 1L && !is.na(r)) { agg_rec  <<- agg_rec + r;  saw_usage <<- TRUE }
+    if (length(s) != 1L || length(r) != 1L || is.na(s) || is.na(r)) {
+      n_unknown <<- n_unknown + 1L
+    }
   }
   loop_attr <- function() list(
     model_calls = n_model_calls,
     sent = if (saw_usage) agg_sent else NA_integer_,
     rec  = if (saw_usage) agg_rec  else NA_integer_,
-    tool_calls = executed
+    tool_calls = executed,
+    n_unknown_usage = n_unknown
   )
   assert_tool_limit <- function() {
     if (executed + 1L > max_tool_calls) {

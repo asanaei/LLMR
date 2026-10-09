@@ -302,11 +302,11 @@ perform_request <- function(req, verbose, provider = NULL, model = NULL, config 
 
   sent_i <- as.integer(tc$sent %||% NA_integer_)
   rec_i  <- as.integer(tc$rec  %||% NA_integer_)
-  # total: prefer a provider-reported total; otherwise sum sent+rec, but only if
-  # at least one part is known (NA + NA stays NA = "unknown", not a false 0).
+  # total: prefer a provider-reported total; otherwise sum sent+rec when both
+  # are known. One known part is not a total, so it stays NA ("unknown").
   total_i <- if (!is.null(direct_total)) as.integer(direct_total)
-             else if (is.na(sent_i) && is.na(rec_i)) NA_integer_
-             else as.integer(sum(c(sent_i, rec_i), na.rm = TRUE))
+             else if (is.na(sent_i) || is.na(rec_i)) NA_integer_
+             else sent_i + rec_i
   usage <- list(sent = sent_i, rec = rec_i, total = total_i,
                 reasoning = as.integer(rt %||% NA_integer_),
                 cached = as.integer(.cached_tokens_from(content) %||% NA_integer_))
