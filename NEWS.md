@@ -39,6 +39,12 @@
   results instead of merging them, and reports skipped lines, unknown ids, and
   duplicates in one warning.
 
+* `llm_request_from_log()` adds `reissuable`, which is `FALSE` when the rebuilt
+  messages cannot be sent again as the original request: attachments survive
+  only as hashes, tool calls and results are dropped, and some roles are mapped
+  with loss. `complete` and request hashes are unchanged; the help now says
+  what each means.
+
 * LLMR requires httr2 1.1.1 or later. Streaming uses functions added in httr2
   1.0.4 and relies on `resp_stream_sse()` returning event data as one string,
   as it does from 1.1.1.

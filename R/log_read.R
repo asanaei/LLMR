@@ -110,16 +110,22 @@ llm_log_read <- function(log) {
 #' @param record A parsed log record: a list with at least `provider`, `model`,
 #'   and `request` (as found in `llm_log_read(x)$records[[i]]$rec`).
 #' @param on_unsupported What to do when the request body uses a shape this
-#'   reconstructor does not cover (so the rebuilt messages would be empty or
-#'   lossy) -- chiefly the OpenAI Responses API (`input`/`instructions`) and
-#'   non-text content blocks (images, files). `"error"` (default) aborts;
-#'   `"warn"` warns and returns the best-effort result; `"quiet"` returns it
-#'   silently. Failing loudly is the default because a silently empty replay is
-#'   worse than none.
-#' @return A list with `config` (an [llm_config()]), `messages` (a named
-#'   character vector of role/content turns), and `complete` (a logical: `TRUE`
-#'   when the body was fully reconstructed, `FALSE` when content was dropped).
-#'   `NULL` when the record carries no request body.
+#'   reconstructor does not cover, so the rebuilt messages would be empty or
+#'   lack a turn's content (`complete = FALSE`) -- chiefly the OpenAI Responses
+#'   API (`input`/`instructions`) and turns whose only content is a non-text
+#'   block. `"error"` (default) aborts; `"warn"` warns and returns the
+#'   best-effort result; `"quiet"` returns it silently. Failing loudly is the
+#'   default because a silently empty replay is worse than none.
+#' @return A list with `config` (an [llm_config()]), `messages`, `complete`,
+#'   and `reissuable`; `NULL` when the record carries no request body.
+#'   `messages` is a character vector of turns named by role, or, when a turn
+#'   carries non-text content, a list of turns whose attachments are kept only
+#'   as hashes. `complete` is `TRUE` when every turn was recovered with its
+#'   text and attachment hashes, which is what [llm_request_hash()] needs.
+#'   `reissuable` is `TRUE` when the rebuilt messages can also be sent again as
+#'   the original request: it is `FALSE` when the record has attachments (only
+#'   their hashes survive), tool calls or tool results (which are dropped), or a
+#'   role mapped with loss (such as `developer` to `system`).
 #' @seealso [llm_log_read()], [llm_request_hash()]
 #' @examples
 #' rec <- list(provider = "openai", model = "gpt-4o-mini",
@@ -162,5 +168,36 @@ llm_request_from_log <- function(record,
     cli::cli_warn(msg)
   }
 
-  list(config = cfg, messages = messages, complete = complete)
+  list(config = cfg, messages = messages, complete = complete,
+       reissuable = complete && .llmr_request_reissuable(req, turns))
+}
+
+# Internal: can the turns rebuilt from a logged body be sent again as the
+# original request? Not when a turn carries attachments (only their hashes
+# survive), when the body holds tool calls or tool results (dropped by the
+# turn canonicalization), or when a role was mapped with loss.
+.llmr_request_reissuable <- function(req, turns) {
+  if (any(vapply(turns, function(t) length(t$non_text %||% character()) > 0L, logical(1)))) {
+    return(FALSE)
+  }
+  msgs <- c(req$messages %||% list(), req$contents %||% list())
+  tool_types <- c("tool_use", "tool_result", "server_tool_use", "web_search_tool_result")
+  for (m in msgs) {
+    if (!is.list(m)) next
+    role <- tolower(as.character(m$role %||% "user")[1])
+    if (!role %in% c("user", "assistant", "model", "system")) return(FALSE)
+    if (!is.null(m$tool_calls) || !is.null(m$tool_call_id) || !is.null(m$function_call)) {
+      return(FALSE)
+    }
+    blocks <- m$content %||% m$parts
+    if (is.list(blocks)) {
+      for (b in blocks) {
+        if (is.list(b) && (isTRUE(b$type %in% tool_types) ||
+                           !is.null(b$functionCall) || !is.null(b$functionResponse))) {
+          return(FALSE)
+        }
+      }
+    }
+  }
+  TRUE
 }

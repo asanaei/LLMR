@@ -11,18 +11,24 @@ llm_request_from_log(record, on_unsupported = c("error", "warn", "quiet"))
 and \code{request} (as found in \code{llm_log_read(x)$records[[i]]$rec}).}
 
 \item{on_unsupported}{What to do when the request body uses a shape this
-reconstructor does not cover (so the rebuilt messages would be empty or
-lossy) -- chiefly the OpenAI Responses API (\code{input}/\code{instructions}) and
-non-text content blocks (images, files). \code{"error"} (default) aborts;
-\code{"warn"} warns and returns the best-effort result; \code{"quiet"} returns it
-silently. Failing loudly is the default because a silently empty replay is
-worse than none.}
+reconstructor does not cover, so the rebuilt messages would be empty or
+lack a turn's content (\code{complete = FALSE}) -- chiefly the OpenAI Responses
+API (\code{input}/\code{instructions}) and turns whose only content is a non-text
+block. \code{"error"} (default) aborts; \code{"warn"} warns and returns the
+best-effort result; \code{"quiet"} returns it silently. Failing loudly is the
+default because a silently empty replay is worse than none.}
 }
 \value{
-A list with \code{config} (an \code{\link[=llm_config]{llm_config()}}), \code{messages} (a named
-character vector of role/content turns), and \code{complete} (a logical: \code{TRUE}
-when the body was fully reconstructed, \code{FALSE} when content was dropped).
-\code{NULL} when the record carries no request body.
+A list with \code{config} (an \code{\link[=llm_config]{llm_config()}}), \code{messages}, \code{complete},
+and \code{reissuable}; \code{NULL} when the record carries no request body.
+\code{messages} is a character vector of turns named by role, or, when a turn
+carries non-text content, a list of turns whose attachments are kept only
+as hashes. \code{complete} is \code{TRUE} when every turn was recovered with its
+text and attachment hashes, which is what \code{\link[=llm_request_hash]{llm_request_hash()}} needs.
+\code{reissuable} is \code{TRUE} when the rebuilt messages can also be sent again as
+the original request: it is \code{FALSE} when the record has attachments (only
+their hashes survive), tool calls or tool results (which are dropped), or a
+role mapped with loss (such as \code{developer} to \code{system}).
 }
 \description{
 Turns one parsed log record (the \code{rec} element of a \code{\link[=llm_log_read]{llm_log_read()}} entry)
