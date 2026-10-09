@@ -18,9 +18,15 @@ current prices, holding columns \code{model}, \code{input}, and \code{output} (U
 per \strong{million} tokens), and optionally \code{cached} (price per million cached
 prompt tokens). When given, a \code{cost_estimate} column is added: cached
 tokens are billed at the \code{cached} rate (or the \code{input} rate if no \code{cached}
-column), the remaining sent tokens at \code{input}, and received tokens at
-\code{output}. LLMR ships no price list on purpose; prices change, and a stale
-bundled table would mislead silently.}
+column), the remaining sent tokens at \code{input}, and everything beyond the
+prompt (\code{total_tokens - sent_tokens} when both are known, which includes
+Gemini's thinking tokens; otherwise the received tokens) at \code{output}. For
+Anthropic rows, whose sent count already excludes cache reads, all sent
+tokens are billed at \code{input}. Rates must be numeric, finite, and
+nonnegative, and each model may appear once; a missing \code{cached} rate is
+allowed only for models whose rows have no cached tokens. Cache-write
+charges are not included. LLMR ships no price list on purpose; prices
+change, and a stale bundled table would mislead silently.}
 }
 \value{
 A one-row tibble: \code{n}, \code{n_ok}, \code{n_failed}, \code{ok_rate}, \code{n_truncated}

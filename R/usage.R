@@ -148,9 +148,15 @@
 #'   per **million** tokens), and optionally `cached` (price per million cached
 #'   prompt tokens). When given, a `cost_estimate` column is added: cached
 #'   tokens are billed at the `cached` rate (or the `input` rate if no `cached`
-#'   column), the remaining sent tokens at `input`, and received tokens at
-#'   `output`. LLMR ships no price list on purpose; prices change, and a stale
-#'   bundled table would mislead silently.
+#'   column), the remaining sent tokens at `input`, and everything beyond the
+#'   prompt (`total_tokens - sent_tokens` when both are known, which includes
+#'   Gemini's thinking tokens; otherwise the received tokens) at `output`. For
+#'   Anthropic rows, whose sent count already excludes cache reads, all sent
+#'   tokens are billed at `input`. Rates must be numeric, finite, and
+#'   nonnegative, and each model may appear once; a missing `cached` rate is
+#'   allowed only for models whose rows have no cached tokens. Cache-write
+#'   charges are not included. LLMR ships no price list on purpose; prices
+#'   change, and a stale bundled table would mislead silently.
 #'
 #' @return A one-row tibble: `n`, `n_ok`, `n_failed`, `ok_rate`, `n_truncated`
 #'   (finish `"length"`), `n_filtered` (finish `"filter"`), `sent_tokens`,
@@ -231,13 +237,26 @@ llm_usage <- function(x, prefix = NULL, price_table = NULL) {
 # Internal: cost estimate from a user-supplied price table (per million tokens).
 # Cached prompt tokens are billed at the `cached` rate when supplied, otherwise
 # at the input rate (i.e., caching is ignored). Rows whose model has no price
-# are excluded with a warning.
+# are excluded with a warning. Rates are validated rather than dropped: a
+# missing or invalid rate would otherwise shrink the estimate silently.
 .llm_cost_estimate <- function(x, m, price_table) {
   if (!is.data.frame(price_table) ||
       !all(c("model", "input", "output") %in% names(price_table))) {
     stop("`price_table` must be a data frame with columns `model`, `input`, ",
          "`output` (and optionally `cached`), in currency per million tokens.",
          call. = FALSE)
+  }
+  rate_cols <- intersect(c("input", "output", "cached"), names(price_table))
+  for (col in rate_cols) {
+    if (!is.numeric(price_table[[col]])) {
+      stop(sprintf("`price_table$%s` must be numeric (a factor would be read as its codes).", col),
+           call. = FALSE)
+    }
+  }
+  dup <- unique(as.character(price_table$model[duplicated(price_table$model)]))
+  if (length(dup)) {
+    stop("`price_table` lists model(s) more than once: ", paste(dup, collapse = ", "),
+         ".", call. = FALSE)
   }
   sent   <- .llm_get_col(x, m[["sent"]],   NA_integer_)
   rec    <- .llm_get_col(x, m[["rec"]],    NA_integer_)
@@ -266,7 +285,26 @@ llm_usage <- function(x, prefix = NULL, price_table = NULL) {
   cached0 <- ifelse(is.na(cached), 0, as.numeric(cached))
   sent0   <- ifelse(is.na(sent),   0, as.numeric(sent))
   rec0    <- ifelse(is.na(rec),    0, as.numeric(rec))
-  fresh   <- pmax(sent0 - cached0, 0)
+
+  priced <- !is.na(idx)
+  bad_rate <- function(v) is.na(v) | !is.finite(v) | v < 0
+  bad <- priced & (bad_rate(p_in) | bad_rate(p_out) |
+                   (cached0 > 0 & bad_rate(p_cache)) |
+                   (!is.na(p_cache) & bad_rate(p_cache)))
+  if (any(bad)) {
+    stop("`price_table` has a missing, negative, or non-finite rate for model(s): ",
+         paste(unique(model[bad]), collapse = ", "),
+         ". A missing `cached` rate is allowed only for rows without cached tokens.",
+         call. = FALSE)
+  }
+  p_cache <- ifelse(is.na(p_cache), 0, p_cache)  # only rows with no cached tokens remain NA
+
+  # Cached tokens are part of the prompt count for most providers, so the
+  # fresh prompt is sent minus cached. Anthropic reports `input_tokens` without
+  # cache reads, so there the whole prompt count is fresh.
+  provider <- if ("provider" %in% names(x)) tolower(as.character(x$provider)) else
+    rep(NA_character_, nrow(x))
+  fresh <- ifelse(provider %in% "anthropic", sent0, pmax(sent0 - cached0, 0))
   # Billed output is everything beyond the prompt: total minus sent when both
   # are known. That equals the received tokens for providers whose total is
   # their sum, and includes Gemini's thinking tokens, which its received count

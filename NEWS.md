@@ -28,6 +28,11 @@
   (`$usage_unknown()`, also in `summary()`), and the tool loop reports
   `n_unknown_usage`.
 
+* `llm_usage(price_table = )` refuses missing, negative, non-finite, and
+  non-numeric rates and duplicated models, which used to shrink the estimate
+  silently, and prices Anthropic's cached tokens once; their sent count already
+  excludes cache reads, which the estimate used to subtract again.
+
 * LLMR requires httr2 1.1.1 or later. Streaming uses functions added in httr2
   1.0.4 and relies on `resp_stream_sse()` returning event data as one string,
   as it does from 1.1.1.
