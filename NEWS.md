@@ -16,6 +16,10 @@
   run with the tool's default arguments. `tool_calls()` reports the argument
   text as sent in `arguments_raw` and its validity in `arguments_ok`.
 
+* LLMR requires httr2 1.1.1 or later. Streaming uses functions added in httr2
+  1.0.4 and relies on `resp_stream_sse()` returning event data as one string,
+  as it does from 1.1.1.
+
 # LLMR 0.8.12
 
 * Uncaught API errors print their message again. The parsed provider payload

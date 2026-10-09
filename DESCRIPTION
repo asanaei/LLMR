@@ -11,7 +11,7 @@ Description: One interface to many large language model providers: a single
   same calls scale to multi-model and multi-condition studies.
 License: MIT + file LICENSE
 Encoding: UTF-8
-Imports: httr2 (>= 1.0.0), curl, purrr, dplyr, tidyr, rlang, memoise, future, future.apply,
+Imports: httr2 (>= 1.1.1), curl, purrr, dplyr, tidyr, rlang, memoise, future, future.apply,
         tibble, base64enc, mime,  glue (>= 1.6.0),  cli (>= 3.6.0), jsonlite, vctrs,
         digest, tidyselect
 Suggests: testthat (>= 3.0.0), roxygen2 (>= 7.1.2),
