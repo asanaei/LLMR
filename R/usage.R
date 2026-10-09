@@ -322,8 +322,10 @@ llm_usage <- function(x, prefix = NULL, price_table = NULL) {
 #' truncated / content-filtered completion (`finish_reason` `"length"` or
 #' `"filter"`), with the diagnostic detail needed to act. Works on both
 #' [call_llm_par()] and [llm_mutate()] results. For a [call_llm_par()] result
-#' (which still carries `config` and `messages`), pass the original frame to
-#' [llm_par_resume()] to re-run only these rows.
+#' (which still carries `config` and `messages`), [llm_par_resume()] re-runs
+#' the hard failures. Truncated and filtered rows count as successful there and
+#' are not re-run; re-run them with [call_llm_par()], for example with a larger
+#' `max_tokens`.
 #'
 #' @inheritParams llm_usage
 #' @param include One of `"failed"` (hard failures only), `"truncated"`

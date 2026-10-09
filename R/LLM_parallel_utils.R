@@ -1175,11 +1175,28 @@ llm_cross_design <- function(.data, configs, prompt = NULL, .messages = NULL, .s
 #' Finds rows where `success` is `FALSE` or `NA` in the output of [call_llm_par()],
 #' re-runs them, and patches the results back into the original data frame.
 #'
+#' Only failed rows are re-run. A truncated or content-filtered reply counts as
+#' successful (`success = TRUE`), so it is kept as it is; re-run such rows with
+#' [call_llm_par()] on those rows, for example with a larger `max_tokens`.
+#'
+#' The raw result columns and the structured diagnostics are refreshed for the
+#' resumed rows. Two kinds of derived column are not: fields hoisted from
+#' structured output, and tag columns (`tags_ok`, `tags_data`, and extracted
+#' tags). A warning says so when they are present; re-derive them with
+#' [llm_parse_structured_col()] or [llm_parse_tags_col()] on the patched
+#' result. When [call_llm_par()] had to rename its own diagnostic columns
+#' because the input already used those names (for example `success.1`), the
+#' resume is refused, since the columns to patch would be ambiguous; rename
+#' those input columns before calling [call_llm_par()].
+#'
 #' @param results Output from [call_llm_par()] (must contain `config`, `messages`,
 #'   and `success` columns).
-#' @param tries Number of retries per call. Default 3.
+#' @param tries Total number of attempts per re-run call (the first attempt plus
+#'   retries), as in [call_llm_robust()]. Default 3.
 #' @param ... Passed to [call_llm_par()].
-#' @return The patched data frame with re-run results filled in.
+#' @return `results`, with the result columns of the re-run rows replaced by
+#'   the new attempt (which may fail again) and the other rows unchanged. When
+#'   no row failed, `results` is returned as it was, with a message.
 #'
 #' @examples
 #' \dontrun{

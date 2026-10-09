@@ -45,6 +45,9 @@
   with loss. `complete` and request hashes are unchanged; the help now says
   what each means.
 
+* The help for `llm_failures()` and `llm_par_resume()` no longer implies that
+  truncated rows are re-run; they are listed but kept as they are.
+
 * LLMR requires httr2 1.1.1 or later. Streaming uses functions added in httr2
   1.0.4 and relies on `resp_stream_sse()` returning event data as one string,
   as it does from 1.1.1.

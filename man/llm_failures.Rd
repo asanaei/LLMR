@@ -27,8 +27,10 @@ Returns one row per problem: a hard failure (\code{success} not \code{TRUE}) or 
 truncated / content-filtered completion (\code{finish_reason} \code{"length"} or
 \code{"filter"}), with the diagnostic detail needed to act. Works on both
 \code{\link[=call_llm_par]{call_llm_par()}} and \code{\link[=llm_mutate]{llm_mutate()}} results. For a \code{\link[=call_llm_par]{call_llm_par()}} result
-(which still carries \code{config} and \code{messages}), pass the original frame to
-\code{\link[=llm_par_resume]{llm_par_resume()}} to re-run only these rows.
+(which still carries \code{config} and \code{messages}), \code{\link[=llm_par_resume]{llm_par_resume()}} re-runs
+the hard failures. Truncated and filtered rows count as successful there and
+are not re-run; re-run them with \code{\link[=call_llm_par]{call_llm_par()}}, for example with a larger
+\code{max_tokens}.
 }
 \examples{
 res <- tibble::tibble(

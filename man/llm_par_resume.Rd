@@ -10,16 +10,34 @@ llm_par_resume(results, tries = 3, ...)
 \item{results}{Output from \code{\link[=call_llm_par]{call_llm_par()}} (must contain \code{config}, \code{messages},
 and \code{success} columns).}
 
-\item{tries}{Number of retries per call. Default 3.}
+\item{tries}{Total number of attempts per re-run call (the first attempt plus
+retries), as in \code{\link[=call_llm_robust]{call_llm_robust()}}. Default 3.}
 
 \item{...}{Passed to \code{\link[=call_llm_par]{call_llm_par()}}.}
 }
 \value{
-The patched data frame with re-run results filled in.
+\code{results}, with the result columns of the re-run rows replaced by
+the new attempt (which may fail again) and the other rows unchanged. When
+no row failed, \code{results} is returned as it was, with a message.
 }
 \description{
 Finds rows where \code{success} is \code{FALSE} or \code{NA} in the output of \code{\link[=call_llm_par]{call_llm_par()}},
 re-runs them, and patches the results back into the original data frame.
+}
+\details{
+Only failed rows are re-run. A truncated or content-filtered reply counts as
+successful (\code{success = TRUE}), so it is kept as it is; re-run such rows with
+\code{\link[=call_llm_par]{call_llm_par()}} on those rows, for example with a larger \code{max_tokens}.
+
+The raw result columns and the structured diagnostics are refreshed for the
+resumed rows. Two kinds of derived column are not: fields hoisted from
+structured output, and tag columns (\code{tags_ok}, \code{tags_data}, and extracted
+tags). A warning says so when they are present; re-derive them with
+\code{\link[=llm_parse_structured_col]{llm_parse_structured_col()}} or \code{\link[=llm_parse_tags_col]{llm_parse_tags_col()}} on the patched
+result. When \code{\link[=call_llm_par]{call_llm_par()}} had to rename its own diagnostic columns
+because the input already used those names (for example \code{success.1}), the
+resume is refused, since the columns to patch would be ambiguous; rename
+those input columns before calling \code{\link[=call_llm_par]{call_llm_par()}}.
 }
 \examples{
 \dontrun{
