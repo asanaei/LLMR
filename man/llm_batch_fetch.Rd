@@ -17,10 +17,16 @@ above. If the job is not finished yet, an error is raised; check with
 }
 \description{
 Retrieves a finished job and returns one row per submitted request, in
-submission order, with the same diagnostic columns as \code{\link[=call_llm_par]{call_llm_par()}}
+submission order, with the core result columns of \code{\link[=call_llm_par]{call_llm_par()}}
 (response text, success, finish reason, token counts including cached
-tokens, response id, raw JSON). Rows whose requests failed carry the
-provider's error message. Parse structured replies afterwards with
+tokens, response id, raw JSON); batch results have no \code{duration},
+\code{status_code}, \code{error_code}, or \code{bad_param} columns, and a failed row's
+\code{finish_reason} is \code{NA}. Rows whose requests failed carry the provider's
+error message; a request the provider did not return is marked "not
+returned by provider", and a reply that cannot be read is a failed row with
+the reason. Unparseable result lines, results for ids that were not
+submitted, and duplicate results (the first is kept) are reported in one
+warning. Parse structured replies afterwards with
 \code{\link[=llm_parse_structured_col]{llm_parse_structured_col()}} or \code{\link[=llm_parse_tags_col]{llm_parse_tags_col()}}, exactly as for
 live results.
 }

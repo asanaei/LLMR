@@ -110,10 +110,18 @@ print.llmr_batch_job <- function(x, ...) {
 }
 
 # Build one synthesized provider response into call_llm_par-style row fields.
+# `read_error` is set when the reply's text cannot be extracted, so the caller
+# records a failure instead of a success without text.
 .batch_row_from_content <- function(content) {
   tc <- .token_counts(content)
+  read_error <- NULL
+  text <- tryCatch(extract_text(content), error = function(e) {
+    read_error <<- conditionMessage(e)
+    NA_character_
+  })
   list(
-    response_text    = tryCatch(extract_text(content), error = function(e) NA_character_),
+    read_error       = read_error,
+    response_text    = text,
     finish_reason    = tryCatch(.std_finish_reason(content), error = function(e) NA_character_),
     sent_tokens      = as.integer(tc$sent %||% NA_integer_),
     rec_tokens       = as.integer(tc$rec %||% NA_integer_),
@@ -153,9 +161,69 @@ print.llmr_batch_job <- function(x, ...) {
 .batch_fill_row <- function(res, i, fields, success, error_message = NA_character_) {
   res$success[i]       <- success
   res$error_message[i] <- error_message
-  for (nm in names(fields)) {
+  for (nm in intersect(names(fields), names(res))) {
     v <- fields[[nm]]
     if (!is.null(v) && length(v) == 1L) res[[nm]][i] <- v
+  }
+  res
+}
+
+# Fill row i from a provider reply reported as successful. A reply that cannot
+# be read is a failed row with the reason, never a success without text.
+.batch_fill_success <- function(res, i, content) {
+  fields <- tryCatch(.batch_row_from_content(content), error = function(e) e)
+  if (inherits(fields, "error")) {
+    return(.batch_fill_row(res, i, list(), FALSE,
+                           error_message = paste("malformed record:", conditionMessage(fields))))
+  }
+  if (!is.null(fields$read_error)) {
+    return(.batch_fill_row(res, i, fields, FALSE,
+                           error_message = paste("unreadable reply:", fields$read_error)))
+  }
+  .batch_fill_row(res, i, fields, TRUE)
+}
+
+# Bookkeeping for one fetch: which submitted rows a record filled, and what was
+# skipped. `claim()` returns the row for a record id, or NULL for an unknown id
+# or a later duplicate (the first record for an id is kept).
+.batch_ledger <- function(custom_ids) {
+  e <- new.env(parent = emptyenv())
+  e$idx <- stats::setNames(seq_along(custom_ids), custom_ids)
+  e$seen <- rep(FALSE, length(custom_ids))
+  e$malformed <- 0L
+  e$unknown <- 0L
+  e$duplicates <- character(0)
+  e$claim <- function(id) {
+    # A non-character id must not index by position, so it is read as text.
+    id <- if (is.null(id) || !length(id)) "" else as.character(id[[1]])
+    i <- unname(e$idx[id])
+    if (is.null(i) || !length(i) || is.na(i)) {
+      e$unknown <- e$unknown + 1L
+      return(NULL)
+    }
+    if (e$seen[i]) {
+      e$duplicates <- c(e$duplicates, id)
+      return(NULL)
+    }
+    e$seen[i] <- TRUE
+    i
+  }
+  e
+}
+
+# Label rows no record filled, and report everything that was skipped.
+.batch_close <- function(res, led) {
+  missing <- !led$seen
+  res$error_message[missing & is.na(res$error_message)] <- "not returned by provider"
+  notes <- c(
+    if (any(missing)) sprintf("%d submitted request(s) were not returned by the provider", sum(missing)),
+    if (led$malformed) sprintf("%d result line(s) could not be parsed", led$malformed),
+    if (led$unknown) sprintf("%d result(s) had an id that was not submitted", led$unknown),
+    if (length(led$duplicates)) sprintf("%d duplicate result(s) were ignored, keeping the first (ids: %s)",
+                                        length(led$duplicates),
+                                        paste(utils::head(unique(led$duplicates), 5L), collapse = ", ")))
+  if (length(notes)) {
+    warning("Batch results: ", paste(notes, collapse = "; "), ".", call. = FALSE)
   }
   res
 }
@@ -249,10 +317,16 @@ llm_batch_status <- function(job) {
 #' Fetch the results of a batch job
 #'
 #' Retrieves a finished job and returns one row per submitted request, in
-#' submission order, with the same diagnostic columns as [call_llm_par()]
+#' submission order, with the core result columns of [call_llm_par()]
 #' (response text, success, finish reason, token counts including cached
-#' tokens, response id, raw JSON). Rows whose requests failed carry the
-#' provider's error message. Parse structured replies afterwards with
+#' tokens, response id, raw JSON); batch results have no `duration`,
+#' `status_code`, `error_code`, or `bad_param` columns, and a failed row's
+#' `finish_reason` is `NA`. Rows whose requests failed carry the provider's
+#' error message; a request the provider did not return is marked "not
+#' returned by provider", and a reply that cannot be read is a failed row with
+#' the reason. Unparseable result lines, results for ids that were not
+#' submitted, and duplicate results (the first is kept) are reported in one
+#' warning. Parse structured replies afterwards with
 #' [llm_parse_structured_col()] or [llm_parse_tags_col()], exactly as for
 #' live results.
 #'
@@ -381,7 +455,7 @@ llm_batch_cancel <- function(job) {
   }
 
   res <- .batch_empty_results(job$n, job$custom_ids)
-  idx <- stats::setNames(seq_along(job$custom_ids), job$custom_ids)
+  led <- .batch_ledger(job$custom_ids)
 
   read_jsonl <- function(file_id) {
     if (is.null(file_id)) return(character(0))
@@ -395,18 +469,18 @@ llm_batch_cancel <- function(job) {
   for (ln in c(read_jsonl(j$output_file_id), read_jsonl(j$error_file_id))) {
     if (!nzchar(trimws(ln))) next
     rec <- tryCatch(jsonlite::fromJSON(ln, simplifyVector = FALSE), error = function(e) NULL)
-    if (is.null(rec)) next
-    i <- unname(idx[rec$custom_id %||% ""])
-    if (is.null(i) || is.na(i)) next
+    if (!is.list(rec)) { led$malformed <- led$malformed + 1L; next }
+    i <- led$claim(rec$custom_id)
+    if (is.null(i)) next
     body <- rec$response$body
-    if (!is.null(body) && (rec$response$status_code %||% 500) < 400 && is.null(rec$error)) {
-      res <- .batch_fill_row(res, i, .batch_row_from_content(body), TRUE)
+    if (is.list(body) && (rec$response$status_code %||% 500) < 400 && is.null(rec$error)) {
+      res <- .batch_fill_success(res, i, body)
     } else {
-      msg <- rec$error$message %||% body$error$message %||% "batch request failed"
+      msg <- rec$error$message %||% (if (is.list(body)) body$error$message) %||% "batch request failed"
       res <- .batch_fill_row(res, i, list(), FALSE, error_message = as.character(msg))
     }
   }
-  res
+  .batch_close(res, led)
 }
 
 # ---- Anthropic (Message Batches) ------------------------------------------------
@@ -462,21 +536,21 @@ llm_batch_cancel <- function(job) {
     httr2::resp_body_string()
 
   res <- .batch_empty_results(job$n, job$custom_ids)
-  idx <- stats::setNames(seq_along(job$custom_ids), job$custom_ids)
+  led <- .batch_ledger(job$custom_ids)
   for (ln in strsplit(txt, "\n", fixed = TRUE)[[1]]) {
     if (!nzchar(trimws(ln))) next
     rec <- tryCatch(jsonlite::fromJSON(ln, simplifyVector = FALSE), error = function(e) NULL)
-    if (is.null(rec)) next
-    i <- unname(idx[rec$custom_id %||% ""])
-    if (is.null(i) || is.na(i)) next
+    if (!is.list(rec)) { led$malformed <- led$malformed + 1L; next }
+    i <- led$claim(rec$custom_id)
+    if (is.null(i)) next
     if (identical(rec$result$type, "succeeded")) {
-      res <- .batch_fill_row(res, i, .batch_row_from_content(rec$result$message), TRUE)
+      res <- .batch_fill_success(res, i, rec$result$message)
     } else {
       msg <- rec$result$error$message %||% rec$result$type %||% "batch request failed"
       res <- .batch_fill_row(res, i, list(), FALSE, error_message = as.character(msg))
     }
   }
-  res
+  .batch_close(res, led)
 }
 
 # ---- Gemini (batchGenerateContent, inline mode) ---------------------------------
@@ -536,17 +610,17 @@ llm_batch_cancel <- function(job) {
     stop("This Gemini batch did not return inline responses; file-based output ",
          "is not supported by llm_batch_fetch() yet.", call. = FALSE)
   }
-  idx <- stats::setNames(seq_along(job$custom_ids), job$custom_ids)
+  led <- .batch_ledger(job$custom_ids)
   for (item in inlined) {
-    key <- item$metadata$key %||% ""
-    i <- unname(idx[key])
-    if (is.null(i) || is.na(i)) next
-    if (!is.null(item$response)) {
-      res <- .batch_fill_row(res, i, .batch_row_from_content(item$response), TRUE)
+    if (!is.list(item)) { led$malformed <- led$malformed + 1L; next }
+    i <- led$claim(item$metadata$key)
+    if (is.null(i)) next
+    if (is.list(item$response)) {
+      res <- .batch_fill_success(res, i, item$response)
     } else {
       msg <- item$error$message %||% "batch request failed"
       res <- .batch_fill_row(res, i, list(), FALSE, error_message = as.character(msg))
     }
   }
-  res
+  .batch_close(res, led)
 }

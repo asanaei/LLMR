@@ -33,6 +33,12 @@
   silently, and prices Anthropic's cached tokens once; their sent count already
   excludes cache reads, which the estimate used to subtract again.
 
+* `llm_batch_fetch()` labels requests the provider did not return ("not
+  returned by provider"), turns an unreadable reply into a failed row instead
+  of a success without text or an aborted fetch, keeps the first of duplicate
+  results instead of merging them, and reports skipped lines, unknown ids, and
+  duplicates in one warning.
+
 * LLMR requires httr2 1.1.1 or later. Streaming uses functions added in httr2
   1.0.4 and relies on `resp_stream_sse()` returning event data as one string,
   as it does from 1.1.1.
