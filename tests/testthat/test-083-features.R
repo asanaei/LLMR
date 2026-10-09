@@ -380,6 +380,8 @@ test_that("chat content strings render multimodal parts readably", {
 test_that("stream finish reasons reuse the standard vocabulary", {
   expect_identical(LLMR:::.map_stream_finish("stop"), "stop")
   expect_identical(LLMR:::.map_stream_finish("length"), "length")
+  # NULL reaches this helper only after the provider signalled completion;
+  # streams that end without that signal fail (test-stream-failures.R).
   expect_identical(LLMR:::.map_stream_finish(NULL), "stop")
 })
 

@@ -5,6 +5,12 @@
   braces as written. A message with example JSON used to go out with its
   placeholders unfilled.
 
+* `call_llm_stream()` raises a typed error, with the text received so far in
+  `partial_text`, when the provider reports an error inside the stream or the
+  stream ends before the provider signals completion; both used to return the
+  partial text as a finished reply. Unparseable events now draw a warning, and
+  streamed calls are logged with their request.
+
 # LLMR 0.8.12
 
 * Uncaught API errors print their message again. The parsed provider payload

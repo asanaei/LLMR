@@ -171,6 +171,54 @@
 .drop_null <- function(x) purrr::compact(x)
 
 
+#' Log and raise the typed error for an HTTP failure
+#'
+#' Shared by perform_request() and the streaming transport, so both classify
+#' and report a failed request identically. `err` is the parsed error body (or
+#' a try-error) and `raw_err` its text (or `NA`). `call` defaults to the
+#' caller's frame, so the error header names the function the user called.
+#'
+#' @keywords internal
+#' @noRd
+.llmr_http_failure <- function(code, err, raw_err, resp, req, provider, model,
+                               start_time, call = rlang::caller_env()) {
+  raw_tail <- if (!is.na(raw_err) && nzchar(raw_err)) substr(raw_err, 1L, 2000L) else NULL
+  fields <- .llmr_error_fields(err, raw_tail)
+  err_reason <- fields$reason
+  bad_param  <- fields$param
+  category   <- .llmr_classify_error(provider, code, fields$code, err_reason)
+  msg_lines <- c(
+    "LLM API request failed.",
+    paste0("HTTP status: ", code),
+    paste0("Reason: ", err_reason),
+    if (!is.na(bad_param)) paste0("Provider flagged parameter: ", bad_param)
+    else if (category == "billing")
+      "The account is blocked by billing or a spend limit, not by this request."
+    else if (category == "param")
+      "Tip: check model params for provider/API version."
+  )
+  .llmr_log_event(
+    kind = "error", provider = provider, model = model, status = code,
+    request = req, error_message = err_reason,
+    duration_s = as.numeric(difftime(Sys.time(), start_time, units = "secs"))
+  )
+  .llmr_error(
+    message     = paste(msg_lines, collapse = "\n"),
+    category    = category,
+    status_code = code,
+    provider    = provider %||% NA_character_,
+    model       = model %||% NA_character_,
+    param       = bad_param,
+    code        = fields$code,
+    request_id  = httr2::resp_header(resp, "x-request-id") %||%
+      httr2::resp_header(resp, "request-id"),
+    retry_after = suppressWarnings(as.numeric(httr2::resp_header(resp, "retry-after") %||% NA_real_)),
+    response_body = if (!inherits(err, "try-error")) err
+                    else if (!is.null(raw_tail)) list(raw = raw_tail) else NULL,
+    call = call
+  )
+}
+
 #' Perform API Request
 #'
 #' Internal helper function to perform the API request and process the response.
@@ -210,40 +258,7 @@ perform_request <- function(req, verbose, provider = NULL, model = NULL, config 
     err <- try(httr2::resp_body_json(resp, check_type = FALSE), silent = TRUE)
     raw_err <- try(httr2::resp_body_string(resp), silent = TRUE)
     raw_err <- if (inherits(raw_err, "try-error")) NA_character_ else trimws(raw_err)
-    raw_tail <- if (!is.na(raw_err) && nzchar(raw_err)) substr(raw_err, 1L, 2000L) else NULL
-    fields <- .llmr_error_fields(err, raw_tail)
-    err_reason <- fields$reason
-    bad_param  <- fields$param
-    category   <- .llmr_classify_error(provider, code, fields$code, err_reason)
-    msg_lines <- c(
-      "LLM API request failed.",
-      paste0("HTTP status: ", code),
-      paste0("Reason: ", err_reason),
-      if (!is.na(bad_param)) paste0("Provider flagged parameter: ", bad_param)
-      else if (category == "billing")
-        "The account is blocked by billing or a spend limit, not by this request."
-      else if (category == "param")
-        "Tip: check model params for provider/API version."
-    )
-    .llmr_log_event(
-      kind = "error", provider = provider, model = model, status = code,
-      request = req, error_message = err_reason,
-      duration_s = as.numeric(difftime(Sys.time(), start_time, units = "secs"))
-    )
-    .llmr_error(
-      message     = paste(msg_lines, collapse = "\n"),
-      category    = category,
-      status_code = code,
-      provider    = provider %||% NA_character_,
-      model       = model %||% NA_character_,
-      param       = bad_param,
-      code        = fields$code,
-      request_id  = httr2::resp_header(resp, "x-request-id") %||%
-        httr2::resp_header(resp, "request-id"),
-      retry_after = suppressWarnings(as.numeric(httr2::resp_header(resp, "retry-after") %||% NA_real_)),
-      response_body = if (!inherits(err, "try-error")) err
-                      else if (!is.null(raw_tail)) list(raw = raw_tail) else NULL
-    )
+    .llmr_http_failure(code, err, raw_err, resp, req, provider, model, start_time)
   }
 
   raw_response <- httr2::resp_body_raw(resp)

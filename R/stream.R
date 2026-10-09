@@ -56,6 +56,15 @@
 #' exception: it rewrites a full parsed response, which has no per-chunk meaning
 #' for a stream, so it is not applied here.
 #'
+#' A stream counts as complete only when the provider signals completion. An
+#' HTTP error, an error event sent inside the stream, or a connection that ends
+#' before the provider's completion signal raises a typed `llmr_api_*_error`
+#' that also has class `llmr_stream_error`; the text received before the
+#' failure is in the condition's `partial_text` field. The call is not retried,
+#' because `callback` may already have emitted part of the text. Events that
+#' cannot be parsed are skipped with a warning that gives their number. An error
+#' raised by `callback` itself propagates unchanged.
+#'
 #' @param config An [llm_config] for a generative model.
 #' @param messages Messages as in [call_llm()].
 #' @param callback Function called with each text chunk (a character scalar)
@@ -84,13 +93,14 @@ call_llm_stream <- function(config, messages,
   }
   prov <- config$provider %||% "openai"
   start_time <- Sys.time()
+  call <- rlang::current_env()
 
   if (identical(prov, "anthropic")) {
-    out <- .stream_anthropic(config, messages, callback)
+    out <- .stream_anthropic(config, messages, callback, call = call)
   } else if (identical(prov, "gemini")) {
-    out <- .stream_gemini(config, messages, callback)
+    out <- .stream_gemini(config, messages, callback, call = call)
   } else {
-    out <- .stream_openai_compat(config, messages, callback)
+    out <- .stream_openai_compat(config, messages, callback, call = call)
   }
 
   resp <- new_llmr_response(
@@ -118,7 +128,7 @@ call_llm_stream <- function(config, messages,
     thinking      = if (nzchar(out$thinking %||% "")) out$thinking else NA_character_
   )
   .llmr_log_event(kind = "stream", provider = prov, model = config$model,
-                  status = 200L, response = resp)
+                  status = out$status, request = out$req, response = resp)
   if (verbose) print(resp)
   invisible(resp)
 }
@@ -143,25 +153,107 @@ call_llm_stream <- function(config, messages,
 }
 
 # Shared SSE pump: applies the request hooks, then hands each parsed JSON event
-# to `handle`.
-.stream_events <- function(req, config, handle) {
+# to `handle`, which records text and metadata in `acc`. The stream counts as
+# complete only when the provider signals it: `[DONE]`, Anthropic's
+# `message_stop` (both set `acc$done`), or a finish reason in any event (set by
+# the handlers in `acc$finish`). An HTTP failure, a provider error event, or a
+# stream that ends without such a signal raises a typed LLMR error carrying the
+# text received so far; nothing is retried, since `callback` may already have
+# emitted that text. Returns the HTTP status and the request as sent.
+.stream_events <- function(req, config, handle, acc, call = rlang::caller_env()) {
+  start_time <- Sys.time()
   req <- .llmr_apply_req_hooks(req, config)
+  req <- httr2::req_error(req, is_error = function(resp) FALSE)
   con <- httr2::req_perform_connection(req)
   on.exit(close(con), add = TRUE)
+  status <- httr2::resp_status(con)
+  if (status >= 400) {
+    raw_err <- .llmr_stream_body_text(con)
+    err <- try(jsonlite::fromJSON(raw_err, simplifyVector = FALSE), silent = TRUE)
+    .llmr_http_failure(status, err, raw_err, con, req,
+                       config$provider %||% "openai", config$model, start_time,
+                       call = call)
+  }
+  skipped <- 0L
   repeat {
     ev <- httr2::resp_stream_sse(con)
     if (is.null(ev)) break
     dat <- ev$data
     if (is.null(dat) || !nzchar(dat)) next
-    if (identical(trimws(dat), "[DONE]")) break
+    if (identical(trimws(dat), "[DONE]")) {
+      acc$done <- TRUE
+      break
+    }
     j <- tryCatch(jsonlite::fromJSON(dat, simplifyVector = FALSE),
                   error = function(e) NULL)
-    if (!is.null(j)) handle(j)
+    if (is.null(j)) {
+      skipped <- skipped + 1L
+      next
+    }
+    if (!is.null(j$error) || identical(j$type, "error")) {
+      fields <- .llmr_error_fields(j)
+      .llmr_stream_fail(fields$reason, acc, req, config, status, start_time,
+                        code = fields$code, response_body = j, call = call)
+    }
+    handle(j)
   }
-  invisible(NULL)
+  if (is.null(acc$finish) && !isTRUE(acc$done)) {
+    .llmr_stream_fail("The stream ended before the provider signalled completion.",
+                      acc, req, config, status, start_time, call = call)
+  }
+  if (skipped > 0L) {
+    warning(sprintf(paste0(
+      "%d streamed event(s) could not be parsed as JSON and were skipped; ",
+      "the returned text may be incomplete."), skipped), call. = FALSE)
+  }
+  list(status = status, req = req)
 }
 
-.stream_openai_compat <- function(config, messages, callback) {
+# Read the remaining body of a streaming response, for error reporting.
+# resp_stream_raw() in bounded chunks works on every supported httr2 version.
+.llmr_stream_body_text <- function(con) {
+  buf <- raw(0)
+  repeat {
+    chunk <- httr2::resp_stream_raw(con, kb = 64)
+    if (!length(chunk)) break
+    buf <- c(buf, chunk)
+  }
+  trimws(rawToChar(buf))
+}
+
+# Log and raise the typed error for a stream that failed after the connection
+# opened. The text received before the failure travels as `partial_text`.
+.llmr_stream_fail <- function(reason, acc, req, config, status, start_time,
+                              code = NA_character_, response_body = NULL,
+                              call = rlang::caller_env()) {
+  provider <- config$provider %||% "openai"
+  partial <- paste(acc$text, collapse = "")
+  category <- .llmr_classify_error(provider, NA_integer_, code, reason)
+  .llmr_log_event(
+    kind = "error", provider = provider, model = config$model, status = status,
+    request = req, error_message = reason,
+    duration_s = as.numeric(difftime(Sys.time(), start_time, units = "secs"))
+  )
+  .llmr_error(
+    message = paste(c(
+      "LLM stream failed.",
+      paste0("Reason: ", reason),
+      if (nzchar(partial))
+        sprintf("%d characters arrived before the failure; they are in the condition's `partial_text`.",
+                nchar(partial))
+    ), collapse = "\n"),
+    category = category,
+    provider = provider,
+    model = config$model %||% NA_character_,
+    code = code,
+    response_body = response_body,
+    class = "llmr_stream_error",
+    call = call,
+    partial_text = partial
+  )
+}
+
+.stream_openai_compat <- function(config, messages, callback, call = rlang::caller_env()) {
   spec <- .compat_stream_spec(config$provider %||% "openai")
   extra <- list(stream = TRUE)
   if (spec$usage_opt) extra$stream_options <- list(include_usage = TRUE)
@@ -175,9 +267,9 @@ call_llm_stream <- function(config, messages,
   acc$text <- character(0); acc$thinking <- character(0)
   acc$finish <- NULL; acc$sent <- NULL; acc$rec <- NULL
   acc$reasoning_tokens <- NULL; acc$cached <- NULL
-  acc$id <- NULL; acc$model_version <- NULL; acc$last <- NULL
+  acc$id <- NULL; acc$model_version <- NULL; acc$last <- NULL; acc$done <- NULL
 
-  .stream_events(req, config, function(j) {
+  ev <- .stream_events(req, config, acc = acc, call = call, handle = function(j) {
     acc$last <- j
     if (is.null(acc$id) && !is.null(j$id)) acc$id <- j$id
     if (is.null(acc$model_version) && !is.null(j$model)) acc$model_version <- j$model
@@ -211,18 +303,19 @@ call_llm_stream <- function(config, messages,
        finish = .map_stream_finish(acc$finish),
        sent = acc$sent, rec = acc$rec,
        reasoning_tokens = acc$reasoning_tokens, cached = acc$cached,
-       id = acc$id, model_version = acc$model_version, raw = acc$last)
+       id = acc$id, model_version = acc$model_version, raw = acc$last,
+       status = ev$status, req = ev$req)
 }
 
-.stream_anthropic <- function(config, messages, callback) {
+.stream_anthropic <- function(config, messages, callback, call = rlang::caller_env()) {
   req <- .anthropic_chat_request(config, messages, extra_body = list(stream = TRUE))
 
   acc <- new.env(parent = emptyenv())
   acc$text <- character(0); acc$thinking <- character(0)
   acc$finish <- NULL; acc$sent <- NULL; acc$rec <- NULL; acc$cached <- NULL
-  acc$id <- NULL; acc$model_version <- NULL; acc$last <- NULL
+  acc$id <- NULL; acc$model_version <- NULL; acc$last <- NULL; acc$done <- NULL
 
-  .stream_events(req, config, function(j) {
+  ev <- .stream_events(req, config, acc = acc, call = call, handle = function(j) {
     acc$last <- j
     type <- j$type %||% ""
     if (identical(type, "message_start")) {
@@ -241,6 +334,8 @@ call_llm_stream <- function(config, messages,
     } else if (identical(type, "message_delta")) {
       if (!is.null(j$delta$stop_reason)) acc$finish <- j$delta$stop_reason
       if (!is.null(j$usage$output_tokens)) acc$rec <- as.integer(j$usage$output_tokens)
+    } else if (identical(type, "message_stop")) {
+      acc$done <- TRUE
     }
   })
 
@@ -248,10 +343,11 @@ call_llm_stream <- function(config, messages,
        thinking = paste(acc$thinking, collapse = ""),
        finish = .map_stream_finish(acc$finish),
        sent = acc$sent, rec = acc$rec, cached = acc$cached,
-       id = acc$id, model_version = acc$model_version, raw = acc$last)
+       id = acc$id, model_version = acc$model_version, raw = acc$last,
+       status = ev$status, req = ev$req)
 }
 
-.stream_gemini <- function(config, messages, callback) {
+.stream_gemini <- function(config, messages, callback, call = rlang::caller_env()) {
   req <- .gemini_chat_request(config, messages,
                               suffix = "streamGenerateContent",
                               query = list(alt = "sse"))
@@ -260,9 +356,9 @@ call_llm_stream <- function(config, messages,
   acc$text <- character(0); acc$thinking <- character(0)
   acc$finish <- NULL; acc$sent <- NULL; acc$rec <- NULL; acc$cached <- NULL
   acc$reasoning_tokens <- NULL
-  acc$id <- NULL; acc$model_version <- NULL; acc$last <- NULL
+  acc$id <- NULL; acc$model_version <- NULL; acc$last <- NULL; acc$done <- NULL
 
-  .stream_events(req, config, function(j) {
+  ev <- .stream_events(req, config, acc = acc, call = call, handle = function(j) {
     acc$last <- j
     if (is.null(acc$id) && !is.null(j$responseId)) acc$id <- j$responseId
     if (is.null(acc$model_version) && !is.null(j$modelVersion)) acc$model_version <- j$modelVersion
@@ -297,7 +393,8 @@ call_llm_stream <- function(config, messages,
        finish = .map_stream_finish(acc$finish),
        sent = acc$sent, rec = acc$rec, cached = acc$cached,
        reasoning_tokens = acc$reasoning_tokens,
-       id = acc$id, model_version = acc$model_version, raw = acc$last)
+       id = acc$id, model_version = acc$model_version, raw = acc$last,
+       status = ev$status, req = ev$req)
 }
 
 # Reuse the standardized finish vocabulary for stream-reported reasons.

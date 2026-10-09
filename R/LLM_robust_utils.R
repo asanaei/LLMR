@@ -36,6 +36,9 @@
 #'   - llmr_api_server_error
 #'   - llmr_api_unknown_error
 #'
+#' `class` prepends further classes (for example `llmr_stream_error`), and named
+#' arguments in `...` become further condition fields.
+#'
 #' @keywords internal
 #' @noRd
 .llmr_error <- function(message, category = c("param","auth","billing","rate_limit","server","unknown"),
@@ -47,10 +50,13 @@
                         request_id = NA_character_,
                         retry_after = NA_real_,
                         response_body = NULL,
-                        call = rlang::caller_env()) {
+                        class = NULL,
+                        call = rlang::caller_env(),
+                        ...) {
 
   category <- match.arg(category)
   cls <- c(
+    class,
     paste0("llmr_api_", category, "_error"),
     "llmr_api_error", "error", "condition"
   )
@@ -74,7 +80,8 @@
       code        = code,
       request_id  = request_id,
       retry_after = retry_after,
-      response_body = response_body
+      response_body = response_body,
+      ...
     )
   } else {
     rlang::abort(
@@ -88,7 +95,8 @@
       code        = code,
       request_id  = request_id,
       retry_after = retry_after,
-      response_body = response_body
+      response_body = response_body,
+      ...
     )
   }
 }
