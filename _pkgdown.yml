@@ -76,7 +76,6 @@ reference:
   - llm_usage
   - llm_failures
   - report
-  - llm_methods_text
 - title: Structured and tagged outputs
   contents:
   - enable_structured_output

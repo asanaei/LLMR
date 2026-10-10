@@ -16,6 +16,8 @@
 * The `llm_failures()` and `llm_par_resume()` help no longer implies that
   truncated rows are re-run.
 * Requires httr2 1.1.1 or later.
+* Removed the deprecated `llm_methods_text()`; `report()` drafts the same
+  paragraph.
 
 # LLMR 0.8.12
 
