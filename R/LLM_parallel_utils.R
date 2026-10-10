@@ -1172,46 +1172,60 @@ llm_cross_design <- function(.data, configs, prompt = NULL, .messages = NULL, .s
 
 #' Resume failed parallel LLM calls
 #'
-#' Finds rows where `success` is `FALSE` or `NA` in the output of [call_llm_par()],
-#' re-runs them, and patches the results back into the original data frame.
+#' Repeats calls for rows whose `success` value is not `TRUE` and patches
+#' their results into the supplied data frame.
 #'
-#' Only failed rows are re-run. A truncated or content-filtered reply counts as
-#' successful (`success = TRUE`), so it is kept as it is; re-run such rows with
-#' [call_llm_par()] on those rows, for example with a larger `max_tokens`.
+#' @details
+#' Selection depends on `success`, not `finish_reason`. Truncated and
+#' content-filtered replies returned with `success = TRUE` are retained.
+#' To repeat such a request, pass its `config` and `messages` columns to
+#' [call_llm_par()]. For a token-limit truncation, increase `max_tokens`
+#' in the configuration before repeating the request.
 #'
-#' The raw result columns and the structured diagnostics are refreshed for the
-#' resumed rows. Two kinds of derived column are not: fields hoisted from
-#' structured output, and tag columns (`tags_ok`, `tags_data`, and extracted
-#' tags). A warning says so when they are present; re-derive them with
-#' [llm_parse_structured_col()] or [llm_parse_tags_col()] on the patched
-#' result. When [call_llm_par()] had to rename its own diagnostic columns
-#' because the input already used those names (for example `success.1`), the
-#' resume is refused, since the columns to patch would be ambiguous; rename
-#' those input columns before calling [call_llm_par()].
+#' The function rejects names consisting of a recognized result-column
+#' name followed by a numeric suffix, such as `success.1` or `duration.1`.
+#' These names can indicate a collision between input and result columns.
+#' Rename conflicting input columns before the original [call_llm_par()]
+#' call. This check also applies when no row needs to be repeated.
 #'
-#' @param results Output from [call_llm_par()] (must contain `config`, `messages`,
-#'   and `success` columns).
-#' @param tries Total number of attempts per re-run call (the first attempt plus
-#'   retries), as in [call_llm_robust()]. Default 3.
-#' @param ... Passed to [call_llm_par()].
-#' @return `results`, with the result columns of the re-run rows replaced by
-#'   the new attempt (which may fail again) and the other rows unchanged. When
-#'   no row failed, `results` is returned as it was, with a message.
+#' When both `structured_ok` and `structured_data` are present, they are
+#' recomputed for the repeated rows. Extracted structured fields are not
+#' replaced. When calls are repeated, the presence of this diagnostic pair
+#' produces a warning, whether or not fields were extracted.
 #'
+#' Tag diagnostics and extracted tag columns are not recomputed. When calls
+#' are repeated, a warning is issued if both `tags_ok` and `tags_data` are
+#' present.
+#'
+#' To replace extracted fields, remove their old columns and use
+#' [llm_parse_structured_col()] or [llm_parse_tags_col()] with the original
+#' extraction specification. If the old columns remain, the parsers write
+#' extracted values to new names with suffixes.
+#'
+#' @param results A result data frame from [call_llm_par()] containing
+#'   `config`, `messages`, and `success`.
+#' @param tries Total number of attempts allowed for each repeated call,
+#'   including its first attempt. The default is 3. See [call_llm_robust()].
+#' @param ... Other arguments passed to [call_llm_par()]. `simplify` is
+#'   fixed at `FALSE` and must not be supplied here.
+#' @return After input validation, a data frame with existing result columns
+#'   patched at the repeated row positions. A repeated call may fail again.
+#'   Columns returned by the new calls but absent from `results` are not
+#'   added. Other rows retain their values.
+#'
+#'   When calls are repeated, the result has class `llmr_experiment`.
+#'   When no row needs to be repeated, the original object is returned
+#'   unchanged with a message.
 #' @examples
 #' \dontrun{
 #' results <- call_llm_par(experiments)
 #' results <- llm_par_resume(results, tries = 3)
 #' }
-#'
-#' @seealso [call_llm_par()]
+#' @seealso [call_llm_par()], [llm_failures()]
 #' @export
 llm_par_resume <- function(results, tries = 3, ...) {
-  # If the input frame had a column named like ANY diagnostic, call_llm_par()
-  # collision-renamed its own output (e.g. duration -> duration.1). The patch
-  # loop below matches columns by name, so it would overwrite the user's column
-  # with re-run diagnostics. Refuse up front (as the original guard did for
-  # 'success' only) rather than silently corrupt the frame.
+  # Suffixed diagnostics indicate a possible name collision. Reject them
+  # before selecting failures because patching by name could replace input data.
   diag_cols <- c("response_text", "raw_response_json", "success", "error_message",
                  "finish_reason", "sent_tokens", "rec_tokens", "total_tokens",
                  "reasoning_tokens", "cached_tokens", "response_id", "duration",
@@ -1261,13 +1275,15 @@ llm_par_resume <- function(results, tries = 3, ...) {
     results$structured_ok[failed_idx]   <- reparsed$structured_ok
     results$structured_data[failed_idx] <- reparsed$structured_data
     warning("Hoisted structured field columns are not re-extracted for resumed ",
-            "rows; run llm_parse_structured_col() on the result if you need ",
-            "them refreshed.", call. = FALSE)
+            "rows; remove their old columns and run llm_parse_structured_col() ",
+            "with the original extraction specification to refresh them.",
+            call. = FALSE)
   }
   if (all(c("tags_ok", "tags_data") %in% names(results))) {
     warning("Tag columns (tags_ok/tags_data and extracted tags) are not ",
-            "re-parsed for resumed rows; run llm_parse_tags_col() on the ",
-            "result to refresh them.", call. = FALSE)
+            "re-parsed for resumed rows; remove old extracted columns and run ",
+            "llm_parse_tags_col() with the original extraction specification ",
+            "to refresh them.", call. = FALSE)
   }
 
   if (!inherits(results, "llmr_experiment")) {

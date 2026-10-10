@@ -7,14 +7,15 @@
 * `call_llm_tools()` does not run a tool whose arguments are invalid or cut off;
   `tool_calls()` gains `arguments_raw` and `arguments_ok`.
 * Gemini `total_tokens` and cost estimates include thinking tokens.
-* Token totals are `NA` unless reported or computable from both counts; chat
-  sessions and the tool loop count replies without usage.
+* Call-level totals are `NA` unless reported or both parts are known; chat
+  sessions and tool loops count replies with incomplete usage.
 * `llm_usage(price_table = )` refuses invalid rates and duplicated models, and
   no longer subtracts Anthropic cache reads twice.
-* `llm_batch_fetch()` labels unreturned, unreadable, and duplicate results.
+* `llm_batch_fetch()` marks missing and unreadable results as failures and keeps
+  the first duplicate. A warning reports skipped lines, unknown ids, and duplicates.
 * `llm_request_from_log()` returns `reissuable`.
-* The `llm_failures()` and `llm_par_resume()` help no longer implies that
-  truncated rows are re-run.
+* Resume help distinguishes failures from successful truncated or filtered
+  replies and describes collision guards and how to replace extracted fields.
 * Requires httr2 1.1.1 or later.
 * Removed the deprecated `llm_methods_text()`; `report()` drafts the same
   paragraph.

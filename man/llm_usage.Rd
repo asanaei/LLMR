@@ -25,8 +25,8 @@ Anthropic rows, whose sent count already excludes cache reads, all sent
 tokens are billed at \code{input}. Rates must be numeric, finite, and
 nonnegative, and each model may appear once; a missing \code{cached} rate is
 allowed only for models whose rows have no cached tokens. Cache-write
-charges are not included. LLMR ships no price list on purpose; prices
-change, and a stale bundled table would mislead silently.}
+charges are not included. LLMR ships no price list, because prices change
+and a bundled table would go out of date without notice.}
 }
 \value{
 A one-row tibble: \code{n}, \code{n_ok}, \code{n_failed}, \code{ok_rate}, \code{n_truncated}

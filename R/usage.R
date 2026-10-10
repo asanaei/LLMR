@@ -155,8 +155,8 @@
 #'   tokens are billed at `input`. Rates must be numeric, finite, and
 #'   nonnegative, and each model may appear once; a missing `cached` rate is
 #'   allowed only for models whose rows have no cached tokens. Cache-write
-#'   charges are not included. LLMR ships no price list on purpose; prices
-#'   change, and a stale bundled table would mislead silently.
+#'   charges are not included. LLMR ships no price list, because prices change
+#'   and a bundled table would go out of date without notice.
 #'
 #' @return A one-row tibble: `n`, `n_ok`, `n_failed`, `ok_rate`, `n_truncated`
 #'   (finish `"length"`), `n_filtered` (finish `"filter"`), `sent_tokens`,
@@ -318,14 +318,15 @@ llm_usage <- function(x, prefix = NULL, price_table = NULL) {
 
 #' List the rows of an LLM run that failed or were truncated
 #'
-#' Returns one row per problem: a hard failure (`success` not `TRUE`) or a
-#' truncated / content-filtered completion (`finish_reason` `"length"` or
-#' `"filter"`), with the diagnostic detail needed to act. Works on both
-#' [call_llm_par()] and [llm_mutate()] results. For a [call_llm_par()] result
-#' (which still carries `config` and `messages`), [llm_par_resume()] re-runs
-#' the hard failures. Truncated and filtered rows count as successful there and
-#' are not re-run; re-run them with [call_llm_par()], for example with a larger
-#' `max_tokens`.
+#' Returns diagnostic rows for calls whose `success` value is not `TRUE`
+#' and, according to `include`, replies whose `finish_reason` is `"length"`
+#' or `"filter"`. Accepts results from [call_llm_par()] and [llm_mutate()].
+#'
+#' Pass the original [call_llm_par()] result to [llm_par_resume()] to repeat
+#' rows whose `success` value is not `TRUE`. Successful truncated or
+#' filtered replies are retained. To repeat those requests, pass their
+#' `config` and `messages` columns to [call_llm_par()]. A token-limit
+#' truncation may require a larger `max_tokens` value in the configuration.
 #'
 #' @inheritParams llm_usage
 #' @param include One of `"failed"` (hard failures only), `"truncated"`

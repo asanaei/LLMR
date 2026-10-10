@@ -23,14 +23,16 @@ A tibble (zero rows if nothing matched) with: \code{row} (index into \code{x}),
 \code{NA}.
 }
 \description{
-Returns one row per problem: a hard failure (\code{success} not \code{TRUE}) or a
-truncated / content-filtered completion (\code{finish_reason} \code{"length"} or
-\code{"filter"}), with the diagnostic detail needed to act. Works on both
-\code{\link[=call_llm_par]{call_llm_par()}} and \code{\link[=llm_mutate]{llm_mutate()}} results. For a \code{\link[=call_llm_par]{call_llm_par()}} result
-(which still carries \code{config} and \code{messages}), \code{\link[=llm_par_resume]{llm_par_resume()}} re-runs
-the hard failures. Truncated and filtered rows count as successful there and
-are not re-run; re-run them with \code{\link[=call_llm_par]{call_llm_par()}}, for example with a larger
-\code{max_tokens}.
+Returns diagnostic rows for calls whose \code{success} value is not \code{TRUE}
+and, according to \code{include}, replies whose \code{finish_reason} is \code{"length"}
+or \code{"filter"}. Accepts results from \code{\link[=call_llm_par]{call_llm_par()}} and \code{\link[=llm_mutate]{llm_mutate()}}.
+}
+\details{
+Pass the original \code{\link[=call_llm_par]{call_llm_par()}} result to \code{\link[=llm_par_resume]{llm_par_resume()}} to repeat
+rows whose \code{success} value is not \code{TRUE}. Successful truncated or
+filtered replies are retained. To repeat those requests, pass their
+\code{config} and \code{messages} columns to \code{\link[=call_llm_par]{call_llm_par()}}. A token-limit
+truncation may require a larger \code{max_tokens} value in the configuration.
 }
 \examples{
 res <- tibble::tibble(
