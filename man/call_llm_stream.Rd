@@ -45,11 +45,13 @@ hook is the one exception: it rewrites a full parsed response, which has no
 per-chunk meaning for a stream, so it is not applied here.
 
 A stream counts as complete only when the provider signals completion. An
-HTTP error, an error event sent inside the stream, or a connection that ends
-before the provider's completion signal raises a typed \verb{llmr_api_*_error}
-that also has class \code{llmr_stream_error}; the text received before the
-failure is in the condition's \code{partial_text} field. The call is not retried,
-because \code{callback} may already have emitted part of the text. Events that
+error event sent inside the stream, or a connection that ends before the
+provider's completion signal, raises a typed \verb{llmr_api_*_error} that also
+has class \code{llmr_stream_error}; the text received before the failure is in
+the condition's \code{partial_text} field. The call is not retried, because
+\code{callback} may already have emitted part of the text. An HTTP error status
+returned before any text arrives raises the same typed \verb{llmr_api_*_error}
+as \code{\link[=call_llm]{call_llm()}}, without the \code{llmr_stream_error} class. Events that
 cannot be parsed are skipped with a warning that gives their number. An error
 raised by \code{callback} itself propagates unchanged.
 }
