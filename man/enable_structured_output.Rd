@@ -33,11 +33,11 @@ Modified \code{llm_config}.
 \description{
 Turn on structured output for a model configuration. Supports OpenAI-compatible
 providers (OpenAI, Groq, Together, x.ai, DeepSeek, Xiaomi, Alibaba (Qwen), Zhipu,
-Moonshot, OpenRouter), Anthropic, and Gemini.
+Moonshot, OpenRouter, Meta), Anthropic, and Gemini.
 }
 \section{Server-side enforcement by provider}{
 
-OpenAI, Groq, Together, x.ai, OpenRouter, and Ollama accept a strict
+OpenAI, Groq, Together, x.ai, OpenRouter, Meta, and Ollama accept a strict
 \code{json_schema} response format. DeepSeek, Alibaba (Qwen), Zhipu, Moonshot,
 and Xiaomi accept only JSON-object mode; for them the supplied schema drives
 local parsing and validation, so the prompt itself should describe the

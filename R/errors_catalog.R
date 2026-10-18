@@ -33,6 +33,8 @@
 #   zhipu      https://docs.bigmodel.cn/cn/faq/api-code
 #   together   https://docs.together.ai/docs/error-codes
 #   openrouter https://openrouter.ai/docs/api-reference/errors
+#   meta       https://dev.meta.ai/docs/protocols/chat-completions
+#               (read 2026-10-18; 400, 429, and 504, all covered below)
 #   voyage     https://docs.voyageai.com/docs/error-codes
 #   ollama     https://github.com/ollama/ollama/blob/main/docs/api.md
 #               (error bodies are {"error": "<text>"}, observed behavior;

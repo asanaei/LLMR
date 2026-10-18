@@ -497,14 +497,18 @@ get_endpoint <- function(config, default_endpoint) {
 #'   OpenAI-compatible mode; serves the Qwen models), `"zhipu"`, `"moonshot"`,
 #'   `"openrouter"` (an aggregator routing one OpenAI-compatible interface to
 #'   many hosted models; model ids like `"openai/gpt-4o-mini"`),
+#'   `"meta"` (the Meta Model API, serving the Muse models such as
+#'   `"muse-spark-1.3"`),
 #'   `"voyage"` (embeddings only), and `"ollama"` (local server, usually
 #'   keyless). Other names are accepted and routed through the
 #'   OpenAI-compatible path.
 #'
 #'   When `api_key` is omitted, LLMR reads the key from the environment using a
 #'   formulaic default: it tries `<PROVIDER>_API_KEY` and then `<PROVIDER>_KEY`,
-#'   upper-cased (e.g. `OPENAI_API_KEY`, or `ALIBABA_API_KEY`/`ALIBABA_KEY`). The
-#'   one exception is Gemini with `vertex = TRUE`, which reads `VERTEX_ACCESS_TOKEN`.
+#'   upper-cased (e.g. `OPENAI_API_KEY`, or `ALIBABA_API_KEY`/`ALIBABA_KEY`).
+#'   Gemini with `vertex = TRUE` reads `VERTEX_ACCESS_TOKEN` instead, and Meta
+#'   also falls back to `MODEL_API_KEY`, the name used in Meta's own
+#'   documentation.
 #' @param model Character scalar. Model name understood by the chosen provider.
 #'   (e.g., `"gpt-4.1-nano"`, `"gpt-5-nano"`, `"gemini-2.5-flash-lite"`,
 #'   `"openai/gpt-oss-20b"`, etc.)
@@ -647,6 +651,7 @@ llm_config <- function(provider, model, api_key = NULL,
                        no_change = FALSE,
                        ...) {
   model_params <- list(...)
+  if (identical(provider, "meta")) .meta_contributor_notice(model)
   ## clamp temperature to valid range
   if (!is.null(model_params$temperature)) {
     temp <- model_params$temperature
@@ -841,6 +846,20 @@ format.llm_config <- function(x, ...) {
 #'         hosted models; its optional attribution headers (`HTTP-Referer`,
 #'         `X-Title`) can be added through the `req_builder` hook of
 #'         [llm_config()]. No embeddings or batch API.
+#'   \item \strong{Meta (Muse):} `provider = "meta"` calls the Meta Model API
+#'         (`api.meta.ai`) with the key in `META_API_KEY` or `MODEL_API_KEY`.
+#'         Muse Spark always reasons: `reasoning_effort` accepts `"minimal"`
+#'         through `"xhigh"` (`"none"` is refused), `stop` and `logprobs` are
+#'         refused, and the reasoning text lands in the `thinking` field.
+#'         Contributor mode trades your content for a lower price: Meta may
+#'         train future models on the prompts and replies, so do not send
+#'         personal, confidential, or IRB-protected data through it. Select it
+#'         by naming the Contributor model, as in
+#'         `llm_config("meta", "muse-spark-1.3-contributor")`. Contributor models
+#'         carry a lower rate limit than Standard ones (150 requests per
+#'         minute per team at the time of writing), which matters for
+#'         [call_llm_par()]; Muse Wonder has no Contributor variant. No
+#'         embeddings or batch API.
 #'   \item \strong{Error handling:} HTTP errors raise structured conditions
 #'         classed by cause: `llmr_api_param_error`, `llmr_api_auth_error`,
 #'         `llmr_api_billing_error`, `llmr_api_rate_limit_error`,
@@ -1465,8 +1484,8 @@ call_llm.gemini <- function(config, messages, verbose = FALSE) {
 }
 
 # ---- Shared OpenAI-compatible chat handler ---------------------------------
-# groq/together/deepseek/xiaomi/alibaba/zhipu/moonshot/xai/ollama all speak the
-# OpenAI chat-completions dialect. One builder keeps their feature set
+# groq/together/deepseek/xiaomi/alibaba/zhipu/moonshot/xai/openrouter/meta/ollama
+# all speak the OpenAI chat-completions dialect. One builder keeps their feature set
 # identical: multimodal file parts, the full canonical parameter set,
 # structured output, tools, verbatim extras passthrough, and the
 # modifiability hooks. Per-provider differences reduce to an endpoint, an
@@ -1677,6 +1696,32 @@ call_llm.xai <- function(config, messages, verbose = FALSE) {
     endpoint = get_endpoint(config, default_endpoint = "https://api.x.ai/v1/chat/completions"),
     drop_params = c("top_k", "repetition_penalty")
   )
+}
+
+#' @export
+call_llm.meta <- function(config, messages, verbose = FALSE) {
+  if (.is_embedding_config(config)) {
+    stop("Embedding models are not currently supported for Meta!")
+  }
+  .openai_compat_chat(
+    config, messages, verbose,
+    endpoint = get_endpoint(config, default_endpoint = "https://api.meta.ai/v1/chat/completions"),
+    drop_params = c("top_k", "repetition_penalty")
+  )
+}
+
+# Meta serves Contributor mode as separate model ids ending in "-contributor".
+# Configuring one draws a once-per-session notice about training use.
+.meta_contributor_notice <- function(model) {
+  if (!is.character(model) || length(model) != 1L || is.na(model)) return(invisible(NULL))
+  if (endsWith(model, "-contributor") && !isTRUE(getOption("llmr.quiet"))) {
+    rlang::inform(
+      c(sprintf("Meta Contributor mode: \"%s\".", model),
+        "i" = "Meta may use the prompts and replies to train its models.",
+        "i" = "Do not send personal or confidential data in this mode."),
+      .frequency = "once", .frequency_id = "llmr_meta_contributor")
+  }
+  invisible(NULL)
 }
 
 #' @export

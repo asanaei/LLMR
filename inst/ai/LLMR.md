@@ -116,11 +116,17 @@ report(study)
   annotation; for replication runs leave sampling on and use
   `llm_replicate()` + `llm_agreement()` (Krippendorff alpha).
 - Strict JSON-schema mode is provider-gated: openai/groq/together/xai/
-  openrouter/ollama take real schemas (auto-hardened:
+  openrouter/meta/ollama take real schemas (auto-hardened:
   `additionalProperties: false`, required filled);
   deepseek/alibaba/zhipu/moonshot get JSON-object mode with local
   validation. Anthropic uses a schema tool; Gemini uses
   `responseJsonSchema`.
+- Meta (`"meta"`; key `META_API_KEY` or `MODEL_API_KEY`):
+  Contributor mode is a separate model id ending in `-contributor`
+  (e.g. `"muse-spark-1.3-contributor"`). It is far cheaper but lets Meta
+  train on prompts and replies and has a lower rate limit. Never pick it for personal, confidential, or IRB-protected
+  data unless the user asks for it. Muse Spark always reasons;
+  `reasoning_effort = "none"`, `stop`, and `logprobs` are refused.
 - Logprobs: openai and deepseek expose them; support elsewhere varies by
   model and endpoint (an unsupported endpoint returns a provider error);
   anthropic has none.

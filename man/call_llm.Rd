@@ -70,6 +70,20 @@ using the wrong region returns HTTP 401.
 hosted models; its optional attribution headers (\code{HTTP-Referer},
 \code{X-Title}) can be added through the \code{req_builder} hook of
 \code{\link[=llm_config]{llm_config()}}. No embeddings or batch API.
+\item \strong{Meta (Muse):} \code{provider = "meta"} calls the Meta Model API
+(\code{api.meta.ai}) with the key in \code{META_API_KEY} or \code{MODEL_API_KEY}.
+Muse Spark always reasons: \code{reasoning_effort} accepts \code{"minimal"}
+through \code{"xhigh"} (\code{"none"} is refused), \code{stop} and \code{logprobs} are
+refused, and the reasoning text lands in the \code{thinking} field.
+Contributor mode trades your content for a lower price: Meta may
+train future models on the prompts and replies, so do not send
+personal, confidential, or IRB-protected data through it. Select it
+by naming the Contributor model, as in
+\code{llm_config("meta", "muse-spark-1.3-contributor")}. Contributor models
+carry a lower rate limit than Standard ones (150 requests per
+minute per team at the time of writing), which matters for
+\code{\link[=call_llm_par]{call_llm_par()}}; Muse Wonder has no Contributor variant. No
+embeddings or batch API.
 \item \strong{Error handling:} HTTP errors raise structured conditions
 classed by cause: \code{llmr_api_param_error}, \code{llmr_api_auth_error},
 \code{llmr_api_billing_error}, \code{llmr_api_rate_limit_error},

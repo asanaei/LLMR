@@ -60,6 +60,29 @@ test_that("deepseek: basic call and cached-token plumbing", {
   expect_true(is.list(tokens(r)) && "cached" %in% names(tokens(r)))
 })
 
+test_that("meta: Contributor-mode call, schema, and streaming", {
+  skip_if(!any(nzchar(Sys.getenv(c("META_API_KEY", "MODEL_API_KEY")))),
+          "Requires META_API_KEY or MODEL_API_KEY")
+  skip_on_cran()
+  cfg <- llm_config("meta", "muse-spark-1.3-contributor",
+                    reasoning_effort = "minimal", max_tokens = 400)
+  r <- call_llm_robust(cfg, "Reply with exactly one word: ready")
+  expect_s3_class(r, "llmr_response")
+  expect_true(nzchar(as.character(r)))
+
+  schema <- list(type = "object",
+                 properties = list(capital = list(type = "string")),
+                 required = list("capital"), additionalProperties = FALSE)
+  rs <- call_llm_robust(enable_structured_output(cfg, schema = schema),
+                        "What is the capital of Chile?")
+  expect_match(llm_parse_structured(rs)$capital, "Santiago", ignore.case = TRUE)
+
+  s <- call_llm_stream(cfg, "Count from 1 to 3, digits only.",
+                       callback = function(chunk) invisible(NULL))
+  expect_s3_class(s, "llmr_response")
+  expect_true(nzchar(as.character(s)))
+})
+
 test_that("gemini: thinking budget, schema, and embeddings", {
   skip_if_no_env("GEMINI_API_KEY")
   skip_on_cran()

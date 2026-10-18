@@ -250,7 +250,7 @@ tool_calls <- function(x) {
 #' the model calls, feeds the results back, and repeats until the model
 #' answers in plain text (or `max_rounds` is reached). Supported for
 #' OpenAI-compatible providers (openai, groq, together, deepseek, xai,
-#' alibaba, zhipu, moonshot, xiaomi, ollama) and Anthropic.
+#' alibaba, zhipu, moonshot, xiaomi, openrouter, meta, ollama) and Anthropic.
 #'
 #' A tool call whose arguments are not a valid JSON object, and every tool call
 #' in a reply cut off by the output-token limit, is not run: the model receives

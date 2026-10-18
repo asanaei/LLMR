@@ -1,5 +1,12 @@
 # LLMR 0.8.13
 
+* New provider `"meta"` for the Muse models on the Meta Model API: chat,
+  streaming, tool calling, and structured output. The key is read from
+  `META_API_KEY`, falling back to `MODEL_API_KEY`. Contributor mode is
+  reached by naming a `-contributor` model, such as
+  `"muse-spark-1.3-contributor"`; it costs less because Meta may train on the
+  prompts and replies, and a once-per-session notice says so. Meta has no
+  embeddings or batch API.
 * `call_llm_stream()` reads cached-token counts reported in Anthropic-style
   or DeepSeek-style usage fields on OpenAI-compatible streams.
 * `call_llm_par_structured()` and `call_llm_par_tags()` fill `{column}`

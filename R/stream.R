@@ -17,6 +17,7 @@
     moonshot = "https://api.moonshot.ai/v1/chat/completions",
     xai      = "https://api.x.ai/v1/chat/completions",
     openrouter = "https://openrouter.ai/api/v1/chat/completions",
+    meta     = "https://api.meta.ai/v1/chat/completions",
     ollama   = "http://localhost:11434/v1/chat/completions"
   )
   list(
@@ -36,7 +37,7 @@
       c("top_k", "repetition_penalty")
     ),
     # providers known to accept stream_options.include_usage (final usage chunk)
-    usage_opt = provider %in% c("openai", "groq", "deepseek", "together", "alibaba")
+    usage_opt = provider %in% c("openai", "groq", "deepseek", "together", "alibaba", "meta")
   )
 }
 
@@ -48,13 +49,13 @@
 #' responsive and avoids HTTP timeouts on slow, lengthy completions.
 #'
 #' Supported providers: all OpenAI-compatible chat APIs (openai, groq,
-#' together, deepseek, xai, alibaba, zhipu, moonshot, xiaomi, ollama),
-#' Anthropic, and Gemini. The request body is built by the same internals as
-#' [call_llm()], so parameters and structured output behave identically; the
-#' `request_modifier` and `req_builder` hooks and the request timeout apply as
-#' well. Only the transport differs. The `response_modifier` hook is the one
-#' exception: it rewrites a full parsed response, which has no per-chunk meaning
-#' for a stream, so it is not applied here.
+#' together, deepseek, xai, alibaba, zhipu, moonshot, xiaomi, openrouter, meta,
+#' ollama), Anthropic, and Gemini. The request body is built by the same
+#' internals as [call_llm()], so parameters and structured output behave
+#' identically; the `request_modifier` and `req_builder` hooks and the request
+#' timeout apply as well. Only the transport differs. The `response_modifier`
+#' hook is the one exception: it rewrites a full parsed response, which has no
+#' per-chunk meaning for a stream, so it is not applied here.
 #'
 #' A stream counts as complete only when the provider signals completion. An
 #' HTTP error, an error event sent inside the stream, or a connection that ends

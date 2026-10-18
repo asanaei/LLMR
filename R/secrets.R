@@ -47,7 +47,10 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
 #' @noRd
 .default_api_key_env <- function(provider) {
   stem <- toupper(provider)
-  c(paste0(stem, "_API_KEY"), paste0(stem, "_KEY"))
+  keys <- c(paste0(stem, "_API_KEY"), paste0(stem, "_KEY"))
+  # Meta's documentation names the key MODEL_API_KEY
+  if (identical(stem, "META")) keys <- c(keys, "MODEL_API_KEY")
+  keys
 }
 
 # Internal: resolve a secret handle or an env-spec string into a concrete key string

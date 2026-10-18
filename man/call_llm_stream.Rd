@@ -36,13 +36,13 @@ responsive and avoids HTTP timeouts on slow, lengthy completions.
 }
 \details{
 Supported providers: all OpenAI-compatible chat APIs (openai, groq,
-together, deepseek, xai, alibaba, zhipu, moonshot, xiaomi, ollama),
-Anthropic, and Gemini. The request body is built by the same internals as
-\code{\link[=call_llm]{call_llm()}}, so parameters and structured output behave identically; the
-\code{request_modifier} and \code{req_builder} hooks and the request timeout apply as
-well. Only the transport differs. The \code{response_modifier} hook is the one
-exception: it rewrites a full parsed response, which has no per-chunk meaning
-for a stream, so it is not applied here.
+together, deepseek, xai, alibaba, zhipu, moonshot, xiaomi, openrouter, meta,
+ollama), Anthropic, and Gemini. The request body is built by the same
+internals as \code{\link[=call_llm]{call_llm()}}, so parameters and structured output behave
+identically; the \code{request_modifier} and \code{req_builder} hooks and the request
+timeout apply as well. Only the transport differs. The \code{response_modifier}
+hook is the one exception: it rewrites a full parsed response, which has no
+per-chunk meaning for a stream, so it is not applied here.
 
 A stream counts as complete only when the provider signals completion. An
 HTTP error, an error event sent inside the stream, or a connection that ends

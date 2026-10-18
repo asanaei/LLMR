@@ -12,8 +12,8 @@ code. The same interface supports single calls, tidy data-frame operations,
 multi-model experiments, and call records for replication and reporting.
 
 **Providers:** OpenAI, Anthropic, Gemini (including Vertex), Groq, Together,
-DeepSeek, xAI, OpenRouter, Voyage, Ollama, Xiaomi MiMo, Alibaba (Qwen), Zhipu,
-and Moonshot.
+DeepSeek, xAI, OpenRouter, Meta (Muse), Voyage, Ollama, Xiaomi MiMo, Alibaba
+(Qwen), Zhipu, and Moonshot.
 
 ## What LLMR does for a study
 

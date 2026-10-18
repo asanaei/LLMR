@@ -50,7 +50,7 @@ Sends \code{messages} together with native tool definitions, executes every tool
 the model calls, feeds the results back, and repeats until the model
 answers in plain text (or \code{max_rounds} is reached). Supported for
 OpenAI-compatible providers (openai, groq, together, deepseek, xai,
-alibaba, zhipu, moonshot, xiaomi, ollama) and Anthropic.
+alibaba, zhipu, moonshot, xiaomi, openrouter, meta, ollama) and Anthropic.
 }
 \details{
 A tool call whose arguments are not a valid JSON object, and every tool call

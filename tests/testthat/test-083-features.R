@@ -387,7 +387,7 @@ test_that("stream finish reasons reuse the standard vocabulary", {
 
 test_that("stream specs cover every compat provider", {
   for (p in c("openai", "groq", "together", "deepseek", "xiaomi", "alibaba",
-              "zhipu", "moonshot", "xai", "openrouter", "ollama")) {
+              "zhipu", "moonshot", "xai", "openrouter", "meta", "ollama")) {
     spec <- LLMR:::.compat_stream_spec(p)
     expect_true(nzchar(spec$endpoint))
     expect_true(spec$auth %in% c("bearer", "api-key", "none"))
