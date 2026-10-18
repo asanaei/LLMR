@@ -6,6 +6,11 @@
   (`toolUsePromptTokenCount`) now count in `sent_tokens`, so the cost
   estimate bills them at the input rate; they used to be billed as output.
   `?tokens` describes how each provider counts reasoning and cached tokens.
+* `call_llm_par_structured()` and `call_llm_par_tags()` send doubled braces
+  as written: `{{name}}` stays `{{name}}`, so template text from Jinja,
+  Mustache, or Handlebars and LaTeX groups such as `\frac{{a}}{2}` reach the
+  model unchanged. LLMR 0.8.11 passed these messages through glue, which
+  turned each doubled brace into a single one.
 * `llm_usage(price_table = )` accepts an optional `provider` column, which
   prices Anthropic's cached tokens correctly for results that carry no
   provider of their own (`llm_mutate()`, `llm_fn()`, `llm_batch_fetch()`).

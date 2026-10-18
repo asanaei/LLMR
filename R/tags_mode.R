@@ -431,9 +431,10 @@ llm_fn_tags <- function(x,
 #' column other than `config` and `messages`) as `{column}`. Each such
 #' placeholder is replaced by that row's value, inserted as text. Nothing inside
 #' braces is evaluated, and braces that do not name a column, such as example
-#' JSON or LaTeX, are sent as written. A doubled pair such as `{{column}}` sends
-#' the literal text `{column}`. A placeholder that looks like a name but matches
-#' no column is sent as written, with a warning.
+#' JSON or LaTeX, are sent as written. Doubled braces such as `{{column}}` are
+#' also sent as written, so template text from Jinja, Mustache, or Handlebars
+#' reaches the model unchanged. A placeholder that looks like a name but
+#' matches no column is sent as written, with a warning.
 #'
 #' @param experiments Tibble with `config` and `messages` list-columns.
 #' @param .tags Character vector of tag names to request and parse.

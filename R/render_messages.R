@@ -121,9 +121,9 @@
 #' receive messages that are often already rendered and can carry braces from
 #' the data: example JSON, LaTeX, code. Only `{name}`, where `name` (trimmed) is
 #' a column of `row`, is replaced, and the value is inserted as text; nothing
-#' inside braces is evaluated. A doubled pair with no braces inside, `{{...}}`,
-#' is glue's escape and becomes the literal `{...}`. Every other brace is kept
-#' as written, so nested JSON such as `{"a": {"b": 1}}` passes unchanged.
+#' inside braces is evaluated. Every other brace is kept as written, including
+#' doubled pairs such as `{{name}}` (template syntax in Jinja, Mustache, and
+#' Handlebars), so nested JSON such as `{"a": {"b": 1}}` passes unchanged.
 #'
 #' @param s A character scalar.
 #' @param row A one-row data.frame holding the metadata columns.
@@ -141,9 +141,8 @@
   if (!length(tokens)) return(list(text = s, unmatched = none))
   unmatched <- none
   filled <- vapply(tokens, function(tok) {
-    if (startsWith(tok, "{{") && endsWith(tok, "}}")) {
-      return(substr(tok, 2L, nchar(tok) - 1L))
-    }
+    # a doubled pair is matched whole so that its inner {name} is not filled
+    if (startsWith(tok, "{{") && endsWith(tok, "}}")) return(tok)
     name <- trimws(substr(tok, 2L, nchar(tok) - 1L))
     if (name %in% names(row)) {
       v <- row[[name]]

@@ -56,10 +56,17 @@ test_that("values from the data are inserted once, not re-read as placeholders",
   expect_identical(sent[[1]], "Rate: Great value {T} for {id}")
 })
 
-test_that("a doubled pair sends the literal placeholder", {
-  ex <- make_ex(list("Rate: {{text}} and {{other}}"), text = "I love it")
+test_that("doubled braces are sent as written", {
+  # template syntax (Jinja, Mustache) and LaTeX groups reach the model intact,
+  # and the inner {text} of {{text}} is not filled even though `text` is a column
+  ex <- make_ex(list("Rate {text}: {{text}} and {{ other }}, \\frac{{a}}{2}, {{literal}}"),
+                text = "I love it")
   sent <- capture_sent(call_llm_par_structured, ex)
-  expect_identical(sent[[1]], "Rate: {text} and {other}")
+  expect_identical(sent[[1]],
+    "Rate I love it: {{text}} and {{ other }}, \\frac{{a}}{2}, {{literal}}")
+  sent_tags <- capture_sent(call_llm_par_tags, ex, .tags = "label")
+  # the tagged runner appends its tag instructions to the filled text
+  expect_true(any(grepl(sent[[1]], unlist(sent_tags), fixed = TRUE)))
 })
 
 test_that("missing values become empty text and factors their labels", {
