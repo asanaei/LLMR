@@ -132,9 +132,21 @@ finish_reason <- function(x) {
 #'
 #' @param x An \code{llmr_response} object.
 #' @return A list \code{list(sent, rec, total, reasoning, cached)}. Missing
-#'   values are \code{NA}. `cached` counts prompt tokens the provider read from
-#'   its cache (cheaper than fresh input tokens); it is `NA` for providers that
-#'   do not report cache usage.
+#'   values are \code{NA}, meaning the provider did not report the count.
+#'   `total` is the provider's own total when it reports one, otherwise
+#'   `sent + rec`, and `NA` when either part is unknown.
+#'
+#'   Providers count reasoning differently. OpenAI-compatible providers include
+#'   reasoning tokens in `rec` (their `completion_tokens`). Gemini's `rec` is
+#'   the visible output only (`candidatesTokenCount`, zero when Gemini omits
+#'   it), while its `total` (`totalTokenCount`) includes the thoughts; for
+#'   Gemini, `sent` also includes tool-use prompt tokens. Where a provider
+#'   reports them separately, `reasoning` holds the reasoning or thought tokens.
+#'
+#'   `cached` counts prompt tokens the provider read from its cache (cheaper
+#'   than fresh input tokens); it is `NA` for providers that do not report
+#'   cache usage. Anthropic's `sent` excludes these cache reads; other
+#'   providers' `sent` includes them.
 #' @examples
 #' r <- structure(list(text="hi", model="demo", finish_reason="stop",
 #'   usage=list(sent=1L, rec=1L, total=2L, reasoning=NA_integer_, cached=NA_integer_),

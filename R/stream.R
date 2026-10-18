@@ -381,8 +381,9 @@ call_llm_stream <- function(config, messages,
     }
     if (!is.null(j$usageMetadata)) {
       um <- j$usageMetadata
-      acc$sent <- as.integer(um$promptTokenCount %||% NA_integer_)
-      acc$rec  <- as.integer(um$candidatesTokenCount %||% NA_integer_)
+      tc <- .token_counts(j)
+      acc$sent <- as.integer(tc$sent %||% NA_integer_)
+      acc$rec  <- as.integer(tc$rec  %||% NA_integer_)
       acc$total <- as.integer(um$totalTokenCount %||% NA_integer_)
       acc$reasoning_tokens <- as.integer(um$thoughtsTokenCount %||% NA_integer_)
       acc$cached <- as.integer(um$cachedContentTokenCount %||% NA_integer_)

@@ -28,9 +28,21 @@ is_truncated(x)
 A length-1 character vector or \code{NA_character_}.
 
 A list \code{list(sent, rec, total, reasoning, cached)}. Missing
-values are \code{NA}. \code{cached} counts prompt tokens the provider read from
-its cache (cheaper than fresh input tokens); it is \code{NA} for providers that
-do not report cache usage.
+values are \code{NA}, meaning the provider did not report the count.
+\code{total} is the provider's own total when it reports one, otherwise
+\code{sent + rec}, and \code{NA} when either part is unknown.
+
+Providers count reasoning differently. OpenAI-compatible providers include
+reasoning tokens in \code{rec} (their \code{completion_tokens}). Gemini's \code{rec} is
+the visible output only (\code{candidatesTokenCount}, zero when Gemini omits
+it), while its \code{total} (\code{totalTokenCount}) includes the thoughts; for
+Gemini, \code{sent} also includes tool-use prompt tokens. Where a provider
+reports them separately, \code{reasoning} holds the reasoning or thought tokens.
+
+\code{cached} counts prompt tokens the provider read from its cache (cheaper
+than fresh input tokens); it is \code{NA} for providers that do not report
+cache usage. Anthropic's \code{sent} excludes these cache reads; other
+providers' \code{sent} includes them.
 
 \code{TRUE} if truncated, otherwise \code{FALSE}.
 }

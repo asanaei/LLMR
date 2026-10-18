@@ -1,3 +1,11 @@
+# LLMR 0.8.14
+
+* Gemini replies without a `candidatesTokenCount` (Gemini omits zero counts)
+  now record `rec_tokens = 0`, streamed or not; a non-streamed reply used to
+  record its thought tokens there instead. Gemini's tool-use prompt tokens
+  (`toolUsePromptTokenCount`) now count in `sent_tokens`, so the cost
+  estimate bills them at the input rate; they used to be billed as output.
+  `?tokens` describes how each provider counts reasoning and cached tokens.
 # LLMR 0.8.13
 
 * New provider `"meta"` for the Muse models on the Meta Model API: chat,

@@ -70,12 +70,17 @@
     # absent (e.g. thinking models that produce no visible output). An absent
     # count reads as zero only in a complete record, one that carries
     # totalTokenCount; without it (a partial record) the count is unknown.
+    # rec is the visible output only; thoughts are in thoughtsTokenCount.
+    # Tool-use prompt tokens (built-in tools such as search grounding) are
+    # input the model read, so they count as sent.
     if (!is.null(m$promptTokenCount) || !is.null(m$candidatesTokenCount)) {
+      tool_prompt <- m$toolUsePromptTokenCount %||% 0L
       if (!is.null(m$totalTokenCount)) {
-        sent <- m$promptTokenCount %||% 0L
-        rec  <- m$candidatesTokenCount %||% max(0L, m$totalTokenCount - sent)
+        sent <- (m$promptTokenCount %||% 0L) + tool_prompt
+        rec  <- m$candidatesTokenCount %||% 0L
       } else {
-        sent <- m$promptTokenCount %||% NA_integer_
+        sent <- if (is.null(m$promptTokenCount)) NA_integer_
+                else m$promptTokenCount + tool_prompt
         rec  <- m$candidatesTokenCount %||% NA_integer_
       }
       return(list(sent = sent, rec = rec))
