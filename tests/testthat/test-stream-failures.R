@@ -156,3 +156,24 @@ test_that("streams are logged with their request, and failures as errors", {
   expect_false(anyNA(m$request_hash))
   expect_identical(m$request_hash[1], m$request_hash[2])
 })
+
+test_that("streamed usage reads cache counts in every reported shape", {
+  skip_without_stream_mocks()
+  local_fake_keys()
+  usage_line <- function(u) sprintf(
+    '{"id":"c1","choices":[],"usage":{"prompt_tokens":20,"completion_tokens":5,%s}}', u)
+  shapes <- c(openai   = '"prompt_tokens_details":{"cached_tokens":12}',
+              anthropic = '"cache_read_input_tokens":12',
+              deepseek = '"prompt_cache_hit_tokens":12')
+  for (nm in names(shapes)) {
+    r <- run_stream(openai_cfg(), mock_stream(sse(
+      '{"id":"c1","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}',
+      usage_line(shapes[[nm]]),
+      "[DONE]")))
+    expect_identical(tokens(r)$cached, 12L, info = nm)
+  }
+  r <- run_stream(openai_cfg(), mock_stream(sse(
+    '{"id":"c1","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}',
+    usage_line('"total_tokens":25'), "[DONE]")))
+  expect_identical(tokens(r)$cached, NA_integer_)
+})

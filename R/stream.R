@@ -293,9 +293,7 @@ call_llm_stream <- function(config, messages,
       acc$reasoning_tokens <- as.integer(
         tryCatch(j$usage$completion_tokens_details$reasoning_tokens,
                  error = function(e) NA_integer_) %||% NA_integer_)
-      acc$cached <- as.integer(
-        tryCatch(j$usage$prompt_tokens_details$cached_tokens,
-                 error = function(e) NA_integer_) %||% NA_integer_)
+      acc$cached <- .cached_tokens_from(j)
     }
   })
 

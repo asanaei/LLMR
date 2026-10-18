@@ -1,5 +1,7 @@
 # LLMR 0.8.13
 
+* `call_llm_stream()` reads cached-token counts reported in Anthropic-style
+  or DeepSeek-style usage fields on OpenAI-compatible streams.
 * `call_llm_par_structured()` and `call_llm_par_tags()` fill `{column}`
   placeholders when a message also holds other braces, such as example JSON.
 * `call_llm_stream()` raises `llmr_stream_error`, with the partial text, when
