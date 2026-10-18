@@ -115,7 +115,8 @@ test_that("llm_usage reports cached tokens and a price estimate", {
   u <- llm_usage(res)
   expect_equal(u$cached_tokens, 80L)
 
-  prices <- data.frame(model = "m1", input = 1, output = 2, cached = 0.1)
+  prices <- data.frame(model = "m1", provider = "openai", input = 1, output = 2,
+                       cached = 0.1)
   u2 <- llm_usage(res, price_table = prices)
   # fresh input: (100-80) + 100 = 120; cached: 80; output: 100
   expect_equal(u2$cost_estimate, (120 * 1 + 80 * 0.1 + 100 * 2) / 1e6)

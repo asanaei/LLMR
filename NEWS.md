@@ -6,6 +6,12 @@
   (`toolUsePromptTokenCount`) now count in `sent_tokens`, so the cost
   estimate bills them at the input rate; they used to be billed as output.
   `?tokens` describes how each provider counts reasoning and cached tokens.
+* `llm_usage(price_table = )` accepts an optional `provider` column, which
+  prices Anthropic's cached tokens correctly for results that carry no
+  provider of their own (`llm_mutate()`, `llm_fn()`, `llm_batch_fetch()`).
+  Such rows used to have their cache reads subtracted from the prompt a
+  second time, understating the cost. Rows with cached tokens and no known
+  provider now draw a warning that names the assumption used.
 # LLMR 0.8.13
 
 * New provider `"meta"` for the Muse models on the Meta Model API: chat,

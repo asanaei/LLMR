@@ -152,7 +152,12 @@
 #'   prompt (`total_tokens - sent_tokens` when both are known, which includes
 #'   Gemini's thinking tokens; otherwise the received tokens) at `output`. For
 #'   Anthropic rows, whose sent count already excludes cache reads, all sent
-#'   tokens are billed at `input`. Rates must be numeric, finite, and
+#'   tokens are billed at `input`. The provider of a row is read from `x`'s
+#'   `provider` column, which [call_llm_par()] results carry, or else from an
+#'   optional `provider` column of `price_table`; results of [llm_mutate()],
+#'   [llm_fn()], and [llm_batch_fetch()] need the latter for Anthropic models,
+#'   and rows with cached tokens and no known provider draw a warning. Rates
+#'   must be numeric, finite, and
 #'   nonnegative, and each model may appear once; a missing `cached` rate is
 #'   allowed only for models whose rows have no cached tokens. Cache-write
 #'   charges are not included. LLMR ships no price list, because prices change
@@ -301,9 +306,24 @@ llm_usage <- function(x, prefix = NULL, price_table = NULL) {
 
   # Cached tokens are part of the prompt count for most providers, so the
   # fresh prompt is sent minus cached. Anthropic reports `input_tokens` without
-  # cache reads, so there the whole prompt count is fresh.
+  # cache reads, so there the whole prompt count is fresh. The provider comes
+  # from the rows (call_llm_par() results) or, for results that carry none
+  # (llm_mutate(), llm_fn(), llm_batch_fetch()), from the price table.
   provider <- if ("provider" %in% names(x)) tolower(as.character(x$provider)) else
     rep(NA_character_, nrow(x))
+  if ("provider" %in% names(price_table)) {
+    from_table <- tolower(as.character(price_table$provider[idx]))
+    provider <- ifelse(is.na(provider), from_table, provider)
+  }
+  unknown_rule <- priced & cached0 > 0 & is.na(provider)
+  if (any(unknown_rule)) {
+    warning(sprintf(paste0(
+      "%d row(s) with cached tokens have no provider, so their cost assumes the ",
+      "sent count includes the cached tokens, as most providers' counts do. ",
+      "Anthropic's count excludes them; add a `provider` column to ",
+      "`price_table` to price such rows by their provider's rule."),
+      sum(unknown_rule)), call. = FALSE)
+  }
   fresh <- ifelse(provider %in% "anthropic", sent0, pmax(sent0 - cached0, 0))
   # Billed output is everything beyond the prompt: total minus sent when both
   # are known. That equals the received tokens for providers whose total is
