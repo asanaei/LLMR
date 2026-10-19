@@ -1313,7 +1313,9 @@ llm_par_resume <- function(results, tries = 3, ...) {
 #' @param .target Bare column name containing the output to evaluate.
 #' @param .config The judge [llm_config].
 #' @param prompt Evaluation prompt template. Use `{.target}` to reference the
-#'   target column value (other data columns are also available).
+#'   target column value (other data columns are also available). A prompt
+#'   that references neither `{.target}` nor the target column draws a warning,
+#'   since the judge would not see the text it evaluates.
 #' @param .tags Tags to extract from the judge response. Defaults to
 #'   `c("reasoning", "score")`.
 #' @param .output Name of the column that receives the judge's raw response.
@@ -1346,6 +1348,19 @@ llm_judge <- function(.data, .target, .config, prompt,
          "uses internally for the prompt template. Rename that column first.")
   }
   stopifnot(is.character(.output), length(.output) == 1L, nzchar(.output))
+
+  # The target reaches the judge only through a placeholder in the prompt; a
+  # prompt without one has the judge rate text it never sees.
+  if (is.character(prompt)) {
+    squeezed <- gsub("\\{\\s*([^{}]*?)\\s*\\}", "{\\1}", prompt, perl = TRUE)
+    refers <- grepl("{.target}", squeezed, fixed = TRUE) |
+      grepl(paste0("{", target_name, "}"), squeezed, fixed = TRUE)
+    if (!any(refers)) {
+      warning(sprintf(paste0(
+        "The judge prompt contains neither `{.target}` nor `{%s}`, so the judge ",
+        "does not see the text it is asked to evaluate."), target_name), call. = FALSE)
+    }
+  }
 
   eval_data <- .data
   eval_data[[".target"]] <- eval_data[[target_name]]

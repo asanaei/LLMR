@@ -22,7 +22,9 @@ llm_judge(
 \item{.config}{The judge \link{llm_config}.}
 
 \item{prompt}{Evaluation prompt template. Use \code{{.target}} to reference the
-target column value (other data columns are also available).}
+target column value (other data columns are also available). A prompt
+that references neither \code{{.target}} nor the target column draws a warning,
+since the judge would not see the text it evaluates.}
 
 \item{.tags}{Tags to extract from the judge response. Defaults to
 \code{c("reasoning", "score")}.}

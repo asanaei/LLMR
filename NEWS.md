@@ -38,6 +38,10 @@
   now stops with an error naming the line and field; such records used to
   fail later with an unrelated error. The manifest gains a `line` column.
 
+* `llm_judge()` warns when its prompt contains neither `{.target}` nor the
+  target column's own placeholder. Such a prompt used to run silently, and
+  the judge scored text it never saw.
+
 * `llm_usage(price_table = )` accepts an optional `provider` column, which
   prices Anthropic's cached tokens correctly for results that carry no
   provider of their own (`llm_mutate()`, `llm_fn()`, `llm_batch_fetch()`).
