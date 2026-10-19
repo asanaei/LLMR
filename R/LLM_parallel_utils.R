@@ -780,11 +780,22 @@ call_llm_par <- function(experiments,
   if (!all(c("config", "messages") %in% names(df))) {
     stop("`config` and `messages` columns are required to add `request_hash`.")
   }
+  why <- character(0)
   df$request_hash <- vapply(seq_len(nrow(df)), function(i) {
     tryCatch(
       llm_request_hash(config = df$config[[i]], messages = df$messages[[i]]),
-      error = function(e) NA_character_)
+      error = function(e) {
+        why[as.character(i)] <<- conditionMessage(e)
+        NA_character_
+      })
   }, character(1))
+  if (length(why)) {
+    rows <- names(why)
+    warning(sprintf("No request hash for %d row(s) (%s): %s",
+                    length(rows),
+                    paste(utils::head(rows, 10L), collapse = ", "),
+                    why[[1]]), call. = FALSE)
+  }
   df
 }
 

@@ -91,7 +91,8 @@ return its reasoning; Anthropic returns thinking blocks whenever
 thinking is on. Returned reasoning lands in the response's
 \code{thinking} field.
 \item \code{timeout} -- total request timeout in seconds (default 600; also
-settable globally via \code{options(llmr.timeout = ...)}).
+settable globally via \code{options(llmr.timeout = ...)}). It must be
+one positive number; \code{Inf} removes the limit.
 \item \code{cache} -- set \code{cache = TRUE} to mark the system prompt and tools
 as cacheable for Anthropic (prompt caching). OpenAI, Gemini,
 DeepSeek, and several compatible providers cache long prompt

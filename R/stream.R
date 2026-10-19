@@ -146,12 +146,8 @@ call_llm_stream <- function(config, messages,
   if (!is.null(config) && is.function(config$model_params$req_builder)) {
     req <- config$model_params$req_builder(req)
   }
-  tmo <- suppressWarnings(as.numeric(
-    (if (!is.null(config)) config$model_params$timeout else NULL) %||%
-      getOption("llmr.timeout", 600)))
-  if (length(tmo) == 1L && is.finite(tmo) && tmo > 0) {
-    req <- httr2::req_timeout(req, tmo)
-  }
+  tmo <- .llmr_request_timeout(config)
+  if (is.finite(tmo)) req <- httr2::req_timeout(req, tmo)
   req
 }
 

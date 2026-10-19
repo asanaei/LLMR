@@ -236,14 +236,9 @@ perform_request <- function(req, verbose, provider = NULL, model = NULL, config 
 
   # A stuck connection should fail, not hang the session. Every request carries
   # a total timeout in seconds: per-config `timeout = ...` wins, then
-  # options(llmr.timeout = ...), then 600.
-  tmo <- suppressWarnings(as.numeric(
-    (if (!is.null(config)) config$model_params$timeout else NULL) %||%
-      getOption("llmr.timeout", 600)
-  ))
-  if (length(tmo) == 1L && is.finite(tmo) && tmo > 0) {
-    req <- httr2::req_timeout(req, tmo)
-  }
+  # options(llmr.timeout = ...), then 600. Inf means no limit.
+  tmo <- .llmr_request_timeout(config)
+  if (is.finite(tmo)) req <- httr2::req_timeout(req, tmo)
 
   req <- httr2::req_error(req, is_error = \(resp) FALSE)
   resp <- httr2::req_perform(req)
@@ -483,6 +478,27 @@ get_endpoint <- function(config, default_endpoint) {
   default_endpoint
 }
 
+# The request timeout in seconds from the config, the llmr.timeout option, or
+# the 600-second default. Checked here as well as in llm_config(), because a
+# saved config or the option can hold a value llm_config() never saw; an
+# invalid value used to leave the request with no timeout at all.
+.llmr_request_timeout <- function(config = NULL) {
+  from_config <- if (!is.null(config)) config$model_params$timeout else NULL
+  if (!is.null(from_config)) return(.llmr_check_timeout(from_config, "timeout"))
+  .llmr_check_timeout(getOption("llmr.timeout", 600), "options(llmr.timeout)")
+}
+
+.llmr_check_timeout <- function(x, what = "timeout") {
+  ok <- is.numeric(x) && length(x) == 1L && !is.na(x) && x > 0
+  if (!ok) {
+    shown <- tryCatch(paste(utils::capture.output(dput(x)), collapse = " "),
+                      error = function(e) class(x)[1])
+    stop(sprintf(paste0("`%s` must be one positive number of seconds (Inf for ",
+                        "no limit), not %s."), what, shown), call. = FALSE)
+  }
+  as.numeric(x)
+}
+
 # ----- Exported Functions -----
 
 #' Create an LLM configuration (provider-agnostic)
@@ -559,7 +575,8 @@ get_endpoint <- function(config, default_endpoint) {
 #'           thinking is on. Returned reasoning lands in the response's
 #'           `thinking` field.
 #'     \item `timeout` -- total request timeout in seconds (default 600; also
-#'           settable globally via `options(llmr.timeout = ...)`).
+#'           settable globally via `options(llmr.timeout = ...)`). It must be
+#'           one positive number; `Inf` removes the limit.
 #'     \item `cache` -- set `cache = TRUE` to mark the system prompt and tools
 #'           as cacheable for Anthropic (prompt caching). OpenAI, Gemini,
 #'           DeepSeek, and several compatible providers cache long prompt
@@ -651,6 +668,7 @@ llm_config <- function(provider, model, api_key = NULL,
                        no_change = FALSE,
                        ...) {
   model_params <- list(...)
+  if (!is.null(model_params$timeout)) .llmr_check_timeout(model_params$timeout)
   if (identical(provider, "meta")) .meta_contributor_notice(model)
   ## clamp temperature to valid range
   if (!is.null(model_params$temperature)) {

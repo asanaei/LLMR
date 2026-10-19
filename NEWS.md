@@ -17,6 +17,15 @@
   parts, or one part only, passed as known. A row with both parts and no
   total now adds their sum to `total_tokens`. Skipped rows and batch
   follow-on rows are not counted as unknown.
+* `llm_config(timeout = )` must be one positive number of seconds, with
+  `Inf` for no limit; any other value is refused with an error that names
+  it. A value such as `"30s"`, `0`, `NA`, or `c(5, 10)` used to leave the
+  request with no timeout at all, not even the 600-second default. The same
+  check applies at request time to saved configs and to
+  `options(llmr.timeout = )`.
+* `call_llm_par(.request_hash = TRUE)` warns, naming the rows, when a
+  request hash cannot be computed (for example, a file part that no longer
+  exists); those rows used to get `NA` silently.
 * `llm_usage(price_table = )` accepts an optional `provider` column, which
   prices Anthropic's cached tokens correctly for results that carry no
   provider of their own (`llm_mutate()`, `llm_fn()`, `llm_batch_fetch()`).
