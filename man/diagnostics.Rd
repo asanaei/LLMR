@@ -26,10 +26,12 @@ LLMR defines the generic and an erroring default only. The method packages
 each returning a tibble of the key numbers for its own result classes.
 }
 \examples{
-\dontrun{
-# LLMRcontent, for instance, returns one row of stability and fragility numbers:
-diagnostics(audit)
+# A method package defines a method for its own result class:
+diagnostics.toy_result <- function(x, ...) {
+  tibble::tibble(n = length(x$scores), mean_score = mean(x$scores))
 }
+res <- structure(list(scores = c(0.2, 0.4, 0.9)), class = "toy_result")
+diagnostics(res)
 }
 \seealso{
 \code{\link[=report]{report()}}

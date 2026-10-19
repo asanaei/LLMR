@@ -26,7 +26,7 @@ the reply text are stored. If \code{FALSE}, only metadata is stored.}
 \value{
 \code{llm_log_enable()} and \code{llm_log_disable()} return the previous log
 path invisibly. \code{llm_log_status()} returns the active path or \code{NULL},
-invisibly, after printing a one-line status.
+invisibly, after reporting the status as a message.
 
 \code{llm_log_active()} returns a list with \code{active} (logical), \code{path}
 (the destination or \code{NULL}), and \code{include_messages} (logical), for code that
@@ -72,15 +72,18 @@ Set \code{include_messages = FALSE} to omit request bodies and reply text
 prompts contain confidential data.
 }
 \examples{
-\dontrun{
-llm_log_enable("annotation_run.jsonl")
-cfg <- llm_config("groq", "openai/gpt-oss-20b")
-call_llm(cfg, "One word: capital of France?")
-llm_log_disable()
-
-# Read the log back as a data frame
-log_df <- jsonlite::stream_in(file("annotation_run.jsonl"), verbose = FALSE)
+log <- tempfile(fileext = ".jsonl")
+llm_log_enable(log)
+llm_log_status()
+\donttest{
+if (nzchar(Sys.getenv("GROQ_API_KEY"))) {
+  cfg <- llm_config("groq", "openai/gpt-oss-20b")
+  call_llm(cfg, "One word: capital of France?")
+  # Read the log back as records and a manifest
+  llm_log_read(log)$manifest
 }
+}
+llm_log_disable()
 }
 \seealso{
 \code{\link[=llm_usage]{llm_usage()}} for token summaries, \code{\link[=report]{report()}} for a

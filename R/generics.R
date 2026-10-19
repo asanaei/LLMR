@@ -19,10 +19,12 @@
 #' @return A method-defined object, by convention a tibble of diagnostic values.
 #' @seealso [report()]
 #' @examples
-#' \dontrun{
-#' # LLMRcontent, for instance, returns one row of stability and fragility numbers:
-#' diagnostics(audit)
+#' # A method package defines a method for its own result class:
+#' diagnostics.toy_result <- function(x, ...) {
+#'   tibble::tibble(n = length(x$scores), mean_score = mean(x$scores))
 #' }
+#' res <- structure(list(scores = c(0.2, 0.4, 0.9)), class = "toy_result")
+#' diagnostics(res)
 #' @export
 diagnostics <- function(x, ...) {
   UseMethod("diagnostics")

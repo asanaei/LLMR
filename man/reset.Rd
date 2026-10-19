@@ -21,8 +21,11 @@ method package (for example, an archive replayer) registers the concrete
 method that restores its state.
 }
 \examples{
-\dontrun{
-# An archive replayer whose queue has advanced can be rewound:
-reset(replayer)
+# A method restores the object's state, here a replay queue's position:
+reset.toy_queue <- function(x, ...) {
+  x$position <- 1L
+  invisible(x)
 }
+q <- structure(list(items = c("a", "b", "c"), position = 3L), class = "toy_queue")
+reset(q)$position
 }

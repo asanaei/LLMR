@@ -264,11 +264,12 @@ print.llmr_batch_job <- function(x, ...) {
 #' @examples
 #' \dontrun{
 #' cfg <- llm_config("groq", "openai/gpt-oss-20b", temperature = 0)
+#' state <- file.path(tempdir(), "my_batch.rds")
 #' job <- llm_batch_submit(cfg, c("2+2?", "Capital of Chile?"),
-#'                         state_path = "my_batch.rds")
+#'                         state_path = state)
 #' llm_batch_status(job)
-#' # ... later, possibly in a new session:
-#' res <- llm_batch_fetch("my_batch.rds")
+#' # ... later, possibly in a new session (keep `state` somewhere durable):
+#' res <- llm_batch_fetch(state)
 #' }
 #' @inheritSection llm_fn Batching, chunking, and row packing
 #' @seealso [llm_batch_status()], [llm_batch_fetch()], [llm_batch_cancel()];

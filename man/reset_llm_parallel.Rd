@@ -16,16 +16,9 @@ Invisibly returns the future plan that was in place before resetting to sequenti
 Resets the future plan to sequential processing.
 }
 \examples{
-\dontrun{
-  # Setup parallel processing
-  old_plan <- setup_llm_parallel(workers = 2)
-
-  # Do some parallel work...
-
-  # Reset to sequential
-  reset_llm_parallel(verbose = TRUE)
-
-  # Optionally restore the specific old_plan if it was non-sequential
-  # future::plan(old_plan)
-}
+old_plan <- setup_llm_parallel(workers = 2)
+# ... parallel calls with call_llm_par() ...
+reset_llm_parallel(verbose = TRUE)
+# To return to the plan in place before setup_llm_parallel():
+future::plan(old_plan)
 }

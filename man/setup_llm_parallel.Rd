@@ -24,17 +24,11 @@ Convenience function to set up the future plan for optimal LLM parallel processi
 Automatically detects system capabilities and sets appropriate defaults.
 }
 \examples{
-\dontrun{
-  # Automatic setup
-  setup_llm_parallel()
+# Two background workers, then back to sequential processing
+setup_llm_parallel(workers = 2, verbose = TRUE)
+reset_llm_parallel()
 
-  # Manual setup with specific workers
-  setup_llm_parallel(workers = 4, verbose = TRUE)
-
-  # Force sequential processing for debugging
-  setup_llm_parallel(strategy = "sequential")
-
-  # Restore old plan if needed
-  reset_llm_parallel()
-}
+# Sequential processing, for debugging
+setup_llm_parallel(strategy = "sequential")
+reset_llm_parallel()
 }

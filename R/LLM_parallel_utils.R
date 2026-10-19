@@ -959,19 +959,13 @@ build_factorial_experiments <- function(configs,
 #' @export
 #'
 #' @examples
-#' \dontrun{
-#'   # Automatic setup
-#'   setup_llm_parallel()
+#' # Two background workers, then back to sequential processing
+#' setup_llm_parallel(workers = 2, verbose = TRUE)
+#' reset_llm_parallel()
 #'
-#'   # Manual setup with specific workers
-#'   setup_llm_parallel(workers = 4, verbose = TRUE)
-#'
-#'   # Force sequential processing for debugging
-#'   setup_llm_parallel(strategy = "sequential")
-#'
-#'   # Restore old plan if needed
-#'   reset_llm_parallel()
-#' }
+#' # Sequential processing, for debugging
+#' setup_llm_parallel(strategy = "sequential")
+#' reset_llm_parallel()
 setup_llm_parallel <- function(workers = NULL, strategy = NULL, verbose = FALSE) {
 
   if (!requireNamespace("future", quietly = TRUE)) {
@@ -1029,18 +1023,11 @@ setup_llm_parallel <- function(workers = NULL, strategy = NULL, verbose = FALSE)
 #' @export
 #'
 #' @examples
-#' \dontrun{
-#'   # Setup parallel processing
-#'   old_plan <- setup_llm_parallel(workers = 2)
-#'
-#'   # Do some parallel work...
-#'
-#'   # Reset to sequential
-#'   reset_llm_parallel(verbose = TRUE)
-#'
-#'   # Optionally restore the specific old_plan if it was non-sequential
-#'   # future::plan(old_plan)
-#' }
+#' old_plan <- setup_llm_parallel(workers = 2)
+#' # ... parallel calls with call_llm_par() ...
+#' reset_llm_parallel(verbose = TRUE)
+#' # To return to the plan in place before setup_llm_parallel():
+#' future::plan(old_plan)
 reset_llm_parallel <- function(verbose = FALSE) {
 
   if (!requireNamespace("future", quietly = TRUE)) {
