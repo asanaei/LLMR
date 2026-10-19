@@ -1,11 +1,22 @@
 ## Submission
 
-LLMR 0.9.0 updates 0.8.14 on CRAN. It adds local models: small open language
-models that run on the user's computer through llama.cpp, with functions for
-research uses that hosted providers do not offer (next-token distributions,
-continuations of a reply whose beginning the user writes, and probabilities
-of given texts), and a provider, `"llamacpp"`, through which the rest of the
-package uses them.
+LLMR 0.9.0 updates 0.8.11 on CRAN; versions 0.8.12 to 0.8.14 were
+development versions and never submitted, so NEWS.md lists their changes
+under their own headings. The release corrects several results that were
+wrong without notice in 0.8.11: experiment runners no longer evaluate braces
+in prompts, failed or interrupted streams raise errors instead of returning
+partial text as a finished reply, tool calls with unparseable arguments are
+not run, Gemini and Anthropic token counts and cost estimates follow each
+provider's counting rules, unknown usage is no longer reported as zero, and
+an invalid `timeout` is refused instead of removing the request timeout. The
+deprecated `llm_methods_text()` is removed; no package on CRAN calls it.
+
+It also adds the Meta Model API as a provider and local models: small open
+language models that run on the user's computer through llama.cpp, with
+functions for research uses that hosted providers do not offer (next-token
+distributions, continuations of a reply whose beginning the user writes,
+and probabilities of given texts), and a provider, `"llamacpp"`, through
+which the rest of the package uses them.
 
 ## Downloading pre-compiled software
 
@@ -51,9 +62,6 @@ onnxr (`onnx_install()`), localLLM (`install_localLLM()`), and tinytex.
 - R CMD check --as-cran --no-manual, with all suggested packages installed
 
 ## R CMD check results
-
-To be rerun on the final version before submission; the 0.9.0 development
-version gives:
 
 0 errors | 0 warnings | 2 notes
 
