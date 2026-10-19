@@ -42,12 +42,18 @@
   target column's own placeholder. Such a prompt used to run silently, and
   the judge scored text it never saw.
 
+* `llm_log_status()` reports the log's state with `message()` rather than
+  printing it to standard output, and the count of failed log writes is
+  kept inside the package instead of in a global option
+  (`llmr.log_failures`, which 0.8.13 introduced).
+
 * `llm_usage(price_table = )` accepts an optional `provider` column, which
   prices Anthropic's cached tokens correctly for results that carry no
   provider of their own (`llm_mutate()`, `llm_fn()`, `llm_batch_fetch()`).
   Such rows used to have their cache reads subtracted from the prompt a
   second time, understating the cost. Rows with cached tokens and no known
   provider now draw a warning that names the assumption used.
+
 # LLMR 0.8.13
 
 * New provider `"meta"` for the Muse models on the Meta Model API: chat,

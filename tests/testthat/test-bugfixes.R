@@ -162,15 +162,18 @@ test_that("metadata-only logging keeps generation parameters", {
 test_that("a failed log write warns once and is counted", {
   dir <- tempfile("logdir-")
   dir.create(dir)
-  old <- options(llmr.log_file = dir, llmr.log_messages = FALSE,
-                 llmr.log_failures = 0L)
+  old <- options(llmr.log_file = dir, llmr.log_messages = FALSE)
   on.exit(options(old), add = TRUE)
+  old_failures <- LLMR:::.llmr_log_state$failures
+  assign("failures", 0L, envir = LLMR:::.llmr_log_state)
+  on.exit(assign("failures", old_failures, envir = LLMR:::.llmr_log_state), add = TRUE)
   expect_warning(
     LLMR:::.llmr_log_event(kind = "call", provider = "p", model = "m"),
     "audit logging failed")
   expect_silent(
     LLMR:::.llmr_log_event(kind = "call", provider = "p", model = "m"))
-  expect_identical(getOption("llmr.log_failures"), 2L)
-  status <- capture.output(llm_log_status())
-  expect_true(any(grepl("2 logging write", status)))
+  expect_identical(LLMR:::.llmr_log_state$failures, 2L)
+  # the counter is package state, not a user option
+  expect_null(getOption("llmr.log_failures"))
+  expect_message(llm_log_status(), "2 logging write")
 })

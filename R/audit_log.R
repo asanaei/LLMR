@@ -54,20 +54,23 @@
 #'   the reply text are stored. If `FALSE`, only metadata is stored.
 #' @return `llm_log_enable()` and `llm_log_disable()` return the previous log
 #'   path invisibly. `llm_log_status()` returns the active path or `NULL`,
-#'   invisibly, after printing a one-line status.
+#'   invisibly, after reporting the status as a message.
 #' @seealso [llm_usage()] for token summaries, [report()] for a
 #'   draft methods paragraph.
 #' @export
 #' @examples
-#' \dontrun{
-#' llm_log_enable("annotation_run.jsonl")
-#' cfg <- llm_config("groq", "openai/gpt-oss-20b")
-#' call_llm(cfg, "One word: capital of France?")
-#' llm_log_disable()
-#'
-#' # Read the log back as a data frame
-#' log_df <- jsonlite::stream_in(file("annotation_run.jsonl"), verbose = FALSE)
+#' log <- tempfile(fileext = ".jsonl")
+#' llm_log_enable(log)
+#' llm_log_status()
+#' \donttest{
+#' if (nzchar(Sys.getenv("GROQ_API_KEY"))) {
+#'   cfg <- llm_config("groq", "openai/gpt-oss-20b")
+#'   call_llm(cfg, "One word: capital of France?")
+#'   # Read the log back as records and a manifest
+#'   llm_log_read(log)$manifest
 #' }
+#' }
+#' llm_log_disable()
 llm_log_enable <- function(path = "llmr_log.jsonl", include_messages = TRUE) {
   stopifnot(is.character(path), length(path) == 1L, nzchar(path))
   writable <- tryCatch({
@@ -84,6 +87,11 @@ llm_log_enable <- function(path = "llmr_log.jsonl", include_messages = TRUE) {
   invisible(old)
 }
 
+# Session state of the audit log that is not a user setting: the number of
+# failed log writes, reported by llm_log_status().
+.llmr_log_state <- new.env(parent = emptyenv())
+.llmr_log_state$failures <- 0L
+
 #' @rdname llm_log_enable
 #' @export
 llm_log_disable <- function() {
@@ -97,16 +105,16 @@ llm_log_disable <- function() {
 llm_log_status <- function() {
   p <- getOption("llmr.log_file")
   if (is.null(p)) {
-    cat("LLMR audit log: disabled\n")
+    message("LLMR audit log: disabled")
   } else {
-    cat("LLMR audit log: writing to", p,
-        if (isTRUE(getOption("llmr.log_messages", TRUE))) "(messages included)\n"
-        else "(metadata and parameters only)\n")
+    message("LLMR audit log: writing to ", p,
+            if (isTRUE(getOption("llmr.log_messages", TRUE))) " (messages included)"
+            else " (metadata and parameters only)")
   }
-  failures <- getOption("llmr.log_failures", 0L)
+  failures <- .llmr_log_state$failures
   if (failures > 0L) {
-    cat(sprintf("  %d logging write(s) failed this session; those calls ran but were not recorded.\n",
-                failures))
+    message(sprintf("  %d logging write(s) failed this session; those calls ran but were not recorded.",
+                    failures))
   }
   invisible(p)
 }
@@ -254,8 +262,8 @@ llm_log_merge <- function(path) {
     NULL
   }, error = identity)
   if (inherits(err, "error")) {
-    n <- getOption("llmr.log_failures", 0L) + 1L
-    options(llmr.log_failures = n)
+    n <- .llmr_log_state$failures + 1L
+    .llmr_log_state$failures <- n
     if (n == 1L) {
       warning("The model call succeeded, but audit logging failed: ",
               conditionMessage(err),
