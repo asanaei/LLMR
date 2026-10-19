@@ -26,6 +26,12 @@
 * `call_llm_par(.request_hash = TRUE)` warns, naming the rows, when a
   request hash cannot be computed (for example, a file part that no longer
   exists); those rows used to get `NA` silently.
+* `llm_log_read()` reports a malformed record by its line in the file; blank
+  lines used to be dropped before numbering, so the reported line could be
+  wrong. A record that is not a JSON object, a metadata field that is not a
+  single value, a non-numeric `status`, or a `request` that is not an object
+  now stops with an error naming the line and field; such records used to
+  fail later with an unrelated error. The manifest gains a `line` column.
 * `llm_usage(price_table = )` accepts an optional `provider` column, which
   prices Anthropic's cached tokens correctly for results that carry no
   provider of their own (`llm_mutate()`, `llm_fn()`, `llm_batch_fetch()`).

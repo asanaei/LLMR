@@ -10,10 +10,11 @@ llm_log_read(log)
 \item{log}{Path to a JSONL audit log.}
 }
 \value{
-A list with \code{records} (a list of \code{list(raw=, rec=)}, one per line) and
-\code{manifest} (a tibble with \code{idx}, \code{ts}, \code{kind}, \code{provider}, \code{model},
-\code{model_version}, \code{status}, \code{schema_version}, \code{has_payload}, \code{request_hash},
-\code{record_hash}).
+A list with \code{records} (a list of \code{list(raw=, rec=)}, one per
+nonblank line) and \code{manifest} (a tibble with \code{idx}, \code{ts}, \code{kind},
+\code{provider}, \code{model}, \code{model_version}, \code{status}, \code{schema_version},
+\code{has_payload}, \code{request_hash}, \code{record_hash}, and \code{line}, the record's
+line number in the file).
 }
 \description{
 Parses a JSONL audit log written by \code{\link[=llm_log_enable]{llm_log_enable()}} into its records and a
@@ -23,6 +24,12 @@ request body was logged, a \code{request_hash} identifying the call. The
 \code{request_hash} is computed through \code{\link[=llm_request_hash]{llm_request_hash()}} over the call's
 canonical turns and generation parameters, so a call read from a log and the
 same call described by a config hash identically.
+}
+\details{
+Reading is strict: a line that is not a JSON object, or a record whose
+metadata fields are not single values, stops with an error that names the
+line of the file, the field, and the reason. Blank lines are ignored but
+still counted, so the line numbers match the file.
 }
 \examples{
 # In practice the log comes from llm_log_enable("study.jsonl"); here one
