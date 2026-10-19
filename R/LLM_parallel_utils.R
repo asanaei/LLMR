@@ -541,6 +541,11 @@ call_llm_par <- function(experiments,
       stop(sprintf("Row %d 'config' is not an llm_config object.", i))
     }
   }
+  # Local models: start each server here, once, and hand the workers its
+  # address, so that workers neither start servers of their own nor ignore the
+  # settings chosen with llm_local_start(). The returned config column stays
+  # as given, so no server key is stored with the results.
+  .llmr_par_configs <- .llmr_local_prebind(experiments$config)
 
   if (is.null(max_workers)) {
     max_workers <- min(future::availableCores(omit = 1L), nrow(experiments))
@@ -599,7 +604,7 @@ call_llm_par <- function(experiments,
       Sys.sleep(stats::runif(1, 0, start_jitter))
 
     start_time <- Sys.time()
-    current_config   <- experiments$config[[i_val]]
+    current_config   <- .llmr_par_configs[[i_val]]
     current_messages <- experiments$messages[[i_val]]
     raw_json_str <- NA_character_
 

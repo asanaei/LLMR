@@ -80,13 +80,13 @@ enable_structured_output <- function(config,
 
   mp <- config$model_params %||% list()
   prov <- config$provider
-  is_openai_compat <- prov %in% c("openai","groq","together","xai","deepseek", "xiaomi", "alibaba", "zhipu", "moonshot", "openrouter", "meta", "ollama")
+  is_openai_compat <- prov %in% c("openai","groq","together","xai","deepseek", "xiaomi", "alibaba", "zhipu", "moonshot", "openrouter", "meta", "llamacpp", "ollama")
   # Providers whose API enforces a json_schema response_format server-side.
   # The others (DeepSeek, Alibaba, Zhipu, Moonshot, Xiaomi) reject the
   # json_schema type outright; for them LLMR requests JSON-object mode and the
   # schema is used for local parsing/validation, so describe the desired
   # fields in your prompt.
-  schema_capable <- prov %in% c("openai", "groq", "together", "xai", "openrouter", "meta", "ollama")
+  schema_capable <- prov %in% c("openai", "groq", "together", "xai", "openrouter", "meta", "llamacpp", "ollama")
 
   if (is_openai_compat) {
     # Prefer json_mode via response_format for structured output

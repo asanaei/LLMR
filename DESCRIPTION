@@ -1,6 +1,6 @@
 Package: LLMR
 Title: Interface for Large Language Model APIs in R
-Version: 0.8.14
+Version: 0.9.0
 Depends: R (>= 4.1.0)
 LazyData: true
 Authors@R: 
@@ -8,12 +8,14 @@ Authors@R:
 Description: One interface to many large language model providers: a single
   configuration object and a single calling function serve chat and embedding
   models alike, so research code does not change when the provider does. The
-  same calls scale to multi-model and multi-condition studies.
+  same calls scale to multi-model and multi-condition studies. Small open
+  models can also run on the user's computer through 'llama.cpp', downloaded
+  only on request, with access to next-token probabilities.
 License: MIT + file LICENSE
 Encoding: UTF-8
-Imports: httr2 (>= 1.1.1), curl, purrr, dplyr, tidyr, rlang, memoise, future, future.apply,
+Imports: httr2 (>= 1.1.1), curl (>= 5.0.0), purrr, dplyr, tidyr, rlang, memoise, future, future.apply,
         tibble, base64enc, mime,  glue (>= 1.6.0),  cli (>= 3.6.0), jsonlite, vctrs,
-        digest, tidyselect
+        digest, tidyselect, processx (>= 3.8.0)
 Suggests: testthat (>= 3.2.0), roxygen2 (>= 7.1.2),
        progressr, knitr, rmarkdown, ggplot2, jsonvalidate,
        stringi, kableExtra, withr

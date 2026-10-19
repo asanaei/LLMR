@@ -514,7 +514,8 @@ get_endpoint <- function(config, default_endpoint) {
 #'   `"openrouter"` (an aggregator routing one OpenAI-compatible interface to
 #'   many hosted models; model ids like `"openai/gpt-4o-mini"`),
 #'   `"meta"` (the Meta Model API, serving the Muse models such as
-#'   `"muse-spark-1.3"`),
+#'   `"muse-spark-1.3"`), `"llamacpp"` (a model on this computer, installed
+#'   with [llm_local_install()]; see [llm_local_models()]),
 #'   `"voyage"` (embeddings only), and `"ollama"` (local server, usually
 #'   keyless). Other names are accepted and routed through the
 #'   OpenAI-compatible path.
@@ -805,6 +806,12 @@ format.llm_config <- function(x, ...) {
 .is_embedding_config <- function(config) {
   if (identical(tolower(config$provider %||% ""), "voyage")) return(TRUE)
   if (!is.null(config$embedding)) return(isTRUE(config$embedding))
+  # A local model's kind comes from its registry entry: names such as "bge-m3"
+  # do not say "embedding".
+  if (identical(config$provider, "llamacpp")) {
+    kind <- .llmr_local_kind(config$model)
+    if (!is.na(kind)) return(identical(kind, "embedding"))
+  }
   grepl("embedding", config$model %||% "", ignore.case = TRUE)
 }
 
@@ -864,6 +871,19 @@ format.llm_config <- function(x, ...) {
 #'         hosted models; its optional attribution headers (`HTTP-Referer`,
 #'         `X-Title`) can be added through the `req_builder` hook of
 #'         [llm_config()]. No embeddings or batch API.
+#'   \item \strong{Local models (llama.cpp):} `provider = "llamacpp"` runs a
+#'         model installed with [llm_local_install()] on this computer; the
+#'         server starts on first use and needs no API key. Chat, streaming,
+#'         structured output, tools, logprobs, and embeddings work as for
+#'         hosted providers, and [llm_next_token()], [llm_continue()], and
+#'         [llm_score()] give token-level access. For embedding models,
+#'         For chat models, `thinking = FALSE` turns off the reasoning step
+#'         of models such as Qwen3 through their chat template. For embedding
+#'         models,
+#'         `task =` selects the model's task prefix and `dimensions =`
+#'         truncates to a trained size. With `api_url`, a llama.cpp server the
+#'         user runs is used instead, with the key in `LLAMACPP_API_KEY` when
+#'         it needs one.
 #'   \item \strong{Meta (Muse):} `provider = "meta"` calls the Meta Model API
 #'         (`api.meta.ai`) with the key in `META_API_KEY` or `MODEL_API_KEY`.
 #'         Muse Spark always reasons: `reasoning_effort` accepts `"minimal"`
@@ -1959,6 +1979,12 @@ call_llm.gemini_embedding <- function(config, messages,
 parse_embeddings <- function(embedding_response) {
   if (is.null(embedding_response$data) || length(embedding_response$data) == 0)
     return(matrix(nrow = 0, ncol = 0))
+  # Return rows in input order when the response carries indices.
+  idx <- vapply(embedding_response$data, function(d)
+    if (is.list(d) && is.numeric(d$index) && length(d$index) == 1L) d$index else NA_real_, 0)
+  if (!anyNA(idx) && !anyDuplicated(idx)) {
+    embedding_response$data <- embedding_response$data[order(idx)]
+  }
 
   list_of_vectors <- purrr::map(embedding_response$data, ~ {
     if (is.list(.x) && !is.null(.x$embedding) && !all(is.na(.x$embedding))) {

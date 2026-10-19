@@ -70,6 +70,19 @@ using the wrong region returns HTTP 401.
 hosted models; its optional attribution headers (\code{HTTP-Referer},
 \code{X-Title}) can be added through the \code{req_builder} hook of
 \code{\link[=llm_config]{llm_config()}}. No embeddings or batch API.
+\item \strong{Local models (llama.cpp):} \code{provider = "llamacpp"} runs a
+model installed with \code{\link[=llm_local_install]{llm_local_install()}} on this computer; the
+server starts on first use and needs no API key. Chat, streaming,
+structured output, tools, logprobs, and embeddings work as for
+hosted providers, and \code{\link[=llm_next_token]{llm_next_token()}}, \code{\link[=llm_continue]{llm_continue()}}, and
+\code{\link[=llm_score]{llm_score()}} give token-level access. For embedding models,
+For chat models, \code{thinking = FALSE} turns off the reasoning step
+of models such as Qwen3 through their chat template. For embedding
+models,
+\verb{task =} selects the model's task prefix and \verb{dimensions =}
+truncates to a trained size. With \code{api_url}, a llama.cpp server the
+user runs is used instead, with the key in \code{LLAMACPP_API_KEY} when
+it needs one.
 \item \strong{Meta (Muse):} \code{provider = "meta"} calls the Meta Model API
 (\code{api.meta.ai}) with the key in \code{META_API_KEY} or \code{MODEL_API_KEY}.
 Muse Spark always reasons: \code{reasoning_effort} accepts \code{"minimal"}

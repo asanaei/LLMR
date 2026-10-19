@@ -23,7 +23,8 @@ OpenAI-compatible mode; serves the Qwen models), \code{"zhipu"}, \code{"moonshot
 \code{"openrouter"} (an aggregator routing one OpenAI-compatible interface to
 many hosted models; model ids like \code{"openai/gpt-4o-mini"}),
 \code{"meta"} (the Meta Model API, serving the Muse models such as
-\code{"muse-spark-1.3"}),
+\code{"muse-spark-1.3"}), \code{"llamacpp"} (a model on this computer, installed
+with \code{\link[=llm_local_install]{llm_local_install()}}; see \code{\link[=llm_local_models]{llm_local_models()}}),
 \code{"voyage"} (embeddings only), and \code{"ollama"} (local server, usually
 keyless). Other names are accepted and routed through the
 OpenAI-compatible path.

@@ -224,7 +224,7 @@
   # built from it agree once they are excluded.
   drop <- c("req_builder", "request_modifier", "response_modifier",
             "timeout", "api_url", "base_url", "max_tries", "verbose",
-            "cache", "use_responses_api", "anthropic_beta",
+            "cache", "cache_prompt", "use_responses_api", "anthropic_beta",
             "vertex", "project", "location", "stream", "stream_options",
             "json_schema", "llmr_schema_tool")
   keep <- model_params[setdiff(names(model_params), drop)]
@@ -242,6 +242,15 @@
   if (!is.null(keep$max_completion_tokens)) {
     keep$max_tokens <- keep$max_tokens %||% keep$max_completion_tokens
     keep$max_completion_tokens <- NULL
+  }
+  # For local llama.cpp models, `thinking = TRUE/FALSE` is sent as
+  # chat_template_kwargs$enable_thinking; fold the body spelling back into
+  # `thinking` so the config and its logged body agree.
+  kw <- keep$chat_template_kwargs
+  if (is.list(kw) && length(kw$enable_thinking) == 1L && is.logical(unlist(kw$enable_thinking))) {
+    keep$thinking <- keep$thinking %||% isTRUE(unlist(kw$enable_thinking))
+    kw$enable_thinking <- NULL
+    keep$chat_template_kwargs <- if (length(kw)) kw else NULL
   }
   if (!length(keep)) list() else keep[order(names(keep))]
 }

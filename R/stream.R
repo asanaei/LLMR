@@ -18,6 +18,7 @@
     xai      = "https://api.x.ai/v1/chat/completions",
     openrouter = "https://openrouter.ai/api/v1/chat/completions",
     meta     = "https://api.meta.ai/v1/chat/completions",
+    llamacpp = "http://127.0.0.1:8080/v1/chat/completions",
     ollama   = "http://localhost:11434/v1/chat/completions"
   )
   list(
@@ -27,17 +28,18 @@
     endpoint = if (isTRUE(provider %in% names(endpoints))) endpoints[[provider]]
                else endpoints[["openai"]],
     auth = if (identical(provider, "xiaomi")) "api-key"
-           else if (identical(provider, "ollama")) "none" else "bearer",
+           else if (provider %in% c("ollama", "llamacpp")) "none" else "bearer",
     drop = switch(provider,
       together = character(0),
       ollama   = character(0),
       openrouter = character(0),
+      llamacpp = character(0),
       alibaba  = "repetition_penalty",
       zhipu    = c("frequency_penalty", "presence_penalty", "repetition_penalty"),
       c("top_k", "repetition_penalty")
     ),
     # providers known to accept stream_options.include_usage (final usage chunk)
-    usage_opt = provider %in% c("openai", "groq", "deepseek", "together", "alibaba", "meta")
+    usage_opt = provider %in% c("openai", "groq", "deepseek", "together", "alibaba", "meta", "llamacpp")
   )
 }
 
@@ -95,6 +97,7 @@ call_llm_stream <- function(config, messages,
          call. = FALSE)
   }
   prov <- config$provider %||% "openai"
+  if (identical(prov, "llamacpp")) config <- .llmr_local_bind(config, "/v1/chat/completions")$config
   start_time <- Sys.time()
   call <- rlang::current_env()
 
