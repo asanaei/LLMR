@@ -79,7 +79,15 @@ test_that(".token_counts keeps Gemini prompt tokens when candidates absent", {
                                  totalTokenCount = 1200L))   # no candidatesTokenCount
   tc <- LLMR:::.token_counts(j)
   expect_identical(tc$sent, 1000L)
-  expect_identical(tc$rec, 200L)        # derived from total - prompt, parenthesized
+  # Gemini omits zero counts, so the visible output is 0; the other 200 tokens
+  # (thoughts or tool use) stay in the total and are billed as output
+  expect_identical(tc$rec, 0L)
+  x <- tibble::tibble(model = "g", success = TRUE, finish_reason = "stop",
+                      sent_tokens = 1000L, rec_tokens = 0L, total_tokens = 1200L,
+                      cached_tokens = NA_integer_)
+  cost <- llm_usage(x, price_table = data.frame(model = "g", input = 1,
+                                                output = 10))$cost_estimate
+  expect_equal(cost, (1000 * 1 + 200 * 10) / 1e6)
 })
 
 test_that(".token_counts derivation is not corrupted by operator precedence", {
