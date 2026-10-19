@@ -6,32 +6,38 @@
   (`toolUsePromptTokenCount`) now count in `sent_tokens`, so the cost
   estimate bills them at the input rate; they used to be billed as output.
   `?tokens` describes how each provider counts reasoning and cached tokens.
+
 * `call_llm_par_structured()` and `call_llm_par_tags()` send doubled braces
   as written: `{{name}}` stays `{{name}}`, so template text from Jinja,
   Mustache, or Handlebars and LaTeX groups such as `\frac{{a}}{2}` reach the
   model unchanged. LLMR 0.8.11 passed these messages through glue, which
   turned each doubled brace into a single one.
+
 * `llm_usage()` counts a row in `n_unknown_tokens` when any of its sent,
   received, or total counts is missing, failed calls included; it used to
   count only successful rows without a total, so a row with a total but no
   parts, or one part only, passed as known. A row with both parts and no
   total now adds their sum to `total_tokens`. Skipped rows and batch
   follow-on rows are not counted as unknown.
+
 * `llm_config(timeout = )` must be one positive number of seconds, with
   `Inf` for no limit; any other value is refused with an error that names
   it. A value such as `"30s"`, `0`, `NA`, or `c(5, 10)` used to leave the
   request with no timeout at all, not even the 600-second default. The same
   check applies at request time to saved configs and to
   `options(llmr.timeout = )`.
+
 * `call_llm_par(.request_hash = TRUE)` warns, naming the rows, when a
   request hash cannot be computed (for example, a file part that no longer
   exists); those rows used to get `NA` silently.
+
 * `llm_log_read()` reports a malformed record by its line in the file; blank
   lines used to be dropped before numbering, so the reported line could be
   wrong. A record that is not a JSON object, a metadata field that is not a
   single value, a non-numeric `status`, or a `request` that is not an object
   now stops with an error naming the line and field; such records used to
   fail later with an unrelated error. The manifest gains a `line` column.
+
 * `llm_usage(price_table = )` accepts an optional `provider` column, which
   prices Anthropic's cached tokens correctly for results that carry no
   provider of their own (`llm_mutate()`, `llm_fn()`, `llm_batch_fetch()`).
@@ -47,27 +53,70 @@
   `"muse-spark-1.3-contributor"`; it costs less because Meta may train on the
   prompts and replies, and a once-per-session notice says so. Meta has no
   embeddings or batch API.
-* `call_llm_stream()` reads cached-token counts reported in Anthropic-style
-  or DeepSeek-style usage fields on OpenAI-compatible streams.
+
 * `call_llm_par_structured()` and `call_llm_par_tags()` fill `{column}`
-  placeholders when a message also holds other braces, such as example JSON.
-* `call_llm_stream()` raises `llmr_stream_error`, with the partial text, when
-  the provider reports an error or the stream ends before completion.
-* `call_llm_tools()` does not run a tool whose arguments are invalid or cut off;
-  `tool_calls()` gains `arguments_raw` and `arguments_ok`.
-* Gemini `total_tokens` and cost estimates include thinking tokens.
-* Call-level totals are `NA` unless reported or both parts are known; chat
-  sessions and tool loops count replies with incomplete usage.
-* `llm_usage(price_table = )` refuses invalid rates and duplicated models, and
-  no longer subtracts Anthropic cache reads twice.
-* `llm_batch_fetch()` marks missing and unreadable results as failures and keeps
-  the first duplicate. A warning reports skipped lines, unknown ids, and duplicates.
-* `llm_request_from_log()` returns `reissuable`.
-* Resume help distinguishes failures from successful truncated or filtered
-  replies and describes collision guards and how to replace extracted fields.
-* Requires httr2 1.1.1 or later.
-* Removed the deprecated `llm_methods_text()`; `report()` drafts the same
-  paragraph.
+  placeholders without evaluating anything inside braces, and send other
+  braces as written. They used to pass every message through glue, so
+  `{T}` became `TRUE`, `{pi}` a number, LaTeX such as `\frac{1}{2}` lost
+  its braces, R code inside the data was run, and a message with example
+  JSON went out with its placeholders unfilled. A placeholder that looks
+  like a name but matches no metadata column is sent as written, with a
+  warning.
+
+* `call_llm_stream()` raises a typed error, with the text received so far in
+  `partial_text`, when the provider reports an error inside the stream or the
+  stream ends before the provider signals completion; both used to return the
+  partial text as a finished reply. Unparseable events now draw a warning
+  that gives their number, and streamed calls are logged with their request.
+  Cached-token counts reported in Anthropic-style or DeepSeek-style usage
+  fields are read on OpenAI-compatible streams as they are for other calls.
+
+* `call_llm_tools()` no longer runs a tool whose arguments are not valid JSON,
+  or any tool called in a reply cut off by the token limit; such calls used to
+  run with the tool's default arguments. `tool_calls()` reports the argument
+  text as sent in `arguments_raw` and its validity in `arguments_ok`.
+
+* Gemini totals include thinking tokens: `total_tokens` comes from the
+  provider's `totalTokenCount`, in ordinary and streamed calls. The cost
+  estimate bills everything beyond the prompt as output, for every provider
+  whose total exceeds sent plus received tokens. Both used to leave Gemini's
+  thinking tokens out. `rec_tokens` remains the visible output.
+
+* Unknown usage stays unknown. A total is recorded only when the provider
+  reports one or both counts are known; batch replies without usage, streams
+  that report one count, and partial Gemini records used to show a total
+  anyway, sometimes 0. Chat sessions count replies with unknown usage
+  (`$usage_unknown()`, also in `summary()`), and the tool loop reports
+  `n_unknown_usage`.
+
+* `llm_usage(price_table = )` refuses missing, negative, non-finite, and
+  non-numeric rates and duplicated models, which used to shrink the estimate
+  silently, and prices Anthropic's cached tokens once; their sent count already
+  excludes cache reads, which the estimate used to subtract again.
+
+* `llm_batch_fetch()` labels requests the provider did not return ("not
+  returned by provider"), turns an unreadable reply into a failed row instead
+  of a success without text or an aborted fetch, keeps the first of duplicate
+  results instead of merging them, and reports skipped lines, unknown ids, and
+  duplicates in one warning.
+
+* `llm_request_from_log()` adds `reissuable`, which is `FALSE` when the rebuilt
+  messages cannot be sent again as the original request: attachments survive
+  only as hashes, tool calls and results are dropped, and some roles are mapped
+  with loss. `complete` and request hashes are unchanged; the help now says
+  what each means.
+
+* The help for `llm_failures()` and `llm_par_resume()` no longer implies that
+  truncated or filtered rows are re-run; they are listed but kept as they are.
+  It describes the guards against overwriting existing columns and how to
+  replace extracted fields after a resume.
+
+* LLMR requires httr2 1.1.1 or later. Streaming uses functions added in httr2
+  1.0.4 and relies on `resp_stream_sse()` returning event data as one string,
+  as it does from 1.1.1.
+
+* The deprecated `llm_methods_text()` is removed; `report()` drafts the same
+  methods paragraph.
 
 # LLMR 0.8.12
 
