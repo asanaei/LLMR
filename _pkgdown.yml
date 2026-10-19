@@ -38,6 +38,9 @@ articles:
   contents:
   - interactive-calls
   - presidential_embeddings
+- title: Local models
+  contents:
+  - local-models
 reference:
 - title: Configure, call, and transform data
   contents:
@@ -104,6 +107,24 @@ reference:
   contents:
   - get_batched_embeddings
   - parse_embeddings
+- title: Local models
+  desc: >
+    Install small open models and the llama.cpp server on this computer, and
+    read next-token distributions, continue prefilled replies, and score texts.
+  contents:
+  - llm_local_install
+  - llm_local_models
+  - llm_local_model
+  - llm_local_ready
+  - llm_local_start
+  - llm_local_uninstall
+  - llm_local_dir
+  - llm_next_token
+  - llm_continue
+  - llm_score
+  - llm_choice_probs
+  - llm_tokenize
+  - llm_render_template
 - title: Asynchronous batch jobs
   contents:
   - llm_batch_submit
