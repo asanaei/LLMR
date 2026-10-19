@@ -14,7 +14,7 @@ Encoding: UTF-8
 Imports: httr2 (>= 1.1.1), curl, purrr, dplyr, tidyr, rlang, memoise, future, future.apply,
         tibble, base64enc, mime,  glue (>= 1.6.0),  cli (>= 3.6.0), jsonlite, vctrs,
         digest, tidyselect
-Suggests: testthat (>= 3.0.0), roxygen2 (>= 7.1.2),
+Suggests: testthat (>= 3.2.0), roxygen2 (>= 7.1.2),
        progressr, knitr, rmarkdown, ggplot2, jsonvalidate,
        stringi, kableExtra, withr
 RoxygenNote: 7.3.3
