@@ -77,5 +77,7 @@ Both notes are environmental:
 
 ## Reverse dependencies
 
-To be checked against this version before submission: LLMR.shiny,
-LLMRagent, LLMRpanel, and FocusGroup (all this maintainer's).
+The CRAN versions of all four reverse dependencies were checked against this
+version with `R CMD check`, with Status OK for each: LLMR.shiny 0.1.2,
+LLMRagent 0.8.1, LLMRpanel 0.6.1, and FocusGroup 0.5.2 (all this
+maintainer's). Updates of these packages follow this submission.
