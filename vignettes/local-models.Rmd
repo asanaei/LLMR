@@ -1,0 +1,202 @@
+---
+title: "Local models: token probabilities, prefilled replies, and embeddings"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Local models: token probabilities, prefilled replies, and embeddings}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>",
+  eval = identical(tolower(Sys.getenv("LLMR_RUN_VIGNETTES", "false")), "true") &&
+    LLMR::llm_local_ready("qwen3-0.6b")
+)
+```
+
+Hosted models answer questions; they rarely show how they arrived at an
+answer. A model that runs on one's own computer can show more: the probability
+it assigns to every possible next token, how it continues a reply whose
+beginning someone else wrote, and how probable it finds a sentence it did not
+write. LLMR runs such models through [llama.cpp](https://github.com/ggml-org/llama.cpp),
+a widely used program for running language models on ordinary hardware, and
+makes them available through the same `llm_config()` used for hosted
+providers.
+
+The models involved are small, under one gigabyte, and much weaker than
+current hosted models. They are tools for studying how language models
+behave, not substitutes for the models a study is about.
+
+```{r}
+library(LLMR)
+```
+
+## Installing a model
+
+One call downloads what is needed: the llama.cpp server program for this
+computer and the model file.
+
+```{r, eval = FALSE}
+llm_local_install("qwen3-0.6b")
+```
+
+Before downloading, the function lists each file with its size, source, and
+license, and asks for agreement; a script passes `accept_license = TRUE`
+instead. Every file is pinned to an exact version and checked against its
+sha256, and a second call makes no network request. The files live in
+`llm_local_dir()`; `llm_local_uninstall()` removes them, and
+`llm_local_models()` lists the models available by name.
+
+```{r}
+llm_local_models()[, c("name", "kind", "size_mb", "license", "installed")]
+```
+
+## The model as a provider
+
+An installed model is a provider like any other. The server starts on the
+first call and stops when R exits.
+
+```{r}
+cfg <- llm_config("llamacpp", "qwen3-0.6b", temperature = 0, thinking = FALSE)
+call_llm(cfg, "What is the capital of France? Answer in one sentence.")
+```
+
+`thinking = FALSE` matters for Qwen3, which otherwise reasons at length before
+answering. Structured output, tools, streaming, log-probabilities, and the
+tidy verbs work as they do for hosted models.
+
+## The next-token distribution
+
+`llm_next_token()` returns the model's probability distribution over the next
+token after a context. The context is either a chat, rendered with the
+model's own template, or raw text given as `prompt`.
+
+```{r}
+llm_next_token(cfg, messages = "What is the capital of France? Answer in one sentence.",
+               prefill = "The capital of France is", top_n = 5)
+```
+
+These are the model's probabilities before any sampling setting acts, so they
+do not depend on temperature or top-p. `full = TRUE` returns the whole
+vocabulary, about 150,000 rows for Qwen3.
+
+## Words in the model's mouth
+
+`prefill` writes the beginning of the assistant's reply. `llm_continue()`
+then shows how the model goes on from there; with `n` above one it returns a
+sample of continuations from the same point.
+
+```{r}
+llm_continue(cfg, messages = "Is coffee good for you?",
+             prefill = "Honestly, I am not sure, but", n = 3,
+             temperature = 1, max_tokens = 30, seed = 110)[, c("sample", "continuation")]
+```
+
+Unless the configuration or the call sets them, the continuations are drawn
+from the model's full distribution: temperature 1, with none of the top-k,
+top-p, or min-p truncation that llama.cpp otherwise applies. The call above
+sets `temperature = 1` because `cfg` fixed it at 0, which gives the single
+most probable continuation. A seed makes a sample reproducible on the same llama.cpp build
+and device; continuation `i` uses `seed + i - 1`.
+
+Earlier turns can be faked as well, by passing them in `messages` with role
+`"assistant"`.
+
+## How probable is a given text?
+
+`llm_score()` gives the log-probability of each token of a text after a
+context, whether or not the model would have produced it.
+
+```{r}
+s <- llm_score(cfg, " Lyon.", prompt = "The capital of France is")
+s[, c("token", "logprob", "rank")]
+attr(s, "total_logprob")
+```
+
+`llm_choice_probs()` compares several continuations of the same context.
+Longer options have lower total probability by construction, so options of
+similar length compare most directly. Each option is written as the model
+would produce it: at the start of a chat reply, without a leading space.
+
+```{r}
+llm_choice_probs(cfg, c("Yes", "No"),
+                 messages = "Is Paris the capital of France? Answer yes or no.")
+```
+
+## Tokens and templates
+
+`llm_tokenize()` and `llm_detokenize()` use the model's tokenizer, and
+`llm_render_template()` shows the exact text the model reads.
+
+```{r}
+llm_tokenize(cfg, "The capital of France is Paris.")
+cat(llm_render_template(cfg, "Name a color.", prefill = "My answer is"))
+```
+
+## Embeddings
+
+Two multilingual embedding models are available by name. `bge-m3` needs no
+task prefix and has strong published results for Persian and Arabic;
+`embeddinggemma-2` is smaller and faster and was trained with task prefixes,
+which LLMR adds from `task =` (default `"similarity"`).
+
+```{r, eval = FALSE}
+llm_local_install("bge-m3")
+texts <- c("The government raised the national budget for schools.",
+           "دولت بودجهٔ ملی مدارس را افزایش داد.")
+X <- get_batched_embeddings(texts, llm_config("llamacpp", "bge-m3"))
+sum(X[1, ] * X[2, ])  # vectors are unit length, so this is the cosine
+```
+
+With `embeddinggemma-2`, `task = "search_query"` and `task = "document"` give
+the asymmetric prefixes for retrieval, `task = "none"` sends the text as
+written, and `dimensions = 256` truncates to one of the sizes the model was
+trained for.
+
+## Reproducibility
+
+Each result of the token-level functions carries an attribute `llmr_local`
+that records the model, the sha256 of its file, the llama.cpp build, the
+device, and the exact context.
+
+The device matters. On the same model, log-probabilities computed on a Mac's
+GPU and on its CPU differ in the first decimal place (by up to about 0.2 in
+tests with Qwen3 0.6B), and on the CPU they also depend on settings such as
+flash attention, which LLMR turns off. Repeated requests on one device and
+build give identical values, so numbers meant to be compared should come from
+the same device, and on the CPU from the same type of machine. The device can
+be chosen when the server starts:
+
+```{r, eval = FALSE}
+llm_local_start("qwen3-0.6b", device = "cpu", threads = 4)
+```
+
+`llm_score()` processes each prefix afresh, while the log-probabilities
+reported during generation come from processing tokens one at a time; the two
+differ by floating-point effects (about 1e-3 on the GPU, up to about 0.1 on
+the CPU), and `cache = TRUE` reproduces the generation values. Embeddings of
+the same text can differ by about 1e-3 between calls that batch it with
+different texts; starting an embedding server with `parallel = 1` and
+embedding texts one at a time makes them repeat exactly. Results that carry a
+claim are best checked against a full-precision reference implementation of
+the same model.
+
+## Other models and systems
+
+`llm_local_model()` describes any GGUF file on Hugging Face; its version and
+checksum are read from Hugging Face at install time and recorded.
+
+```{r, eval = FALSE}
+llm_local_install(llm_local_model("Qwen/Qwen3-1.7B-GGUF", "Qwen3-1.7B-Q8_0.gguf"))
+```
+
+The official llama.cpp builds run on macOS 13.3 or later, Windows with the
+Microsoft Visual C++ runtime, and Linux with glibc 2.34 or later (Ubuntu 22.04,
+Debian 12, RHEL 9, or newer). On older Linux systems, such as many computing
+clusters, a llama.cpp built on that system can be used through
+`llm_local_start(server = )`.
+
+```{r, include = FALSE}
+llm_local_stop()
+```

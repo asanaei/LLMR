@@ -55,6 +55,16 @@ llm_logprobs(x)
 # embeddings
 get_batched_embeddings(texts, embed_config, ...)
 
+# local models (llama.cpp on this computer; downloads only on request)
+llm_local_install(model = "qwen3-0.6b", accept_license = FALSE)   # asks first
+llm_local_models(); llm_local_status(); llm_local_ready(model)
+llm_config("llamacpp", model, thinking = FALSE)   # chat, stream, schema, tools
+llm_next_token(config, messages = NULL, prompt = NULL, prefill = NULL,
+               top_n = 20, full = FALSE)          # next-token distribution
+llm_continue(config, messages, prefill, n = 1, temperature = NULL, seed = NULL)
+llm_score(config, continuation, messages = NULL, prompt = NULL)
+llm_choice_probs(config, options, ...); llm_tokenize(); llm_render_template()
+
 # reproducibility
 llm_log_enable(path, include_messages = TRUE); llm_log_disable()
 llm_replicate(.data, output, prompt, .config, .times = 3, ...)
@@ -134,9 +144,24 @@ report(study)
   `x$tool_loop` for total loop spend.
 - Failed rows in tidy verbs carry diagnostics (`llm_failures()`); braces in
   user text are safe everywhere.
-- Local/open-weight: any OpenAI-compatible endpoint via
-  `llm_config(..., api_url = "http://localhost:8000/v1/chat/completions")`
+- Local/open-weight: provider `"llamacpp"` after `llm_local_install()`;
+  any OpenAI-compatible endpoint via
+  `llm_config(..., api_url = "http://localhost:8000/v1/chat/completions")`;
   or provider `"ollama"`.
+- Local models: never install without the user's agreement
+  (`accept_license = TRUE` only when the user has said yes). Token-level
+  functions need `"llamacpp"`. `llm_continue()` samples from the full
+  distribution unless a temperature is set; a config with `temperature = 0`
+  makes every continuation identical. Chat options start without a leading
+  space (`"Yes"`); mid-sentence options usually start with one (`" Paris"`).
+  GPU and CPU log-probabilities differ in the first decimal (up to about
+  0.2 nats); repeats on one device and build are identical. Report the
+  `llmr_local` attribute (model sha256, build, device) and compare numbers
+  only from the same device (and machine type, for the CPU). `top_n` is the
+  number of alternatives returned; `top_k` in `llm_continue()` is sampling.
+- Local embeddings: `bge-m3` takes no task prefix (`task =` errors);
+  `embeddinggemma-2` takes `task =` (default "similarity"; "search_query" /
+  "document" for retrieval) and `dimensions = 512/256/128`.
 - Retries: `tries`/`wait_seconds` on robust/parallel paths honor
   Retry-After; permanent errors fail fast.
 

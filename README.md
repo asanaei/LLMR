@@ -13,7 +13,8 @@ multi-model experiments, and call records for replication and reporting.
 
 **Providers:** OpenAI, Anthropic, Gemini (including Vertex), Groq, Together,
 DeepSeek, xAI, OpenRouter, Meta (Muse), Voyage, Ollama, Xiaomi MiMo, Alibaba
-(Qwen), Zhipu, and Moonshot.
+(Qwen), Zhipu, and Moonshot, and small open models run on one's own computer
+through llama.cpp.
 
 ## What LLMR does for a study
 
@@ -232,6 +233,35 @@ pricing depend on the provider. See [Interactive
 calls](https://asanaei.github.io/LLMR/articles/interactive-calls.html) and the
 [embeddings article](https://asanaei.github.io/LLMR/articles/presidential_embeddings.html).
 
+## Models on your own computer
+
+A small open model can run on the researcher's computer through
+[llama.cpp](https://github.com/ggml-org/llama.cpp). One call downloads the
+llama.cpp server for the platform and the model, after showing their licenses
+and asking for agreement; every file is pinned and checked against its sha256.
+
+```r
+llm_local_install("qwen3-0.6b")
+cfg <- llm_config("llamacpp", "qwen3-0.6b", temperature = 0, thinking = FALSE)
+call_llm(cfg, "What is the capital of France?")
+```
+
+Such a model shows what hosted models hide. `llm_next_token()` returns the
+probability of every possible next token after a context, `llm_continue()`
+continues a reply whose beginning the researcher writes, and `llm_score()`
+gives the log-probability of a text the model did not write:
+
+```r
+llm_next_token(cfg, messages = "Capital of France?", prefill = "The capital of France is", top_n = 10)
+llm_continue(cfg, messages = "Is coffee good for you?",
+             prefill = "Honestly, I am not sure, but", n = 5, temperature = 1, seed = 110)
+llm_score(cfg, " Lyon.", prompt = "The capital of France is")
+```
+
+The multilingual embedding models `bge-m3` and `embeddinggemma-2` install the
+same way and serve `get_batched_embeddings()`. See the [local models
+article](https://asanaei.github.io/LLMR/articles/local-models.html).
+
 ## Which function do I need?
 
 | Task | Function |
@@ -253,6 +283,8 @@ calls](https://asanaei.github.io/LLMR/articles/interactive-calls.html) and the
 | R function tools | `llm_tool()` + `call_llm_tools()` |
 | Streaming response | `call_llm_stream()` |
 | Embeddings | `get_batched_embeddings()` |
+| Install and run a local model | `llm_local_install()` + `llm_config("llamacpp", ...)` |
+| Next-token distribution, prefilled replies, text probabilities | `llm_next_token()` / `llm_continue()` / `llm_score()` |
 | Provider batch job | `llm_batch_submit()` + `llm_batch_status()` + `llm_batch_fetch()` |
 
 ## The LLMR package family

@@ -1,3 +1,49 @@
+# LLMR 0.9.0
+
+## Local models
+
+* LLMR can run small open models on the user's computer through llama.cpp.
+  `llm_local_install()` downloads, on request, the llama.cpp server program
+  for the platform and a model's GGUF file from Hugging Face; it lists each
+  file with its size, source, and license and asks for agreement first, pins
+  every file to an exact version, checks its sha256, and makes no network
+  request when the files are present. `llm_local_models()` lists the models
+  available by name (Qwen3 0.6B, Qwen3.5 0.8B and its base model, IBM
+  Granite 4.0 350M and its base model, SmolLM2 135M, and the embedding models
+  bge-m3 and EmbeddingGemma 2); `llm_local_model()` adds any GGUF file on
+  Hugging Face. `llm_local_status()`, `llm_local_start()`,
+  `llm_local_stop()`, `llm_local_ready()`, `llm_local_dir()`, and
+  `llm_local_uninstall()` manage the files and servers.
+
+* New provider `"llamacpp"`: `llm_config("llamacpp", model)` runs an
+  installed model, starting its server on first use and stopping it when R
+  exits. Chat, streaming, structured output, tools, log-probabilities, and
+  embeddings work as for hosted providers. `thinking = FALSE` turns off the
+  reasoning step of models such as Qwen3. For embedding models, `task =`
+  adds the model's task prefix and `dimensions =` truncates to a trained
+  size. With `api_url`, a llama.cpp server the user runs is used instead.
+
+* Token-level functions for local models: `llm_next_token()` returns the
+  next-token distribution (the top tokens, or the whole vocabulary) after a
+  chat or a raw prompt; `llm_continue()` continues a reply whose beginning
+  the user writes, any number of times, sampling from the model's full
+  distribution unless told otherwise; `llm_score()` gives the
+  log-probability of each token of a text the model did not write;
+  `llm_choice_probs()` compares the probabilities of several options;
+  `llm_tokenize()`, `llm_detokenize()`, and `llm_render_template()` expose
+  the tokenizer and the exact text the model reads. Each result records the
+  model, the sha256 of its file, the llama.cpp build, the device, and the
+  context.
+
+* LLMR now imports processx, which supervises the local servers, and
+  requires curl 5.0.0 or later, whose `multi_download()` resumes interrupted
+  downloads.
+
+## Other changes
+
+* `parse_embeddings()` returns rows in the order of the response's `index`
+  fields when the provider reports them.
+
 # LLMR 0.8.14
 
 * Gemini replies without a `candidatesTokenCount` (Gemini omits zero counts)
