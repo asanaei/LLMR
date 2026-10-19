@@ -258,8 +258,8 @@ llm_continue(cfg, messages = "Is coffee good for you?",
 llm_score(cfg, " Lyon.", prompt = "The capital of France is")
 ```
 
-The multilingual embedding models `bge-m3` and `embeddinggemma-2` install the
-same way and serve `get_batched_embeddings()`. See the [local models
+Multilingual embedding models, from `multilingual-e5-small` (132 MB) to
+`bge-m3` (635 MB), install the same way and serve `get_batched_embeddings()`. See the [local models
 article](https://asanaei.github.io/LLMR/articles/local-models.html).
 
 ## Which function do I need?

@@ -9,9 +9,10 @@
   every file to an exact version, checks its sha256, and makes no network
   request when the files are present. `llm_local_models()` lists the models
   available by name (Qwen3 0.6B, Qwen3.5 0.8B and its base model, IBM
-  Granite 4.0 350M and its base model, SmolLM2 135M, and the embedding models
-  bge-m3 and EmbeddingGemma 2); `llm_local_model()` adds any GGUF file on
-  Hugging Face. `llm_local_status()`, `llm_local_start()`,
+  Granite 4.0 350M and its base model, SmolLM2 135M and 360M, and the
+  multilingual embedding models multilingual-e5-small, Granite Embedding
+  311M, EmbeddingGemma 2, and bge-m3); `llm_local_model()` adds any GGUF
+  file on Hugging Face. `llm_local_status()`, `llm_local_start()`,
   `llm_local_stop()`, `llm_local_ready()`, `llm_local_dir()`, and
   `llm_local_uninstall()` manage the files and servers.
 

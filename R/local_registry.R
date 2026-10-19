@@ -123,6 +123,39 @@
       languages = "English",
       note = "A very small model for trying the functions and for examples; a community conversion of Hugging Face's SmolLM2."
     ),
+    "smollm2-360m" = list(
+      kind = "chat", base = FALSE, ctx = 2048L,
+      repo = "HuggingFaceTB/SmolLM2-360M-Instruct-GGUF", revision = "593b5a2e04c8f3e4ee880263f93e0bd2901ad47f",
+      file = "smollm2-360m-instruct-q8_0.gguf", size = 386404992,
+      sha256 = "48ab3034d0dd401fbc721eb1df3217902fee7dab9078992d66431f09b7750201",
+      license = "Apache-2.0", license_url = "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct",
+      card_url = "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct",
+      languages = "English",
+      note = "Hugging Face's official 8-bit conversion; a small English model."
+    ),
+    "multilingual-e5-small" = list(
+      kind = "embedding", base = NA, ctx = 512L, parallel = 4L,
+      repo = "TwinSunsLLC/multilingual-e5-small-gguf", revision = "b6cac9615d4ecce28d7f22539b7322d695fc2886",
+      file = "multilingual-e5-small-q8_0.gguf", size = 132439008,
+      sha256 = "e011debc1208e31bf7b6aebee2d9fc8bd2ca11694a77ed66ac9d0c9d0a877c93",
+      license = "MIT", license_url = "https://huggingface.co/intfloat/multilingual-e5-small",
+      card_url = "https://huggingface.co/intfloat/multilingual-e5-small",
+      languages = "94 languages, Persian and Arabic among them",
+      dims = 384L, mrl = integer(),
+      prefixes = c(query = "query: ", passage = "passage: "), default_task = "query",
+      note = "The smallest multilingual model here (384 dimensions, 512-token inputs); a community conversion of intfloat's model. Trained with prefixes: \"query\" (the default, also for non-retrieval tasks) and \"passage\" for documents."
+    ),
+    "granite-embedding-311m" = list(
+      kind = "embedding", base = NA, ctx = 8192L, parallel = 4L,
+      repo = "mykor/granite-embedding-311m-multilingual-r2-GGUF", revision = "4413a1d4c63ed0aeda030202ad982a613a91f9ea",
+      file = "granite-embedding-311M-multilingual-r2-Q8_0.gguf", size = 347018080,
+      sha256 = "960116d274ff796e65713a984c4d3de52999795512c64a02bb162e231fa1f3f8",
+      license = "Apache-2.0", license_url = "https://huggingface.co/ibm-granite/granite-embedding-311m-multilingual-r2",
+      card_url = "https://huggingface.co/ibm-granite/granite-embedding-311m-multilingual-r2",
+      languages = "52 languages, Persian and Arabic among them",
+      dims = 768L, mrl = c(512L, 384L, 256L, 128L), prefixes = character(), default_task = NA_character_,
+      note = "Needs no task prefix; a community conversion of IBM's model."
+    ),
     "bge-m3" = list(
       kind = "embedding", base = NA, ctx = 8192L, parallel = 4L,
       repo = "ggml-org/bge-m3-Q8_0-GGUF", revision = "9eba04c5d75ba5a1595e45de734d36bef4e5cb98",

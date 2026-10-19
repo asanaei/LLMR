@@ -136,16 +136,19 @@ cat(llm_render_template(cfg, "Name a color.", prefill = "My answer is"))
 
 ## Embeddings
 
-Two multilingual embedding models are available by name. `bge-m3` needs no
-task prefix and has strong published results for Persian and Arabic;
-`embeddinggemma-2` is smaller and faster and was trained with task prefixes,
-which LLMR adds from `task =` (default `"similarity"`).
+Four multilingual embedding models are available by name, from 132 MB to
+635 MB. `multilingual-e5-small` is the smallest and takes the prefix
+`"query: "` by default (`task = "passage"` for documents in retrieval);
+`granite-embedding-311m` and `bge-m3` need no prefix, and `bge-m3` has the
+strongest published results for Persian and Arabic; `embeddinggemma-2` was
+trained with task prefixes, which LLMR adds from `task =` (default
+`"similarity"`).
 
 ```{r, eval = FALSE}
-llm_local_install("bge-m3")
+llm_local_install("multilingual-e5-small")
 texts <- c("The government raised the national budget for schools.",
            "دولت بودجهٔ ملی مدارس را افزایش داد.")
-X <- get_batched_embeddings(texts, llm_config("llamacpp", "bge-m3"))
+X <- get_batched_embeddings(texts, llm_config("llamacpp", "multilingual-e5-small"))
 sum(X[1, ] * X[2, ])  # vectors are unit length, so this is the cosine
 ```
 
