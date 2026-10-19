@@ -39,8 +39,10 @@ A one-row tibble: \code{n}, \code{n_ok}, \code{n_failed}, \code{ok_rate}, \code{
 \code{rec_tokens}, \code{total_tokens}, \code{reasoning_tokens}, \code{cached_tokens}
 (prompt tokens served from the provider's cache, when reported),
 \code{n_unknown_tokens}
-(successful rows for which the provider reported no token usage, so the
-token sums above understate the truth), \code{duration_s}, (when a batch id
+(rows whose sent, received, or total count was not reported, so the token
+sums above understate the truth by those rows; failed calls count here
+when their usage is missing, although providers usually do not bill
+them, and skipped rows and batch follow-on rows do not), \code{duration_s}, (when a batch id
 column is present) \code{rowpack_calls} and \code{rows_per_rowpack}, and (when
 \code{price_table} is supplied) \code{cost_estimate} in the table's currency.
 }

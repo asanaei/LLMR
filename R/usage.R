@@ -168,8 +168,10 @@
 #'   `rec_tokens`, `total_tokens`, `reasoning_tokens`, `cached_tokens`
 #'   (prompt tokens served from the provider's cache, when reported),
 #'   `n_unknown_tokens`
-#'   (successful rows for which the provider reported no token usage, so the
-#'   token sums above understate the truth), `duration_s`, (when a batch id
+#'   (rows whose sent, received, or total count was not reported, so the token
+#'   sums above understate the truth by those rows; failed calls count here
+#'   when their usage is missing, although providers usually do not bill
+#'   them, and skipped rows and batch follow-on rows do not), `duration_s`, (when a batch id
 #'   column is present) `rowpack_calls` and `rows_per_rowpack`, and (when
 #'   `price_table` is supplied) `cost_estimate` in the table's currency.
 #'
@@ -209,12 +211,17 @@ llm_usage <- function(x, prefix = NULL, price_table = NULL) {
   uniq_batches <- if (has_batch) length(unique(stats::na.omit(batch))) else NA_integer_
   batch_i <- .llm_get_col(x, m[["batch_i"]], NA_integer_)
 
-  # Rows with genuinely unknown usage: succeeded but no total-token count, and
-  # not a batch follow-on position (where NA tokens are by design, attributed to
-  # the batch's first row). This disambiguates "0 tokens" from "tokens unknown",
-  # since the token sums below use na.rm = TRUE (correct for batching).
+  # A total is known when the provider reported one or both parts are known.
+  # A row's usage is unknown when any of sent, received, or total is missing,
+  # whether the call succeeded or failed, so the sums below (na.rm = TRUE)
+  # understate by those rows. Batch follow-on positions (NA by design, the
+  # usage sits on the batch's first row) and skipped rows (no call was made)
+  # are not unknown.
   batch_follow_on <- !is.na(batch_i) & batch_i > 1L
-  n_unknown_tokens <- sum((ok %in% TRUE) & is.na(total) & !batch_follow_on)
+  skipped <- finish %in% "skipped"
+  total <- ifelse(is.na(total) & !is.na(sent) & !is.na(rec), sent + rec, total)
+  n_unknown_tokens <- sum((is.na(sent) | is.na(rec) | is.na(total)) &
+                            !batch_follow_on & !skipped)
 
   out <- tibble::tibble(
     n                = n,

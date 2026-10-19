@@ -70,3 +70,29 @@ test_that("the tool loop counts model calls whose usage is unknown", {
   r <- call_llm_tools(llm_config("openai", "m"), "hi", tools = tool)
   expect_identical(r$tool_loop$n_unknown_usage, 1L)
 })
+
+test_that("llm_usage counts a row unknown when any usage part is missing", {
+  x <- tibble::tibble(
+    success       = c(TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, NA),
+    finish_reason = c("stop", "stop", "stop", "stop", NA, NA, "skipped"),
+    #                full  total-only  one part (legacy)  parts-only  failed+usage  failed  skipped
+    sent_tokens   = c(10L, NA,  120L, 7L, 5L, NA, NA),
+    rec_tokens    = c(4L,  NA,  NA,   3L, 0L, NA, NA),
+    total_tokens  = c(14L, 30L, 120L, NA, 5L, NA, NA))
+  u <- llm_usage(x)
+  # unknown: total-only, legacy one-part, failed without usage
+  expect_identical(u$n_unknown_tokens, 3L)
+  # observed subtotals; the parts-only row now contributes its sum to the total
+  expect_equal(u$sent_tokens, 10 + 120 + 7 + 5)
+  expect_equal(u$rec_tokens, 4 + 3 + 0)
+  expect_equal(u$total_tokens, 14 + 30 + 120 + 10 + 5)
+})
+
+test_that("fully reported usage has no unknown rows and unchanged totals", {
+  x <- tibble::tibble(success = TRUE, finish_reason = "stop",
+                      sent_tokens = c(10L, 20L), rec_tokens = c(4L, 5L),
+                      total_tokens = c(14L, 25L))
+  u <- llm_usage(x)
+  expect_identical(u$n_unknown_tokens, 0L)
+  expect_equal(u$total_tokens, 39)
+})

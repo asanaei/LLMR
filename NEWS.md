@@ -11,6 +11,12 @@
   Mustache, or Handlebars and LaTeX groups such as `\frac{{a}}{2}` reach the
   model unchanged. LLMR 0.8.11 passed these messages through glue, which
   turned each doubled brace into a single one.
+* `llm_usage()` counts a row in `n_unknown_tokens` when any of its sent,
+  received, or total counts is missing, failed calls included; it used to
+  count only successful rows without a total, so a row with a total but no
+  parts, or one part only, passed as known. A row with both parts and no
+  total now adds their sum to `total_tokens`. Skipped rows and batch
+  follow-on rows are not counted as unknown.
 * `llm_usage(price_table = )` accepts an optional `provider` column, which
   prices Anthropic's cached tokens correctly for results that carry no
   provider of their own (`llm_mutate()`, `llm_fn()`, `llm_batch_fetch()`).
