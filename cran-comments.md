@@ -58,8 +58,10 @@ onnxr (`onnx_install()`), localLLM (`install_localLLM()`), and tinytex.
 
 ## Test environments
 
-- local macOS 26.7.1 (aarch64), R 4.4.3
-- R CMD check --as-cran --no-manual, with all suggested packages installed
+- local macOS 26.7.1 (aarch64), R 4.4.3: R CMD check --as-cran, with all
+  suggested packages installed
+- GitHub Actions: macOS, Windows, and Ubuntu with R release; Ubuntu with R
+  devel and the previous release (all OK)
 
 ## R CMD check results
 
