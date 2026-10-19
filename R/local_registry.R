@@ -83,6 +83,16 @@
       languages = "201 languages and dialects; markedly better Persian than qwen3-0.6b",
       note = "llama.cpp's 8-bit conversion. A hybrid recurrent model, so its numbers are reproducible only without prompt caching, which the research functions never use."
     ),
+    "qwen3.5-0.8b-q4" = list(
+      kind = "chat", base = FALSE, ctx = 4096L,
+      repo = "ggml-org/Qwen3.5-0.8B-GGUF", revision = "8fea620810c4afa23dd6443f999a48574c1611a3",
+      file = "Qwen3.5-0.8B-Q4_0.gguf", size = 563036064,
+      sha256 = "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf",
+      license = "Apache-2.0", license_url = "https://huggingface.co/Qwen/Qwen3.5-0.8B",
+      card_url = "https://huggingface.co/Qwen/Qwen3.5-0.8B",
+      languages = "201 languages and dialects; markedly better Persian than qwen3-0.6b",
+      note = "The 4-bit version of qwen3.5-0.8b, smaller at some cost in fidelity to the full model. A hybrid recurrent model, reproducible only without prompt caching, which the research functions never use."
+    ),
     "qwen3.5-0.8b-base" = list(
       kind = "chat", base = TRUE, ctx = 4096L,
       repo = "ggml-org/Qwen3.5-0.8B-Base-GGUF", revision = "f78a2c518573cedd5585e5e368a6e1844d2ebbda",
