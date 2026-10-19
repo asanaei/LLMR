@@ -85,8 +85,7 @@ test_that("anthropic builder keeps top_k", {
 })
 
 test_that("anthropic cache = TRUE marks the system prompt as cacheable", {
-  Sys.setenv(ANTHROPIC_API_KEY = "test-key-not-real")
-  on.exit(Sys.unsetenv("ANTHROPIC_API_KEY"), add = TRUE)
+  withr::local_envvar(c(ANTHROPIC_API_KEY = "test-key-not-real"))
   cfg <- llm_config("anthropic", "claude-x", max_tokens = 50, cache = TRUE)
   req <- LLMR:::.anthropic_chat_request(cfg, c(system = "Long shared prefix.",
                                                user = "hi"))
@@ -96,8 +95,7 @@ test_that("anthropic cache = TRUE marks the system prompt as cacheable", {
 })
 
 test_that("anthropic builder passes typed blocks (tool_result) through", {
-  Sys.setenv(ANTHROPIC_API_KEY = "test-key-not-real")
-  on.exit(Sys.unsetenv("ANTHROPIC_API_KEY"), add = TRUE)
+  withr::local_envvar(c(ANTHROPIC_API_KEY = "test-key-not-real"))
   cfg <- llm_config("anthropic", "claude-x", max_tokens = 50)
   msgs <- list(
     list(role = "user", content = "hi"),
@@ -114,8 +112,7 @@ test_that("anthropic builder passes typed blocks (tool_result) through", {
 # ---- request builders: Gemini ------------------------------------------------
 
 test_that("gemini builder consumes thinking, seed, penalties, and logprobs", {
-  Sys.setenv(GEMINI_API_KEY = "test-key-not-real")
-  on.exit(Sys.unsetenv("GEMINI_API_KEY"), add = TRUE)
+  withr::local_envvar(c(GEMINI_API_KEY = "test-key-not-real"))
   cfg <- llm_config("gemini", "gemini-2.5-flash-lite",
                     max_tokens = 64, thinking_budget = 128,
                     include_thoughts = TRUE, seed = 110,
@@ -132,8 +129,7 @@ test_that("gemini builder consumes thinking, seed, penalties, and logprobs", {
 })
 
 test_that("gemini schema is sent by default via responseJsonSchema", {
-  Sys.setenv(GEMINI_API_KEY = "test-key-not-real")
-  on.exit(Sys.unsetenv("GEMINI_API_KEY"), add = TRUE)
+  withr::local_envvar(c(GEMINI_API_KEY = "test-key-not-real"))
   schema <- list(type = "object", properties = list(x = list(type = "string")))
   cfg <- enable_structured_output(llm_config("gemini", "gemini-2.5-flash-lite"),
                                   schema = schema)
@@ -150,8 +146,7 @@ test_that("gemini schema is sent by default via responseJsonSchema", {
 })
 
 test_that("gemini no_change keeps canonical spellings usable", {
-  Sys.setenv(GEMINI_API_KEY = "test-key-not-real")
-  on.exit(Sys.unsetenv("GEMINI_API_KEY"), add = TRUE)
+  withr::local_envvar(c(GEMINI_API_KEY = "test-key-not-real"))
   cfg <- llm_config("gemini", "gemini-2.5-flash-lite", max_tokens = 33,
                     no_change = TRUE)
   req <- LLMR:::.gemini_chat_request(cfg, "hi")

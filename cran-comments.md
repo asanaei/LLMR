@@ -14,8 +14,8 @@ is removed; no package on CRAN calls it.
 
 ## Test environments
 
-- local macOS 25 (aarch64), R 4.4.3
-- R CMD check --as-cran
+- local macOS 26.7.1 (aarch64), R 4.4.3
+- R CMD check --as-cran --no-manual, with all suggested packages installed
 
 ## R CMD check results
 
