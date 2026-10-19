@@ -1,41 +1,39 @@
 ## Submission
 
-LLMR 0.8.11 adds OpenRouter and a focused set of corrections described in
-NEWS.md. Request hashes now distinguish multimodal attachments, embedding
-batch failures are surfaced, invalid Anthropic thinking budgets fail before a
-request is built, ordered agreement metrics require a defensible category
-order, audit-log destinations are validated when enabled, and experiment and
-tool-loop objects expose their documented reporting and provenance contracts.
-Ten non-core helpers remain available inside the package but are no longer
-exported.
+LLMR 0.8.14 updates 0.8.11 on CRAN; versions 0.8.12 and 0.8.13 were
+development versions and never submitted, so NEWS.md lists their changes
+under their own headings. The release adds the Meta Model API as a provider
+and corrects several results that were wrong without notice: experiment
+runners no longer evaluate braces in prompts, failed or interrupted streams
+raise errors instead of returning partial text as a finished reply, tool
+calls with unparseable arguments are not run, Gemini and Anthropic token
+counts and cost estimates follow each provider's counting rules, unknown
+usage is no longer reported as zero, and an invalid `timeout` is refused
+instead of removing the request timeout. The deprecated `llm_methods_text()`
+is removed; no package on CRAN calls it.
 
 ## Test environments
 
-- local macOS (R 4.4.3)
+- local macOS 25 (aarch64), R 4.4.3
 - R CMD check --as-cran
 
 ## R CMD check results
 
-0 errors | 0 warnings | 3 notes
+0 errors | 0 warnings | 2 notes
 
-The notes are environmental, not package issues:
+Both notes are environmental:
 
-- "checking CRAN incoming feasibility ... NOTE": new-version housekeeping. It
-  may also report the `man/anes_2024_personas.Rd` \source URL
-  (electionstudies.org) as "possibly invalid" because that host returns HTTP
-  403 to automated requests; the URL is correct and reachable in a browser.
-- "checking for future file timestamps ... NOTE (unable to verify current time)":
-  a clock-comparison artifact of the local build machine; it does not appear on
-  CRAN's check machines.
-- "checking HTML version of manual ... NOTE": emitted by an older system `tidy`
-  that does not recognize valid HTML5 elements (`<main>`, `<details>`) in the help
-  pages R itself generates; it does not reproduce on CRAN.
+- "checking CRAN incoming feasibility ... NOTE": the `\source` URL in
+  `man/anes_2024_personas.Rd` and `inst/CITATION`
+  (https://electionstudies.org/data-center/2024-time-series-study/) is
+  reported as possibly invalid because that host returns HTTP 403 to
+  automated requests. The URL is correct and opens in a browser.
+- "checking for future file timestamps ... NOTE (unable to verify current
+  time)": the local machine could not reach a time server.
 
 ## Reverse dependencies
 
-LLMR.shiny 0.1.1 and LLMRagent 0.8.0 (both this maintainer's) were checked
-against this version: Status OK for both. `llm_methods_text()`, which
-LLMRagent 0.8.0 calls, is kept as a deprecated wrapper for this release and
-will be removed once the already-prepared LLMRagent update is on CRAN.
-Updates of both packages, and three new packages that depend on LLMR, follow
-this submission.
+The CRAN versions of all four reverse dependencies were checked against this
+version with `R CMD check`, with Status OK for each: LLMR.shiny 0.1.2,
+LLMRagent 0.8.1, LLMRpanel 0.6.1, and FocusGroup 0.5.2 (all this
+maintainer's). Updates of these packages follow this submission.
