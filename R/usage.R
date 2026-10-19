@@ -38,7 +38,7 @@
     param     = "bad_param",
     duration  = "duration",
     batch     = "rowpack_id",
-    batch_n   = "batch_size",
+    batch_n   = "rows_per_prompt",
     batch_i   = "rowpack_row"
   )
 
