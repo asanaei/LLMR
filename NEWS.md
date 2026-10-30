@@ -1,3 +1,9 @@
+# LLMR (development version)
+
+* Added "Set up a model" (`vignette("setup")`) for readers who have never used an API. It covers getting a key, keeping it in `~/.Renviron` under the default variable names, making a first call, and using a small local model that needs no key.
+* The "Missing API key" error now points to the article.
+* For provider `"gemini"`, `llm_config()` now also reads `GOOGLE_API_KEY` after `GEMINI_API_KEY` and `GEMINI_KEY`.
+
 # LLMR 0.9.0
 
 ## Local models

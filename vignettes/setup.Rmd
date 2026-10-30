@@ -1,0 +1,114 @@
+---
+title: "Set up a model"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Set up a model}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+## 1. Install the package
+
+```r
+install.packages("LLMR")
+```
+
+## 2. Choose how to start
+
+The examples use Groq, a company that hosts models. You need an account and a key. Each call to a hosted model is billed to your account, and the provider's website shows prices and lets you set a spending limit.
+
+Or you can run a small model on your own computer, with no account or key. To do that, go to step 7.
+
+## 3. Get a key
+
+An API key is a long password that lets your R session use your account. If this is your first time, the examples assume Groq, so the simplest path is a Groq key. Make one on the provider's website. Copy it right away; many sites show it only once. New accounts with some providers need a payment method or prepaid credit before the key works.
+
+Paste an address from the table into your browser.
+
+| Provider | Name in `llm_config()` | Name to put in .Renviron | Where to make a key |
+|---|---|---|---|
+| Groq | `"groq"` | `GROQ_API_KEY` | console.groq.com/keys |
+| OpenAI | `"openai"` | `OPENAI_API_KEY` | platform.openai.com/api-keys |
+| Anthropic | `"anthropic"` | `ANTHROPIC_API_KEY` | platform.claude.com/settings/keys |
+| Google Gemini | `"gemini"` | `GEMINI_API_KEY` | aistudio.google.com/app/apikey |
+| OpenRouter | `"openrouter"` | `OPENROUTER_API_KEY` | openrouter.ai/keys |
+| DeepSeek | `"deepseek"` | `DEEPSEEK_API_KEY` | platform.deepseek.com/api_keys |
+
+An environment variable is a named value that R can read. For any provider, LLMR looks first for `<PROVIDER>_API_KEY`, then for `<PROVIDER>_KEY`, with the provider name in capital letters. These are the default key names, so if you use them, you never type the key in your code.
+
+If you use another provider, replace `GROQ_API_KEY` and `"groq"` everywhere in the examples with the names from that provider's row in the table. Use a model name from that provider's website.
+
+## 4. Store your key
+
+The best place for your key is a file called `.Renviron` in your home folder. On a Mac or Linux, it is hidden because its name starts with a dot. On Windows, R's home folder is usually your Documents folder. R reads the file every time it starts.
+
+Because the key lives there and not in your scripts, you will not share it by accident when you share code or put a project on GitHub. Never paste the key into a script, and never print it.
+
+Open or create the file with:
+
+```r
+file.edit("~/.Renviron")
+```
+
+The first time, this opens an empty file. That is normal. Do not make the file by hand in Notepad or Finder. Notepad can save it as `.Renviron.txt`, which R does not read.
+
+If you are not in RStudio and the editor that opens is hard to use, run `path.expand("~/.Renviron")` to see where the file is, and edit it with any plain text editor.
+
+Add one line per key: the name, an equals sign, and the key. For example:
+
+```
+GROQ_API_KEY=paste-your-key-here
+```
+
+Save the file and restart R. In RStudio, choose Session > Restart R. In other R programs, quit R and start it again. Check that R sees the key, without printing it. Use the same name you wrote in the file:
+
+```r
+nzchar(Sys.getenv("GROQ_API_KEY"))   # TRUE means R found it
+```
+
+If it says `FALSE`, see the last step, If something goes wrong.
+
+## 5. Try a call
+
+A configuration says which provider and model to use. `llm_config()` finds the key by itself:
+
+```r
+library(LLMR)
+cfg <- llm_config("groq", "openai/gpt-oss-20b")
+call_llm(cfg, "Say hello in one sentence.")
+```
+
+Groq hosts models made by other companies, and the model name starts with the maker's name. `openai/gpt-oss-20b` is an open model from OpenAI that runs on Groq, so it needs only your Groq key.
+
+## 6. Use your configuration in other packages
+
+Every package in the family takes the same `cfg`. FocusGroup, LLMRpanel, and LLMRagent are on CRAN; LLMRcontent is on GitHub. Install a package before using it. For example:
+
+```r
+install.packages("FocusGroup")
+FocusGroup::run_focus_group("Library opening hours", cfg)
+```
+
+A focus group makes many model calls. A default session makes about a hundred, each billed to your account, so try a single `call_llm()` first.
+
+## 7. Run a small model on your computer
+
+This model downloads once, about 640 MB. It then runs offline, free, with no key. If you skipped step 5, run `library(LLMR)` first.
+
+```r
+llm_local_install("qwen3-0.6b")
+cfg <- llm_config("llamacpp", "qwen3-0.6b", temperature = 0, thinking = FALSE)
+call_llm(cfg, "Say hello in one sentence.")
+```
+
+`llm_local_install()` lists the files with their sizes and licenses, then asks in the console whether to download them and accept their licenses. Answer yes. The first time, it also downloads the small llama.cpp program that runs the model. `llm_local_dir()` shows where the files are kept.
+
+Small local models are much weaker than hosted ones. They are good for trying things out and learning. For more, see the article [Local models](local-models.html).
+
+## 8. If something goes wrong
+
+* **"Missing API key":** The name may be misspelled, the file may not have been saved, or R may not have been restarted. Check the name against the table, save the file, and restart R.
+* **Invalid or unauthorized key:** The key was copied incompletely or has been revoked. Make a new key, replace it in `.Renviron`, and restart R.
+* **Model does not exist:** The name is misspelled or the provider does not offer it. Use a name from the provider's model list.
+* **No credit, out of quota, or too many requests:** Check billing on the provider's website, or wait and try again.
+

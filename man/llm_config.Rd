@@ -34,7 +34,7 @@ formulaic default: it tries \verb{<PROVIDER>_API_KEY} and then \verb{<PROVIDER>_
 upper-cased (e.g. \code{OPENAI_API_KEY}, or \code{ALIBABA_API_KEY}/\code{ALIBABA_KEY}).
 Gemini with \code{vertex = TRUE} reads \code{VERTEX_ACCESS_TOKEN} instead, and Meta
 also falls back to \code{MODEL_API_KEY}, the name used in Meta's own
-documentation.}
+documentation. For provider \code{gemini}, \code{GOOGLE_API_KEY} is also read after \code{GEMINI_API_KEY} and \code{GEMINI_KEY}.}
 
 \item{model}{Character scalar. Model name understood by the chosen provider.
 (e.g., \code{"gpt-4.1-nano"}, \code{"gpt-5-nano"}, \code{"gemini-2.5-flash-lite"},

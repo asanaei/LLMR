@@ -23,6 +23,7 @@ navbar:
 articles:
 - title: Getting Started
   contents:
+  - setup
   - quickstart
   - reproducibility-and-cost
   - chat-basics

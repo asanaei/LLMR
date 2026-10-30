@@ -31,9 +31,7 @@ install.packages("LLMR")
 # remotes::install_github("asanaei/LLMR")
 ```
 
-Store keys in environment variables such as `GROQ_API_KEY`, `OPENAI_API_KEY`,
-or `ANTHROPIC_API_KEY`, commonly in `~/.Renviron`. `llm_config()` reads the
-provider's variable, so the key need not appear in the analysis code.
+Store keys in `~/.Renviron` under LLMR's default variable names, such as `GROQ_API_KEY`, `OPENAI_API_KEY`, and `ANTHROPIC_API_KEY`, so they stay out of your analysis code. If you are new to API keys, follow [Set up a model](https://asanaei.github.io/LLMR/articles/setup.html).
 
 ```r
 library(LLMR)

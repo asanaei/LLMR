@@ -50,8 +50,13 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
   keys <- c(paste0(stem, "_API_KEY"), paste0(stem, "_KEY"))
   # Meta's documentation names the key MODEL_API_KEY
   if (identical(stem, "META")) keys <- c(keys, "MODEL_API_KEY")
+  # Google's own tools also accept GOOGLE_API_KEY for Gemini
+  if (identical(stem, "GEMINI")) keys <- c(keys, "GOOGLE_API_KEY")
   keys
 }
+
+# Appended to every "Missing API key" error.
+.llmr_key_setup_hint <- "To set up a key, see https://asanaei.github.io/LLMR/articles/setup.html."
 
 # Internal: resolve a secret handle or an env-spec string into a concrete key string
 #' @keywords internal
@@ -68,8 +73,9 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
       if (nzchar(val)) return(val)
       .llmr_error(
         message = sprintf(
-          "Missing API key. Set environment variable '%s' for provider '%s'%s.",
-          var, provider %||% "?", if (!is.null(model)) paste0(" (model '", model, "')") else ""
+          "Missing API key. Set environment variable '%s' for provider '%s'%s. %s",
+          var, provider %||% "?", if (!is.null(model)) paste0(" (model '", model, "')") else "",
+          .llmr_key_setup_hint
         ),
         category = "auth"
       )
@@ -116,8 +122,9 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
     if (isFALSE(secret$required)) return("")
     .llmr_error(
       message = sprintf(
-        "Missing API key. Set environment variable '%s' for provider '%s'%s.",
-        paste(secret$ref, collapse = " or "), provider %||% "?", if (!is.null(model)) paste0(" (model '", model, "')") else ""
+        "Missing API key. Set environment variable '%s' for provider '%s'%s. %s",
+        paste(secret$ref, collapse = " or "), provider %||% "?", if (!is.null(model)) paste0(" (model '", model, "')") else "",
+        .llmr_key_setup_hint
       ),
       category = "auth"
     )
@@ -131,8 +138,9 @@ llm_api_key_env <- function(var, required = TRUE, default = NULL) {
     }
     .llmr_error(
       message = sprintf(
-        "Missing API key. Set environment variable '%s' for provider '%s'%s.",
-        paste(var, collapse=" or "), provider %||% "?", if (!is.null(model)) paste0(" (model '", model, "')") else ""
+        "Missing API key. Set environment variable '%s' for provider '%s'%s. %s",
+        paste(var, collapse=" or "), provider %||% "?", if (!is.null(model)) paste0(" (model '", model, "')") else "",
+        .llmr_key_setup_hint
       ),
       category = "auth"
     )

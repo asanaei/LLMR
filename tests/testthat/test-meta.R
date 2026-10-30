@@ -138,3 +138,21 @@ test_that("a Meta reply keeps reasoning text and cache-read counts", {
   expect_identical(tokens(r)$cached, 12L)
   expect_identical(tokens(r)$total, 25L)
 })
+
+test_that("Gemini also reads GOOGLE_API_KEY, after its own names", {
+  expect_identical(LLMR:::.default_api_key_env("gemini"),
+                   c("GEMINI_API_KEY", "GEMINI_KEY", "GOOGLE_API_KEY"))
+  withr::local_envvar(GEMINI_API_KEY = NA, GEMINI_KEY = NA, GOOGLE_API_KEY = "g-key")
+  cfg <- llm_config("gemini", "gemini-2.5-flash-lite")
+  expect_identical(LLMR:::.resolve_api_key(cfg$api_key, "gemini", "m"), "g-key")
+  # A key under LLMR's own name wins.
+  withr::local_envvar(GEMINI_API_KEY = "own-key")
+  expect_identical(LLMR:::.resolve_api_key(cfg$api_key, "gemini", "m"), "own-key")
+})
+
+test_that("the missing-key error points to the setup article", {
+  withr::local_envvar(GROQ_API_KEY = NA, GROQ_KEY = NA)
+  cfg <- llm_config("groq", "openai/gpt-oss-20b")
+  expect_error(LLMR:::.resolve_api_key(cfg$api_key, "groq", "openai/gpt-oss-20b"),
+               "articles/setup.html", fixed = TRUE)
+})

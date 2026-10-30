@@ -27,34 +27,7 @@ install.packages("LLMR")                   # CRAN
 
 ## 2. Set an API key
 
-You can hand `llm_config()` your key directly as a string, but the safer habit
-is to keep it out of your code and let LLMR read it from an environment
-variable. For each provider LLMR knows a default variable to look in: it tries
-`<PROVIDER>_API_KEY` first, then `<PROVIDER>_KEY` (upper-cased), so Groq reads
-`GROQ_API_KEY`, OpenAI reads `OPENAI_API_KEY`, and so on. If you set that
-variable, you never pass a key in code at all.
-
-Put the key in your `~/.Renviron` file, one per line:
-
-```
-GROQ_API_KEY=...
-```
-
-The easiest way to open that file is:
-
-```r
-usethis::edit_r_environ()
-```
-
-Save it and **restart R**. You can check that R sees the key without printing it:
-
-```r
-nzchar(Sys.getenv("GROQ_API_KEY"))   # TRUE once it is set
-```
-
-If this is `FALSE`, R cannot see the key yet: check the spelling and that you
-restarted the session. A missing key shows up as an authentication error on your
-first call, not before.
+Store your key in `~/.Renviron` under LLMR's default variable name `<PROVIDER>_API_KEY`, such as `GROQ_API_KEY`, to keep it out of your code. Restart R after adding it. If you have never done this, follow [Set up a model](setup.html).
 
 ## 3. Your first call
 

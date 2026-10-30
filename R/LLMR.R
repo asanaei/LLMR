@@ -525,7 +525,7 @@ get_endpoint <- function(config, default_endpoint) {
 #'   upper-cased (e.g. `OPENAI_API_KEY`, or `ALIBABA_API_KEY`/`ALIBABA_KEY`).
 #'   Gemini with `vertex = TRUE` reads `VERTEX_ACCESS_TOKEN` instead, and Meta
 #'   also falls back to `MODEL_API_KEY`, the name used in Meta's own
-#'   documentation.
+#'   documentation. For provider `gemini`, `GOOGLE_API_KEY` is also read after `GEMINI_API_KEY` and `GEMINI_KEY`.
 #' @param model Character scalar. Model name understood by the chosen provider.
 #'   (e.g., `"gpt-4.1-nano"`, `"gpt-5-nano"`, `"gemini-2.5-flash-lite"`,
 #'   `"openai/gpt-oss-20b"`, etc.)
