@@ -3,7 +3,7 @@ template:
   bootstrap: 5
 title: LLMR
 development:
-  mode: auto
+  mode: release
 home:
   links:
   - text: Source on GitHub
